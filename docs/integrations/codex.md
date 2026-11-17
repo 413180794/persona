@@ -593,6 +593,7 @@ with its own tag and "Message the Agent" input label. Code: `server/internal/nod
   The node uses the existing paginated reader, with the system `sqlite3` 3.33 or newer, to list and read these conversations, including stored items
   of a running turn and stopped conversations. Databases are opened read-only; generated transcripts stay in the node's private state directory.
   Per-thread projection revisions keep unrelated database writes from rebuilding every transcript. Older schemas retain the database-stamp fallback.
+  Full history is projected only when its conversation is read or watched; listing sessions uses cached summaries and does not convert cold histories.
   Live writer locks and process ancestry select one main conversation per pane; nested exec and guardian threads cannot replace it.
   A fresh start excludes all historical IDs, and an asynchronous request waits for the CLI's actual thread instead of preallocating a Claude ID.
 - **Conversation directory and terminal container**: the session's cwd comes from its TRAE metadata, not the host workspace.

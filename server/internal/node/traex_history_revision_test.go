@@ -42,6 +42,10 @@ func traexHistoryRevisionSQL(t *testing.T, db, sql string) {
 
 func traexHistoryRevisionSession(t *testing.T, n *Node, id, last string) proto.Session {
 	t.Helper()
+	// History is refreshed by a conversation read/watch, never the global list.
+	if err := n.refreshCodexAppHistory(id); err != nil {
+		t.Fatal(err)
+	}
 	// Model the next summary poll without sleeping through the list's existing metadata throttle.
 	p := n.codexAppHistoryFile(codexSource{home: n.traexHome(), thread: id})
 	n.mu.Lock()
@@ -75,7 +79,11 @@ func TestTraexHistoryRevisionKeepsUnchangedThreads(t *testing.T) {
 			traexHistoryRevisionSQL(t, filepath.Join(n.traexHome(), "state_5.sqlite"),
 				fmt.Sprintf(`UPDATE threads SET archived = 0 WHERE id = '%s';`, threadOld))
 			invalidateCodexPaginated(n.traexHome())
-			n.traexSessions(map[string]bool{})
+			for _, id := range []string{threadMain, threadOld} {
+				if err := n.refreshCodexAppHistory(id); err != nil {
+					t.Fatal(err)
+				}
+			}
 			paths := map[string]string{}
 			for _, id := range []string{threadMain, threadOld} {
 				paths[id] = n.codexAppHistoryFile(codexSource{home: n.traexHome(), thread: id})
@@ -91,7 +99,7 @@ func TestTraexHistoryRevisionKeepsUnchangedThreads(t *testing.T) {
 			if stamp == fileStamp(db)+fileStamp(db+"-wal") {
 				t.Fatal("fixture did not change the history database stamp")
 			}
-			// Refresh B before A, then take the same list path that refreshes every offline conversation.
+			// Refresh B before A, then read A and its cached summary.
 			if err := n.refreshCodexAppHistory(threadOld); err != nil {
 				t.Fatal(err)
 			}
@@ -107,6 +115,39 @@ func TestTraexHistoryRevisionKeepsUnchangedThreads(t *testing.T) {
 				t.Fatalf("an unrelated thread write changed B's mark: before %+v, after %+v", markB, after)
 			}
 		})
+	}
+}
+
+func TestTraexListingDoesNotRebuildChangedHistory(t *testing.T) {
+	n := remoteTestNode(t)
+	db := traexHistoryRevisionFixture(t, n, []historyTurn{{thread: threadMain, id: "turn-a", status: "completed", ordinal: 0,
+		items: [][2]string{userItem("ua", "Inspect the export"), answerItem("aa", "The export is correct.")}}})
+	f, err := n.file(threadMain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	p := n.codexAppHistoryFile(codexSource{home: n.traexHome(), thread: threadMain})
+	before := statOf(t, p)
+	traexHistoryRevisionSQL(t, db, `UPDATE thread_items SET item_json = REPLACE(item_json, 'correct', 'ready');
+		UPDATE thread_history_projection_state SET next_rollout_ordinal = next_rollout_ordinal + 1;`)
+	for range 4 {
+		if rows := n.traexSessions(map[string]bool{}); len(rows) != 1 {
+			t.Fatalf("listing lost the conversation: %+v", rows)
+		}
+		if !os.SameFile(before, statOf(t, p)) {
+			t.Fatal("a global list rebuilt the changed history")
+		}
+	}
+	f, err = n.file(threadMain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := f.Refresh()
+	if err != nil || !strings.Contains(historyText(items), "assistant:text:The export is ready.") {
+		t.Fatalf("an explicit read did not refresh history: %s, %v", historyText(items), err)
 	}
 }
 

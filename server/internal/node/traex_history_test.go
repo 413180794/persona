@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,24 @@ import (
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
 )
+
+func TestTraexOfflineTiedRowsKeepIDOrder(t *testing.T) {
+	n := remoteTestNode(t)
+	traexHistoryFixture(t, n, nil)
+	writeCodexApp(t, n.traexHome(), "/work/app", `UPDATE threads SET archived = 0;
+		UPDATE threads SET updated_at = 10, updated_at_ms = 10000;`)
+	invalidateCodexPaginated(n.traexHome())
+	want := []string{threadMain, threadOld}
+	for range 32 {
+		var ids []string
+		for _, row := range n.traexSessions(map[string]bool{}) {
+			ids = append(ids, row.SessionID)
+		}
+		if !slices.Equal(ids, want) {
+			t.Fatalf("unchanged tied conversations changed order: %v, want %v", ids, want)
+		}
+	}
+}
 
 func traexHistoryFixture(t *testing.T, n *Node, turns []historyTurn) {
 	t.Helper()
@@ -35,8 +54,11 @@ func TestTraexPaginatedHistoryListsAndReadsWithoutRollouts(t *testing.T) {
 	}
 	rows := n.traexSessions(map[string]bool{})
 	if len(rows) != 1 || rows[0].SessionID != threadMain || rows[0].Agent != traexAgent ||
-		rows[0].Title != "Inspect the export" || rows[0].LastText != "The export is correct." || rows[0].Status != proto.StatusOffline {
+		rows[0].Title != "Inspect the export" || rows[0].Status != proto.StatusOffline {
 		t.Fatalf("paginated conversation = %+v", rows)
+	}
+	if fileExists(n.codexAppHistoryFile(codexSource{home: n.traexHome(), thread: threadMain})) {
+		t.Fatal("listing a cold conversation synchronously projected its history")
 	}
 	if got := n.traexSessions(map[string]bool{threadMain: true}); len(got) != 0 {
 		t.Fatalf("live conversation listed twice: %+v", got)
@@ -52,6 +74,9 @@ func TestTraexPaginatedHistoryListsAndReadsWithoutRollouts(t *testing.T) {
 	text := historyText(items)
 	if !strings.Contains(text, "user:text:Inspect the export") || !strings.Contains(text, "assistant:text:The export is correct.") {
 		t.Fatalf("conversation not readable: %s", text)
+	}
+	if rows := n.traexSessions(map[string]bool{}); len(rows) != 1 || rows[0].LastText != "The export is correct." {
+		t.Fatalf("the summary did not use the already-read transcript: %+v", rows)
 	}
 	if p := n.transcriptPath(threadMain); !strings.HasPrefix(p, n.dir+string(filepath.Separator)) {
 		t.Fatalf("history materialized outside the node state: %q", p)

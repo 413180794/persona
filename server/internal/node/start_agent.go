@@ -145,11 +145,16 @@ func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, l
 		if err := n.refreshHosts(ctx); err != nil {
 			continue
 		}
+		confirmed := ""
+		if kind == traexAgent {
+			confirmed = n.traexLiveThread(pane, resume)
+		}
 		n.mu.Lock()
 		var id string
 		var agent host.Agent
 		for candidate, a := range n.agents {
 			if a.PaneID == pane && a.Agent == kind && candidate != "" &&
+				(kind != traexAgent || candidate == confirmed) &&
 				((resume == "" && !existing[candidate]) || candidate == resume) {
 				id, agent = candidate, a
 				break
