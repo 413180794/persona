@@ -28,6 +28,10 @@ func TestTraexLiveHistory(t *testing.T) {
 			if !validID(id) {
 				t.Fatal("invalid thread ID")
 			}
+			f, err := n.file(id)
+			if err != nil {
+				t.Fatal(err)
+			}
 			path := n.traexPath(id)
 			t.Logf("TRAE thread %s: transcript_found=%t", id, path != "")
 			if path == "" {
@@ -37,10 +41,6 @@ func TestTraexLiveHistory(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(markers) != 0 {
-				f, err := n.file(id)
-				if err != nil {
-					t.Fatal(err)
-				}
 				items, err := f.Refresh()
 				if err != nil {
 					t.Fatal(err)

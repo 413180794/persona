@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-func traexIdentityNode(t *testing.T, id string) (*Node, *fakeHerdr, string) {
+func traexIdentityNode(t *testing.T, id string, confirmed ...bool) (*Node, *fakeHerdr, string) {
 	t.Helper()
 	n, f, home := herdrNode(t)
 	t.Setenv("HOME", home)
@@ -22,10 +23,34 @@ func traexIdentityNode(t *testing.T, id string) (*Node, *fakeHerdr, string) {
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	f.after(func(c herdrCall) {
 		if c.Method == "pane.send_input" {
+			if len(confirmed) == 0 || confirmed[0] {
+				writeTraexOwner(t, n.home, id, os.Getpid())
+				cacheTraexOwnerPane(t, os.Getpid())
+			}
 			f.reply("session.snapshot", snapshot(nil, nil, []any{agentOf(traexAgent, id, proto.StatusIdle, "w1:p2", "w1:t2", "w1", home, "")}, nil))
 		}
 	})
 	return n, f, home
+}
+
+func TestTraexFreshStartRequiresCurrentWriterEvidence(t *testing.T) {
+	for _, source := range []string{"unindexed", "archived", "outside rollout window"} {
+		t.Run(source, func(t *testing.T) {
+			n, _, home := traexIdentityNode(t, threadOld, false)
+			switch source {
+			case "archived":
+				traexHistoryFixture(t, n, nil) // threadOld is archived and excluded from the list.
+			case "outside rollout window":
+				writeMetaRollout(t, n.traexHome(), threadOld, `{"id":"`+threadOld+`","cwd":"`+home+`","source":"cli"}`, time.Now().Add(-90*24*time.Hour))
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 1300*time.Millisecond)
+			defer cancel()
+			s, err := n.start(ctx, home, traexAgent, "Inspect the export", "", "w1", "", "", "", "", "")
+			if s != nil || err == nil || !strings.Contains(err.Error(), "wait for traex session") {
+				t.Fatalf("an unconfirmed host claim was adopted: %+v (%v)", s, err)
+			}
+		})
+	}
 }
 
 func TestTraexAsyncStartWaitsForActualThread(t *testing.T) {

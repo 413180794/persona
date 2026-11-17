@@ -40,7 +40,6 @@ func (n *Node) traexHome() string {
 
 func (n *Node) traexPath(id string) string {
 	if _, ok := n.traexThread(id); ok {
-		_ = n.refreshCodexAppHistory(id)
 		p := n.codexAppHistoryFile(codexSource{home: n.traexHome(), thread: id})
 		if fileExists(p) {
 			return p
@@ -74,6 +73,18 @@ func (n *Node) traexOwners() map[int]string {
 		out[pid] = threads[0]
 	}
 	return out
+}
+
+// Fresh starts need positive writer evidence, including when old IDs were archived,
+// outside the rollout scan window, or absent from a cached metadata list.
+func (n *Node) traexLiveThread(pane, preferred string) string {
+	owners := map[int][]string{}
+	for pid, ids := range n.traexOwnerThreads(n.traexThreads()) {
+		if n.paneOfPID(pid) == pane {
+			owners[pid] = ids
+		}
+	}
+	return traexPaneThread(owners, preferred, parentPID)
 }
 
 // traexOwnerThreads keeps every main writer owned by a process, newest first: a host's existing session may still

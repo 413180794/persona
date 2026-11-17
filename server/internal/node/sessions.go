@@ -105,7 +105,6 @@ func (n *Node) sessionListIn(ctx context.Context, refreshAgents bool, pass *code
 			s.Title = n.codexTitle(id)                        // the terminal title is "dots | codex | Ready"
 			s.CodexRoute, s.CodexRouteNote = n.codexRoute(id) // codex_daemon.go
 		case a.Agent == traexAgent:
-			_ = n.refreshCodexAppHistory(id)
 			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
 			s.CodexRoute, s.CodexRouteNote = codexRouteTerminal, "TRAEX 没有共享的 app-server"
 		}

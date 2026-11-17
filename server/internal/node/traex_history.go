@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sort"
 	"sync"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -90,5 +91,7 @@ func (n *Node) traexSessions(seen map[string]bool) []proto.Session {
 		n.decorate(&s)
 		out = append(out, s)
 	}
+	// The final list's stable time sort must not inherit random map order for ties.
+	sort.Slice(out, func(i, j int) bool { return out[i].SessionID < out[j].SessionID })
 	return out
 }
