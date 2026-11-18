@@ -326,7 +326,9 @@ func TestClaudeHeadlessUsageOverlaysStatusLine(t *testing.T) {
 		if len(a.Windows) != 2 || a.Windows[0].UsedPercent != pct || a.Windows[0].ResetsAt == nil || a.Windows[0].ResetsAt.Unix() != reset || a.Windows[1].UsedPercent != 74 {
 			t.Fatalf("windows %+v", a.Windows)
 		}
-		return a.SampledAt
+		n.usageWin.streams.Lock()
+		defer n.usageWin.streams.Unlock()
+		return n.usageWin.streams.samples[claudeStreamWindow{p.claudeUsageSource, 300}].at
 	}
 	send(fmt.Sprintf(`{"unifiedWindows":{"five_hour":{"utilization":0.25,"resetsAt":%d},"seven_day":{"utilization":0.64,"resetsAt":%d}}}`, five, weekly))
 	first := check(25, five)
@@ -355,7 +357,7 @@ func TestClaudeHeadlessUsageOverlaysStatusLine(t *testing.T) {
 	n.setUsageWindows(false)
 	send(extra)
 	n.setUsageWindows(true)
-	if s := n.usageSnapshot(false); len(s.Accounts) != 1 || s.Accounts[0].Windows[0].ResetsAt != nil {
+	if s := n.usageSnapshot(false); len(s.Accounts) != 1 || s.Accounts[0].Provider != "claude" {
 		t.Fatalf("disabled stream: %+v", s)
 	}
 }

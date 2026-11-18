@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -61,10 +62,11 @@ func (n *Node) recordClaudeUsage(source string, raw json.RawMessage, now time.Ti
 	}
 	streams := &n.usageWin.streams
 	streams.Lock()
-	defer streams.Unlock()
 	if n.usageWin.off.Load() {
+		streams.Unlock()
 		return
 	}
+	changed := make(map[string]proto.UsageWindow)
 	for _, def := range claudeStatusWindows {
 		candidates := []json.RawMessage{info.Unified[def.key]}
 		if def.key == info.Type {
@@ -88,7 +90,18 @@ func (n *Node) recordClaudeUsage(source string, raw json.RawMessage, now time.Ti
 				streams.samples = make(map[claudeStreamWindow]claudeWindowSample)
 			}
 			streams.samples[key] = claudeWindowSample{win, now.UTC()}
+			changed[def.key] = win
 		}
+	}
+	streams.Unlock()
+	if source == "claude:claude.json" && len(changed) > 0 {
+		// File locking must not block the assistant stdout reader. Each write merges under the
+		// shared lock, so concurrent goroutines and statusline writers cannot regress a window.
+		go func() {
+			if err := persistClaudeWindows(n.dir, changed); err != nil && n.logger != nil {
+				n.logger.Printf("persist Claude usage windows: %v", err)
+			}
+		}()
 	}
 }
 
@@ -121,4 +134,74 @@ func (s *claudeUsageStreams) overlay(accounts map[string]proto.UsageAccount, now
 		}
 		accounts[key.source] = a
 	}
+}
+
+// persistClaudeWindows uses the statusline's flock and read/merge/rename protocol.
+func persistClaudeWindows(nodeDir string, updates map[string]proto.UsageWindow) error {
+	dir := filepath.Join(nodeDir, "usage")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	unlock, err := lockClaudeUsage(filepath.Join(dir, "claude.lock"))
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	path := filepath.Join(dir, "claude.json")
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	var doc struct {
+		RateLimits map[string]json.RawMessage `json:"rate_limits"`
+	}
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &doc); err != nil {
+			return err
+		}
+	}
+	if doc.RateLimits == nil {
+		doc.RateLimits = make(map[string]json.RawMessage)
+	}
+	changed := false
+	for key, win := range updates {
+		var old struct {
+			Used  *float64 `json:"used_percentage"`
+			Reset int64    `json:"resets_at"`
+		}
+		_ = json.Unmarshal(doc.RateLimits[key], &old)
+		if old.Used != nil && *old.Used >= 0 && old.Reset > 0 &&
+			(old.Reset > win.ResetsAt.Unix() || (old.Reset == win.ResetsAt.Unix() && *old.Used >= win.UsedPercent)) {
+			continue
+		}
+		encoded, err := json.Marshal(struct {
+			Used  float64 `json:"used_percentage"`
+			Reset int64   `json:"resets_at"`
+		}{win.UsedPercent, win.ResetsAt.Unix()})
+		if err != nil {
+			return err
+		}
+		doc.RateLimits[key] = encoded
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	data, err = json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".claude.*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err = tmp.Write(append(data, '\n')); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
