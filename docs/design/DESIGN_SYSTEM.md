@@ -467,9 +467,13 @@ on-demand model panel, not the everyday Assistant home (#6887).
   number (labels carry the index). Left, a 20 px drag handle (`grip` icon, 12 px, `ink-3`) shown with the row's actions;
   right, 20 px round buttons with a `line` ring on `surface` (↑ Send now 12 px, pencil and trash 11 px), shown on hover
   or focus and always on a screen without hover, a spinner in their place while the row's request is out. Send now acts
-  at one press (4.4), its tooltip saying what happens. A row from
-  another conversation has a send mark and **Another chat** (semibold 13 px, at most 120 px) before its words and no
-  handle or buttons. Four rows or fewer show in full; from five, three and a centered 12 px **N more** / **Show less**
+  at one press (4.4), its tooltip saying what happens. Messages from
+  other conversations come last, folded into one 32 px line: a `chat` mark in the rows' 20 px handle column, **N messages
+  from other chats** (12 px, `ink-2`, medium) and "· Arrives when this chat is free" (`ink-3`), a chevron at the end.
+  Opened, each row names the chat it came from once (medium, `ink`, at most 40%; the hub's 「来自「…」：」 prefix taken off)
+  and then its words, with no mark, handle or buttons; a line cut short has a chevron and opens in place to its whole
+  text (at most 132 px, then it scrolls, selectable). Only the groups that are there are drawn: with none of the owner's
+  rows the relayed line is the card's first thing, with no hairline over it (#9749). Four rows or fewer show in full; from five, three and a centered 12 px **N more** / **Show less**
   with a chevron under a `line` divider. On a phone on its side the queue is one "N queued" line beside the run's status
   that opens the same rows. Spec: `docs/web/web.md` ("Queued messages").
 - Duplicates: four composer implementations exist (DS-19).
