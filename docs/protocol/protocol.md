@@ -1143,6 +1143,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "model":"claude-opus-5-5",                           // assistant items only, optional: the model that wrote the item as the transcript records it (Claude Code's message.model, never its "<synthetic>";
                                                       // a Codex turn's turn_context model). Absent when the transcript does not say and from older nodes; clients draw a divider where the replies' model changes (#5034)
  "usage":[{"model":"claude-opus-5-5","in":3,"out":412,"cache_read":40210,"cache_write":1180}], // optional: the tokens of the model requests this item stands for, one entry per model and speed; see "Token usage on items" (#5426)
+ "codex_heartbeat_quiet":true, // optional, assistant text: the node decoded a Codex DONT_NOTIFY envelope; the hub localizes its generated text. Matching prose has no marker and is left as written.
  "model_refusal":{"subtype":"model_refusal_fallback","original_model":"primary-model","fallback_model":"fallback-model","category":"synthetic-policy","scope":"session","explanation":"Upstream refused the request","text":"<the refusal's own words>"}, // optional, kind=notice: the record's values as recorded (unknown model_refusal_* subtypes, categories and scopes too) and `text`, its string `content`. Never the record's line or its other fields (#2528): they stay in the transcript and the node. Older builds also sent `raw` (the whole line) and used it as the notice's text; clients must not show or keep it. The notice's `text` is the refusal's words, which the hub writes again in the reader's language
  "tool_use_id":"toolu_…",                             // shared by tool_use and tool_result; the App merges them into one card by it
  "tool_name":"Bash", "tool_input":{...},              // tool_use only
@@ -5038,6 +5039,7 @@ On reading back, web only recognizes blocks after the first block whose first li
 | `patrol` | A repeating scheduled run, including daily routines and interval patrols | `title` is the scheduled task title; `conversation_id` is the originating conversation when recorded; `push: "asked"` marks a run whose normal completion stays quiet |
 | `followup` | A one-shot scheduled follow-up, wake, or usage-limit continuation | `title` and originating `conversation_id` when recorded; `push: "asked"` as for `patrol` |
 | `supervision` | A supervision dispatch | Existing `injected.level` and turn-folding behavior still apply |
+| `scheduled_task` | An automatic input from an external scheduler, such as a Codex heartbeat | `text` is the visible task instructions, not the runtime envelope; no Persona `injected` follow-up or patrol is implied |
 | `meeting` | A batch from a recorded meeting this session attends: live sentences, questions and answers since the last batch, the end of the meeting (#2981, [meeting-minutes.md](../assistant/meeting-minutes.md) "Feeding the attending session") | `title` is the meeting's name; no `conversation_id` |
 
 The manager persists explicit provenance in the native transcript with a leading context block, rendered by `shared/message_source.md`:
