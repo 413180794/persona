@@ -41,18 +41,8 @@ func availAfter(t *testing.T, until time.Time) {
 // during it is counted as having come on a background round, and is answered by the text that follows once nothing
 // of the owner's is queued any more.
 func TestAvailabilityReplyWaitAndRounds(t *testing.T) {
-	ft := newFleetTest(t)
-	ft.f.sessions["mac"], ft.f.known["conv"] = nil, true // the fake hub answers the sends to it
+	ft, ref, list := availConv(t)
 	s := ft.s
-	m, _ := s.fleetMachine("mac")
-	conv := proto.Session{SessionID: "conv", Agent: "claude", Cwd: m.assistantCwd(), Status: proto.StatusIdle, LastText: "earlier"}
-	ref := SessionRef{MachineID: "mac", SessionID: "conv"}
-	list := func(status, text string, queued ...string) {
-		c := conv
-		c.Status, c.LastText, c.Queued = status, text, queued
-		ft.sessions("mac", c)
-	}
-	list(proto.StatusIdle, "earlier")
 
 	s.UserSpoke(t.Context(), ref)
 	list(proto.StatusWorking, "earlier")
@@ -155,6 +145,8 @@ func TestAvailabilityReplyWaitFallbacks(t *testing.T) {
 func availConv(t *testing.T) (ft *fleetTest, ref SessionRef, list func(status, text string, queued ...string)) {
 	ft = newFleetTest(t)
 	ft.f.sessions["mac"], ft.f.known["conv"] = nil, true // the fake hub answers the sends to it
+	ft.f.hello.Assistant.MachineID = "mac"
+	setSettings(t, ft.s, func(v *Settings) { v.Leaders = []string{"conv"} })
 	m, _ := ft.s.fleetMachine("mac")
 	conv := proto.Session{SessionID: "conv", Agent: "claude", Cwd: m.assistantCwd(), Status: proto.StatusIdle, LastText: "earlier"}
 	list = func(status, text string, queued ...string) {
@@ -230,13 +222,9 @@ func TestAvailabilityStoppedRound(t *testing.T) {
 func TestAvailabilityReplyWaitWithoutQueue(t *testing.T) {
 	ft, ref, list := availConv(t)
 	s := ft.s
-	oldFor := availInputFor
-	availInputFor = time.Millisecond // the message is noted long before the round it waits behind ends
-	t.Cleanup(func() { availInputFor = oldFor })
 	superviseRound(t, ft, list, "earlier")
-	s.UserSpoke(t.Context(), ref)
-	at, _ := availWaitTimes(s)
-	availAfter(t, at.Add(5*time.Millisecond))
+	// The owner spoke more than one input window before the background round ended.
+	s.availOwnerSpoke(ref, time.Now().Add(-availInputFor-time.Second))
 	list(proto.StatusWorking, "Checking the PR.")
 	list(proto.StatusWorking, "Merged it.")
 	if got := availEvents(s, replyWaitEvent); len(got) != 0 {
@@ -338,6 +326,7 @@ func TestAvailabilityReplayAndGone(t *testing.T) {
 // that takes a queued message's place has waited since the first.
 func TestAvailabilityQueueWait(t *testing.T) {
 	f := newFakeHub().withMachine()
+	f.settings = &Settings{MachineID: "server", Leaders: []string{"receiver"}}
 	f.known["receiver"] = true
 	s := newTestService(t, f)
 	first := relayMsg{From: "c1", FromTitle: "Research", Tool: "conversation_send", Text: "Read the result.", Hop: 1, At: time.Now().UTC()}

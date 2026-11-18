@@ -808,7 +808,7 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 						msg, stale, keep = original, false, true
 					}
 					b.stuck[id] = msg
-					if !relayInDoubt(err) {
+					if err != nil && !keep && !relayInDoubt(err) && !strings.Contains(err.Error(), "is gone") {
 						b.failedAt[id] = time.Now()
 					}
 				}
