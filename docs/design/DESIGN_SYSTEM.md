@@ -850,8 +850,8 @@ Muted and Seen, and it keeps its space, repository and worktree out of the idle 
 a plain dot, its state word "Just finished" (the To-dos' section word, `StateName`), its second line the triage's
 "✓ conclusion". A muted one is plain Seen. Why not Unread: Unread stays what needs a look. Why not plain Seen: work
 that ended minutes ago sank under sessions seen days ago. Why after the work still going: as in the To-dos' order
-above, what still runs comes before what is done. The web has it first; Apple, Android and HarmonyOS follow in their
-own issues and show these rows as Seen until then.
+above, what still runs comes before what is done. The web and Android (#9786; there the dot is Unread's, as Awaiting
+reply's) have it; Apple and HarmonyOS follow in their own issues and show these rows as Seen until then.
 
 #### The work-item row
 
