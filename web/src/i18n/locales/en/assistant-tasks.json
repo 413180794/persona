@@ -1,4 +1,11 @@
 {
+  "channel_notice_send": "Confirm and send",
+  "channel_notice_confirm": "Send the displayed reply to the original Feishu conversation?",
+  "channel_notice_sent": "Sent",
+  "channel_notice_unconfirmed": "Delivery unconfirmed. Check the original conversation.",
+  "channel_notice_source": "Extension notice · {extension}",
+  "channel_notice_original": "Open original Feishu message",
+  "channel_notice_context": "Conversation excerpt",
   "workspace": "Workspace",
   "workspace_new": "New",
   "workspace_existing": "Use existing",

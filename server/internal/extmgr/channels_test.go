@@ -110,11 +110,11 @@ type channelWorld struct {
 }
 
 // newChannelWorld is the bot world with a plugin contributing examplechat, connected.
-func newChannelWorld(t *testing.T) *channelWorld {
+func newChannelWorld(t *testing.T, scopes ...string) *channelWorld {
 	t.Helper()
 	w := newBotWorld(t)
 	raw, _ := json.Marshal([]channel.Item{exampleChannel})
-	m := &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: "example-chat", Name: "Example Chat", Version: "1.0.0",
+	m := &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: "example-chat", Name: "Example Chat", Version: "1.0.0", Permissions: extension.Permissions{Hub: scopes},
 		Engines: extension.Engines{ExtensionProtocol: extension.Protocol}, ActivationEvents: []string{extension.OnStartup},
 		Runtime: &extension.Runtime{Command: extension.Command{Path: "example-chat"}}, Contributes: map[string]json.RawMessage{"channel": raw}}
 	reg := extension.NewRegistry(t.TempDir(), nil, nil, 0)
@@ -135,7 +135,7 @@ func newChannelWorld(t *testing.T) *channelWorld {
 func (w *channelWorld) receive(t *testing.T, id, text string) {
 	t.Helper()
 	p, _ := json.Marshal(channel.ReceiveParams{Contribution: "examplechat", Message: channel.Message{ID: id, Text: text}})
-	if _, err := w.h.extensionChannelCall("example-chat", channel.MReceive, p); err != nil {
+	if _, err := w.h.extensionChannelCall(context.Background(), "example-chat", channel.MReceive, p); err != nil {
 		t.Fatal(err)
 	}
 }

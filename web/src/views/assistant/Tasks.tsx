@@ -3,6 +3,7 @@
 // #8237), the "Today" card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
+import { ChannelNotice } from "./ChannelNotice";
 import { lazy, memo, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { taskMeter, type TaskCardMetadata } from "../../lib/task-cards";
 import { agentRowKey, agentRowLabel, agentRowMark, agentRowTone, todoChipLabel, todoChipState } from "../../lib/task-row-status";
@@ -486,6 +487,8 @@ export const FeedLineView = memo(function FeedLineView({ item, simplified = fals
     case "urgent_call":
       // an urgent call (docs/assistant/urgent-call.md): its row, loaded with the first one
       return <Suspense fallback={null}><LazyUrgentCallLine item={item} /></Suspense>;
+    case "channel_notice":
+      return <ChannelNotice item={item} />;
     case "notice": {
       // a line the hub wrote (#4305): small and centered, as the chat's own notices
       const text = feedNotice(item);

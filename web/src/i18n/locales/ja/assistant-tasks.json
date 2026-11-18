@@ -1,4 +1,11 @@
 {
+  "channel_notice_send": "確認して送信",
+  "channel_notice_confirm": "表示された返信を元の Feishu 会話に送信しますか？",
+  "channel_notice_sent": "送信済み",
+  "channel_notice_unconfirmed": "送信結果を確認できません。元の会話を確認してください。",
+  "channel_notice_source": "拡張機能の通知 · {extension}",
+  "channel_notice_original": "Feishu の元メッセージを開く",
+  "channel_notice_context": "会話の抜粋",
   "workspace": "ワークスペース",
   "workspace_new": "新規作成",
   "workspace_existing": "既存を使用",

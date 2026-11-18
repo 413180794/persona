@@ -16,6 +16,7 @@ const (
 	ScopeAgentsControl = "agents.control"
 	ScopeMachinesRead  = "machines.read"
 	ScopeNotify        = "notify"
+	ScopeChannelNotice = "channel.notice"
 	ScopeAssistantAsk  = "assistant.ask"
 	ScopeTodosRead     = "todos.read"
 	ScopeTodosWrite    = "todos.write"

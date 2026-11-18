@@ -4662,6 +4662,51 @@ export type ChannelSendKind = "answer" | "note" | "ask" | "push" | (string & {})
 export const CHANNEL_SEND_KINDS = ["answer", "note", "ask", "push"] as const;
 
 /**
+ * A full Persona client confirmed the stored grounded draft. The program resolves the original notice id locally; it
+ * gets no new recipient, text or tool arguments.
+ */
+export interface ChannelNoticeConfirmParams {
+  contribution: string;
+  id: string;
+}
+
+/**
+ * An untrusted display-only item. Requires the explicit channel.notice grant and an existing main conversation. The
+ * hub derives the attribution from the calling extension.
+ */
+export interface ChannelNoticeParams {
+  contribution: string;
+  notice: ChannelNotice;
+}
+
+export interface ChannelNotice {
+  id: string;
+  kind: ChannelNoticeKind;
+  source_url: string;
+  text: string;
+  forward: string;
+}
+
+export type ChannelNoticeKind = "grounded_reply" | "task_signal" | "agent_suggestion" | (string & {});
+export const CHANNEL_NOTICE_KINDS = ["grounded_reply", "task_signal", "agent_suggestion"] as const;
+
+export interface ChannelNoticeResult {
+  id: string;
+  status: ChannelNoticeReceipt;
+}
+
+export type ChannelNoticeReceipt = "stored" | "duplicate" | (string & {});
+export const CHANNEL_NOTICE_RECEIPTS = ["stored", "duplicate"] as const;
+
+export interface ChannelNoticeStatusParams {
+  contribution: string;
+}
+
+export interface ChannelNoticeStatusResult {
+  ready: boolean;
+}
+
+/**
  * channel.receive: one of the owner's messages (only the owner's). Answered once the hub has it, deduplicated by id
  * and queued, not after the turn.
  */
@@ -6246,6 +6291,9 @@ export const CALLS: Record<string, Call> = {
   "sent.record": { from: "program", params: "ConnectorSentRecordParams", result: "Empty" },
   "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
   "channel.receive": { from: "program", params: "ChannelReceiveParams", result: "Empty" },
+  "channel.receive_notice": { from: "program", params: "ChannelNoticeParams", result: "ChannelNoticeResult" },
+  "channel.notice_status": { from: "program", params: "ChannelNoticeStatusParams", result: "ChannelNoticeStatusResult" },
+  "channel.confirm_notice": { from: "hub", params: "ChannelNoticeConfirmParams", result: "Empty" },
   "channel.status": { from: "program", params: "ChannelStatusParams", result: "Empty" },
   "channel.send": { from: "hub", params: "ChannelSendParams", result: "ChannelSendResult" },
   "channel.typing": { from: "hub", params: "ChannelTypingParams", result: "Empty" },

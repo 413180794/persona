@@ -4391,6 +4391,60 @@ const (
 // ChannelSendKinds are the values of ChannelSendKind, in order.
 var ChannelSendKinds = []string{"answer", "note", "ask", "push"}
 
+// ChannelNoticeConfirmParams: A full Persona client confirmed the stored grounded draft. The program resolves the
+// original notice id locally; it gets no new recipient, text or tool arguments.
+type ChannelNoticeConfirmParams struct {
+	Contribution string `json:"contribution"`
+	ID           string `json:"id"`
+}
+
+// ChannelNoticeParams: an untrusted display-only item. Requires the explicit channel.notice grant and an existing
+// main conversation. The hub derives the attribution from the calling extension.
+type ChannelNoticeParams struct {
+	Contribution string        `json:"contribution"`
+	Notice       ChannelNotice `json:"notice"`
+}
+
+type ChannelNotice struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	SourceURL string `json:"source_url"`
+	Text      string `json:"text"`
+	Forward   string `json:"forward"`
+}
+
+// Values of ChannelNoticeKind.
+const (
+	ChannelNoticeKindGroundedReply   = "grounded_reply"
+	ChannelNoticeKindTaskSignal      = "task_signal"
+	ChannelNoticeKindAgentSuggestion = "agent_suggestion"
+)
+
+// ChannelNoticeKinds are the values of ChannelNoticeKind, in order.
+var ChannelNoticeKinds = []string{"grounded_reply", "task_signal", "agent_suggestion"}
+
+type ChannelNoticeResult struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+// Values of ChannelNoticeReceipt.
+const (
+	ChannelNoticeReceiptStored    = "stored"
+	ChannelNoticeReceiptDuplicate = "duplicate"
+)
+
+// ChannelNoticeReceipts are the values of ChannelNoticeReceipt, in order.
+var ChannelNoticeReceipts = []string{"stored", "duplicate"}
+
+type ChannelNoticeStatusParams struct {
+	Contribution string `json:"contribution"`
+}
+
+type ChannelNoticeStatusResult struct {
+	Ready bool `json:"ready"`
+}
+
 // ChannelReceiveParams: channel.receive: one of the owner's messages (only the owner's). Answered once the hub has
 // it, deduplicated by id and queued, not after the turn.
 type ChannelReceiveParams struct {
@@ -6492,6 +6546,12 @@ var newDef = map[string]func() any{
 	"ConnectorArchivedChats":        func() any { return new(ConnectorArchivedChats) },
 	"ConnectorArchivedChat":         func() any { return new(ConnectorArchivedChat) },
 	"ConnectorChangedEvent":         func() any { return new(ConnectorChangedEvent) },
+	"ChannelNoticeConfirmParams":    func() any { return new(ChannelNoticeConfirmParams) },
+	"ChannelNoticeParams":           func() any { return new(ChannelNoticeParams) },
+	"ChannelNotice":                 func() any { return new(ChannelNotice) },
+	"ChannelNoticeResult":           func() any { return new(ChannelNoticeResult) },
+	"ChannelNoticeStatusParams":     func() any { return new(ChannelNoticeStatusParams) },
+	"ChannelNoticeStatusResult":     func() any { return new(ChannelNoticeStatusResult) },
 	"ChannelReceiveParams":          func() any { return new(ChannelReceiveParams) },
 	"ChannelMessage":                func() any { return new(ChannelMessage) },
 	"ChannelBlob":                   func() any { return new(ChannelBlob) },
@@ -6667,6 +6727,9 @@ var Calls = map[string]Call{
 	"sent.record":                    {Name: "sent.record", From: "program", Params: "ConnectorSentRecordParams", Result: "Empty"},
 	"connector.changed":              {Name: "connector.changed", From: "program", Params: "ConnectorChangedEvent", Result: "", Event: true},
 	"channel.receive":                {Name: "channel.receive", From: "program", Params: "ChannelReceiveParams", Result: "Empty"},
+	"channel.receive_notice":         {Name: "channel.receive_notice", From: "program", Params: "ChannelNoticeParams", Result: "ChannelNoticeResult"},
+	"channel.notice_status":          {Name: "channel.notice_status", From: "program", Params: "ChannelNoticeStatusParams", Result: "ChannelNoticeStatusResult"},
+	"channel.confirm_notice":         {Name: "channel.confirm_notice", From: "hub", Params: "ChannelNoticeConfirmParams", Result: "Empty"},
 	"channel.status":                 {Name: "channel.status", From: "program", Params: "ChannelStatusParams", Result: "Empty"},
 	"channel.send":                   {Name: "channel.send", From: "hub", Params: "ChannelSendParams", Result: "ChannelSendResult"},
 	"channel.typing":                 {Name: "channel.typing", From: "hub", Params: "ChannelTypingParams", Result: "Empty"},

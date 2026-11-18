@@ -6,6 +6,9 @@
   "x-side": "plugin",
   "x-methods": {
     "channel.receive": {"from": "program", "params": "ChannelReceiveParams", "result": "Empty"},
+    "channel.receive_notice": {"from": "program", "params": "ChannelNoticeParams", "result": "ChannelNoticeResult"},
+    "channel.notice_status": {"from": "program", "params": "ChannelNoticeStatusParams", "result": "ChannelNoticeStatusResult"},
+    "channel.confirm_notice": {"from": "hub", "params": "ChannelNoticeConfirmParams", "result": "Empty"},
     "channel.status": {"from": "program", "params": "ChannelStatusParams", "result": "Empty"},
     "channel.send": {"from": "hub", "params": "ChannelSendParams", "result": "ChannelSendResult"},
     "channel.typing": {"from": "hub", "params": "ChannelTypingParams", "result": "Empty"},
@@ -26,6 +29,52 @@
       "description": "What a message the hub sends is: the turn's answer, a note of the hub's own, a question (asks: text), a push the owner did not ask for.",
       "type": "string",
       "enum": ["answer", "note", "ask", "push"]
+    },
+    "ChannelNoticeConfirmParams": {
+      "description": "A full Persona client confirmed the stored grounded draft. The program resolves the original notice id locally; it gets no new recipient, text or tool arguments.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "contribution": {"type": "string"},
+        "id": {"type": "string"}
+      },
+      "required": ["contribution", "id"]
+    },
+    "ChannelNoticeParams": {
+      "description": "An untrusted display-only item. Requires the explicit channel.notice grant and an existing main conversation. The hub derives the attribution from the calling extension.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "contribution": {"type": "string"},
+        "notice": {"$ref": "#/$defs/ChannelNotice"}
+      },
+      "required": ["contribution", "notice"]
+    },
+    "ChannelNotice": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 96, "pattern": "^[A-Za-z0-9_-]+$"},
+        "kind": {"$ref": "#/$defs/ChannelNoticeKind"},
+        "source_url": {"type": "string", "maxLength": 1024, "pattern": "^https://applink\\.feishu\\.cn/client/chat/open[?]"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 2400},
+        "forward": {"type": "string", "minLength": 1, "maxLength": 3600}
+      },
+      "required": ["id", "kind", "source_url", "text", "forward"]
+    },
+    "ChannelNoticeKind": {"type": "string", "enum": ["grounded_reply", "task_signal", "agent_suggestion"]},
+    "ChannelNoticeResult": {
+      "type": "object",
+      "properties": {"id": {"type": "string"}, "status": {"$ref": "#/$defs/ChannelNoticeReceipt"}},
+      "required": ["id", "status"]
+    },
+    "ChannelNoticeReceipt": {"type": "string", "enum": ["stored", "duplicate"]},
+    "ChannelNoticeStatusParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"contribution": {"type": "string"}},
+      "required": ["contribution"]
+    },
+    "ChannelNoticeStatusResult": {
+      "type": "object",
+      "properties": {"ready": {"type": "boolean"}},
+      "required": ["ready"]
     },
     "ChannelReceiveParams": {
       "description": "channel.receive: one of the owner's messages (only the owner's). Answered once the hub has it, deduplicated by id and queued, not after the turn.",

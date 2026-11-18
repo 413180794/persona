@@ -352,3 +352,20 @@ if the assistant is disconnected, return `503 assistant_offline`; fields are unc
 - One owner per channel; group chats in channels are not handled.
 - Once `text` questions have been answered elsewhere, already-sent text can't be withdrawn.
 - Extension channel `progress` (send progress, then edit it with `channel.edit`): in the protocol, but the pipeline still draws progress cards only for the Lark bot; extension channels currently only have "typing".
+
+### Passive main conversation notices
+
+A channel contribution with the explicitly approved `channel.notice` scope can query
+`channel.notice_status` and append a display-only item with `channel.receive_notice`.
+The manager authenticates the extension and contribution from the running program.
+The program supplies a stable notice ID, kind, original Feishu message link, plain-text
+summary and conversation excerpt. The assistant writes an item to the existing main
+conversation feed. It does not enter transcript, turn routing, memory or owner-input
+handling. An unavailable main or durable store refuses writes. A retry of the same ID
+and content returns `duplicate`; changing that content returns an error.
+
+The Web client displays the extension and a link to the Feishu original, with a
+collapsed plain-text excerpt. For a grounded reply, a full Persona client can
+explicitly confirm the displayed draft. Persona then calls `channel.confirm_notice`
+on the same source extension, with only the stored notice ID. The source extension
+is responsible for checking that the draft is still current and sending once.

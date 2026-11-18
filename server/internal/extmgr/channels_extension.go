@@ -96,7 +96,7 @@ func (h *Manager) channelTell(ctx context.Context, id, replyTo, text, kind strin
 }
 
 // extensionChannelCall answers a plugin's calls in the channel namespace (extensions.go): method without it.
-func (h *Manager) extensionChannelCall(extensionID, method string, params json.RawMessage) (any, error) {
+func (h *Manager) extensionChannelCall(ctx context.Context, extensionID, method string, params json.RawMessage) (any, error) {
 	id := contributionOf(params)
 	p := h.extensions.reg.Get(extensionID)
 	if p == nil {
@@ -111,6 +111,8 @@ func (h *Manager) extensionChannelCall(extensionID, method string, params json.R
 		return nil, &rpc.Error{Code: extension.CodeNoContribution, Message: "no channel " + id}
 	}
 	switch method {
+	case assistantwire.MReceiveNotice, assistantwire.MNoticeStatus:
+		return h.extensionChannelNotice(ctx, extensionID, id, method, params)
 	case channel.MReceive:
 		var in channel.ReceiveParams
 		if err := json.Unmarshal(params, &in); err != nil {

@@ -1168,7 +1168,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			return c.Handle(ctx, rest, params)
 		}
 		if rest, ok := strings.CutPrefix(method, channel.Namespace+"."); ok && ps.h != nil {
-			return ps.h.extensionChannelCall(id, rest, params)
+			return ps.h.extensionChannelCall(ctx, id, rest, params)
 		}
 		if method == "quota.http" || method == "gateway.http" {
 			return ps.quotaHTTP(ctx, id, params)

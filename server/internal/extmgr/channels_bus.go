@@ -10,6 +10,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -341,6 +342,16 @@ func (h *Manager) channelsCall(ctx context.Context, method string, params json.R
 	switch method {
 	case assistantwire.ChannelsList:
 		return map[string]any{"channels": h.channelList(ctx)}, nil
+	case assistantwire.ChannelsConfirmNotice:
+		var p assistantwire.ConfirmChannelNotice
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		pc, ok := h.extensionChannel(p.Channel)
+		if !ok || pc.extension.Record.ID != p.Extension || !h.extensions.reg.HubScopeGranted(p.Extension, extension.ScopeChannelNotice) {
+			return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: "notice source unavailable"}
+		}
+		return struct{}{}, h.extensionCall(ctx, p.Channel, assistantwire.MConfirmNotice, map[string]string{"id": p.ID}, nil)
 	case assistantwire.ChannelsSend:
 		if a.FeishuCard != nil {
 			return nil, errors.New("native owner cards require the paired Feishu transport")

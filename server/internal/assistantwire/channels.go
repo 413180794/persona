@@ -19,7 +19,9 @@ import (
 // its own.
 const (
 	// MethodChannelReceive: ChannelReceive → {}: the owner's message from a plugin's channel, taken (not its turn).
-	MethodChannelReceive = "channels.receive"
+	MethodChannelReceive      = "channels.receive"
+	MethodChannelNotice       = "channels.notice"
+	MethodChannelNoticeStatus = "channels.notice_status"
 	// MethodChannelUnbound: ChannelUnbound → {}: clear the channel's pending turns and text questions before
 	// signing out finishes, including a connector that revoked its own authorization.
 	MethodChannelUnbound = "channels.unbound"

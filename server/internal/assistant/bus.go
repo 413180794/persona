@@ -587,6 +587,15 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		return map[string]any{}, s.ChannelUnbound(ctx, p)
+	case assistantwire.MethodChannelNotice:
+		var p assistantwire.ChannelNotice
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return s.receiveChannelNotice(ctx, p)
+	case assistantwire.MethodChannelNoticeStatus:
+		_, ready, err := s.noticeMain(ctx)
+		return assistantwire.NoticeStatusResult{Ready: ready && err == nil}, err
 	case assistantwire.MethodChannelReceive:
 		var p ChannelReceive
 		if err := decode(&p); err != nil {
