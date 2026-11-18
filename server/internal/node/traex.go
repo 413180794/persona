@@ -130,25 +130,35 @@ func (n *Node) traexOwnerThreads(threads map[string]codexAppThread) map[int][]st
 		})
 		var main, fallback []string
 		for _, o := range owners {
-			if t, known := threads[o.thread]; known {
-				if traexConversation(t) {
-					main = append(main, o.thread)
+			t, known := threads[o.thread]
+			if known && traexConversation(t) {
+				main = append(main, o.thread)
+				continue
+			}
+			p := rolloutPath(home, o.thread)
+			if p == "" {
+				// A new paginated owner can precede its state row. Wait for its source.
+				if !known && !paginated {
+					fallback = append(fallback, o.thread)
 				}
 				continue
 			}
-			if p := rolloutPath(home, o.thread); p != "" {
-				if !metaOf(home, p).sub {
-					main = append(main, o.thread)
-				} else if root := mainThread(home, o.thread); root != o.thread && validID(root) {
-					t, known := threads[root]
-					if (!known || traexConversation(t)) && !metaOf(home, rolloutPath(home, root)).sub {
-						fallback = append(fallback, root)
-					}
-				}
-			} else if !paginated {
-				// With paginated storage, a new owner can precede the cached state
-				// row. Wait for its source instead of promoting an unknown guardian.
-				fallback = append(fallback, o.thread)
+			m := metaOf(home, p)
+			if !known && !m.sub {
+				main = append(main, o.thread)
+				continue
+			}
+			root := m.root
+			if root == o.thread || !validID(root) {
+				continue
+			}
+			parent, listed := threads[root]
+			if listed && !traexConversation(parent) {
+				continue
+			}
+			rootPath := rolloutPath(home, root)
+			if (listed || rootPath != "") && (rootPath == "" || !metaOf(home, rootPath).sub) {
+				fallback = append(fallback, root)
 			}
 		}
 		if len(main) > 0 {

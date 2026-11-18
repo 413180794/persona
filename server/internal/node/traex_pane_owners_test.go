@@ -158,6 +158,19 @@ func TestTraexPaneOwnersDoNotPromotePaginatedGuardian(t *testing.T) {
 	}
 }
 
+func TestTraexPaginatedGuardianRolloutIdentifiesPane(t *testing.T) {
+	n, _, _ := startNode(t)
+	traexHistoryFixture(t, n, nil)
+	writeMetaRollout(t, n.traexHome(), threadGuardian, `{"id":"`+threadGuardian+`","session_id":"`+threadMain+
+		`","thread_source":"subagent"}`, time.Now())
+	writeOwner(t, n, threadGuardian, time.Now())
+	cacheTraexOwnerPane(t, os.Getpid())
+	got := n.traexAgents(context.Background(), []host.Agent{{PaneID: traexOwnerPane}}, nil)
+	if len(got) != 1 || got[0].SessionID() != threadMain {
+		t.Fatalf("pane with only the guardian's lock: %+v, want its parent", got)
+	}
+}
+
 func TestTraexPaneOwnersProcessAncestry(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
