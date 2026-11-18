@@ -191,6 +191,9 @@ func validSessionID(id string) bool { return sessionIDRe.MatchString(id) }
 // --- messages between conversations ---
 
 type relayMsg struct {
+	Digest *queuedSupervision `json:"digest,omitempty"`
+	OnceID string             `json:"once_id,omitempty"` // a partially pruned retry keeps its original delivery identity
+
 	// An already-rendered supervision message held for, or moved from, an incompatible
 	// conversation. Its original signals may no longer exist after a manager restart.
 	NeedsSupervisor bool      `json:"needs_supervisor,omitempty"`
@@ -590,7 +593,8 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 				b.mu.Unlock()
 				return
 			}
-			msg := q[0]
+			original := q[0]
+			msg := original
 			b.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			// A needs notice may have been answered on the phone after it queued while the agent's node still
@@ -609,6 +613,11 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 				}
 			}
 			var err error
+			if msg.Tool == superviseTool {
+				msg, err = s.recheckSuperviseRelay(ctx, id, original)
+				keep = err != nil
+				stale = !keep && msg.Tool == ""
+			}
 			tried := time.Now()
 			if !stale && !keep {
 				if s.relayLanded(machine, id, msg) {
@@ -617,6 +626,11 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 					err = s.deliverRelay(ctx, machine, id, msg)
 					if err == nil {
 						s.forgetDoubt(id, msg)
+					} else if errors.Is(err, errSupervisorUnavailable) && msg.Tool == superviseTool {
+						// The last task can close between the ledger check and admission.
+						var readErr error
+						msg, readErr = s.recheckSuperviseRelay(ctx, id, msg)
+						keep, stale = readErr != nil, readErr == nil && msg.Tool == ""
 					} else if s.relaySettled(machine, id, msg, tried, err) {
 						err = nil
 					}
@@ -629,17 +643,22 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 			// Delivered, answered just in time, or the conversation is gone for good: off the queue. An unreachable
 			// node or another delivery failure keeps it.
 			taken := false
-			if stale || !keep && (err == nil || strings.Contains(err.Error(), "is gone")) {
-				if q := b.st.Queue[id]; len(q) > 0 && (!stale || q[0] == msg) {
-					b.st.Queue[id] = q[1:]
+			if q := b.st.Queue[id]; len(q) > 0 && q[0] == original {
+				if stale || !keep && (err == nil || strings.Contains(err.Error(), "is gone")) {
+					taken = s.editQueuedRelayLocked(id, 0, relayMsg{})
+					if taken {
+						delete(b.doubted, relayMsgID(id, original))
+					}
+				} else if msg != original && !s.editQueuedRelayLocked(id, 0, msg) {
+					msg = original
 				}
-				if len(b.st.Queue[id]) == 0 {
-					delete(b.st.Queue, id)
+				if !taken {
+					if stale {
+						// Persist the retirement before publishing or draining the next row.
+						msg, stale, keep = original, false, true
+					}
+					b.stuck[id] = msg
 				}
-				s.saveRelayLocked()
-				taken = true
-			} else {
-				b.stuck[id] = msg // the next drain takes another one first (pickLocked)
 			}
 			b.mu.Unlock()
 			if taken && !stale && err == nil {
@@ -648,7 +667,7 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 			if taken {
 				s.publish(context.Background()) // it no longer shows waiting
 			}
-			if stale {
+			if taken && stale {
 				if list, err := s.sessions(context.Background(), machine); err == nil {
 					s.drainRelays(machine, list) // a message queued behind the stale one is due as well
 				}

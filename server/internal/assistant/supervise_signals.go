@@ -62,6 +62,7 @@ var (
 // the same signal with the same key is told once.
 type superviseSignal struct {
 	Todo, Kind, Key string
+	owner           string // ledger owner when routed, including explicit escalations and fallbacks
 	PRURL           string // draft_pr: the current or earlier followed PR, revalidated before delivery
 	// Unreachable: this decision exists because the task leader's agent could not be reached, not because the worker
 	// waits for the user. It stays a decision even though the worker's ledger is not needs_user (task_leader.go).
@@ -145,11 +146,10 @@ type superviseBook struct {
 	writeMu sync.Mutex // one ledger write at a time (updateSupervision)
 	dedupMu sync.Mutex // serializes digest reservations and delivery
 	dedup   map[string]superviseFingerprint
-	pending map[string]superviseSignal   // by todo|kind
-	sent    map[string]string            // todo|kind → the key last told
-	asks    map[string]string            // todo → what its agent last asked (InteractionRaised)
-	last    time.Time                    // when the last supervision message went out
-	queued  map[string][]superviseSignal // conversation → the signals of the message still waiting in its queue
+	pending map[string]superviseSignal // by todo|kind
+	sent    map[string]string          // todo|kind → the key last told
+	asks    map[string]string          // todo → what its agent last asked (InteractionRaised)
+	last    time.Time                  // when the last supervision message went out
 	timer   *time.Timer
 	timerAt time.Time
 	// noMainSince is when digests started finding no main conversation (zero: the last one found it), noMainLogged
@@ -413,6 +413,7 @@ func (s *Service) superviseWatch(ctx context.Context, now time.Time) {
 	s.supervise.dedupMu.Lock()
 	s.rehomeRuntimeSupervision(ctx, s.settings(ctx))
 	s.supervise.dedupMu.Unlock()
+	s.pruneQueuedSupervision(ctx)
 	s.autoReviewTick(ctx, now)
 	s.askTick(now)                 // cards held past their time go up a rung (ask_route.go)
 	s.handOverUnreviewed(ctx, now) // a review a side conversation left waiting goes to the main one's follow-up (side_handover.go)

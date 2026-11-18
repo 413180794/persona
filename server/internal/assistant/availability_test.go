@@ -351,7 +351,7 @@ func TestAvailabilityQueueWait(t *testing.T) {
 	if queued.Depth != 2 || queued.QueuedAt.IsZero() {
 		t.Fatalf("queued %+v", queued)
 	}
-	if !s.replaceQueuedSupervise("receiver", relayMsg{Tool: superviseTool, Text: "A later one."}) {
+	if !s.replaceQueuedSupervise("receiver", queued, relayMsg{Tool: superviseTool, Text: "A later one."}) {
 		t.Fatal("not replaced")
 	}
 	if got := s.relays.st.Queue["receiver"][1]; got.Text != "A later one." || !got.QueuedAt.Equal(queued.QueuedAt) || got.Depth != 2 {

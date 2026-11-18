@@ -132,27 +132,25 @@ func (s *Service) ensureBackground(ctx context.Context) (id, gone string) {
 // backgroundLost takes back what was still queued for background supervisor old, which is gone. The signals of the
 // supervision message that waited there are returned with their deduplication entries forgotten, so they are told
 // again where they go now, and that message is dropped. When the signals are not known (the manager restarted since it
-// was queued: supervise.queued is memory only, the deduplication history is not) the message itself moves to
+// was queued: the original signals are memory only) the message itself moves to
 // conversation to, the new background supervisor or the main conversation, as do the other messages that waited
 // there: nothing queued is dropped unread. dedupMu is held.
 func (s *Service) backgroundLost(ctx context.Context, old, to, web string) []superviseSignal {
 	if old == "" || old == to {
 		return nil
 	}
-	b := &s.supervise
-	b.mu.Lock()
-	lost := b.queued[old]
-	b.setQueuedLocked(old, nil)
-	b.mu.Unlock()
+	var lost []superviseSignal
 	moved := 0
 	r := &s.relays
 	r.mu.Lock()
 	if s.relayLocked(ctx) && len(r.st.Queue[old]) > 0 && !r.draining[old] {
 		for _, msg := range r.st.Queue[old] {
-			if msg.Tool == superviseTool && !msg.NeedsSupervisor && len(lost) > 0 {
+			if msg.Tool == superviseTool && !msg.NeedsSupervisor && msg.Digest != nil && len(msg.Digest.signals) > 0 {
+				lost = mergeSignals(lost, msg.Digest.signals)
 				continue // told again from its signals
 			}
 			if to != "" {
+				msg.OnceID = ""
 				r.st.Queue[to] = append(r.st.Queue[to], msg)
 				moved++
 			}
@@ -188,10 +186,7 @@ func (s *Service) backgroundStranded(ctx context.Context) {
 		return
 	}
 	b := &s.supervise
-	b.mu.Lock()
-	waiting := len(b.queued[id]) > 0
-	b.mu.Unlock()
-	if !waiting && s.queuedFor(id) == 0 || cfg.BackgroundSupervisorMachineID == cfg.MachineID && s.backgroundThere(ctx, cfg, id) {
+	if s.queuedFor(id) == 0 || cfg.BackgroundSupervisorMachineID == cfg.MachineID && s.backgroundThere(ctx, cfg, id) {
 		return
 	}
 	b.dedupMu.Lock()
