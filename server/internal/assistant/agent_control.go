@@ -805,8 +805,17 @@ func (s *Service) reportNow(ctx context.Context, t Todo, machine, session, kind,
 	// the handoff; progress reports only update the card (the stream stays quiet).
 	if kind != upReportProgress {
 		body := reportBody{Kind: kind, Text: text, Evidence: evidence, Step: step, Steps: steps}
-		if _, err := s.appendFeed(ctx, t.Supervision.Supervisor, feedReport, t.ID, body); err != nil {
+		_, err := s.appendFeed(ctx, t.Supervision.Supervisor, feedReport, t.ID, body)
+		if err != nil {
 			s.logf("task %s: report feed: %v", t.ID, err)
+		}
+		if cfg := s.settings(ctx); cfg.Main == "" {
+			if c, ok := s.session(ctx, cfg.MachineID, t.Supervision.Supervisor); ok && runtimeSupervisionUnavailable(c) {
+				if err != nil {
+					return "", fmt.Errorf("could not keep the report for task %s: %w", t.ID, err)
+				}
+				return fmt.Sprintf("Recorded on task %s with its evidence. Follow-up is waiting for a compatible supervisor.", t.ID), nil
+			}
 		}
 	}
 	s.logf("task %s: %s reports %s", t.ID, short(session), kind)

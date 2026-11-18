@@ -99,11 +99,13 @@ func (s *Service) sendDigest(ctx context.Context) {
 	}
 	web := s.webBase(ctx)
 	groups := map[string][]superviseSignal{}
+	var waiting []superviseSignal
 	var order []string
 	leaders := map[[2]string][]superviseSignal{} // leader agent (machine, session) → the signals of its workers (task_leader.go)
 	var leaderOrder []TodoAgent
 	gone := map[string]bool{}      // leaders whose conversation is not there: their signals go to the main one
 	s.rehomeLeaderlessWorkers(ctx) // a worker whose leader's task closed gets a supervisor that can act, before routing
+	runtimes := s.rehomeRuntimeSupervision(ctx, here)
 	if s.backgroundNeeded(here, list) {
 		// The background supervisor is made the first time a signal is for it, and again when it is gone. One that
 		// cannot start leaves here as it was: the gone check below sends its signals to the main conversation.
@@ -161,6 +163,15 @@ func (s *Service) sendDigest(ctx context.Context) {
 				to = here.Main
 			}
 		}
+		// Keep an undeliverable review separate from needs_user and other
+		// secretary notifications that can still go into the same main chat.
+		if here.secretary(to) && s.backgroundNeeded(here, []superviseSignal{g}) {
+			t, ok := s.todoNow(g.Todo)
+			if ok && (runtimes[to] || t.Origin != here.Main && t.Supervision != nil && t.Supervision.Supervisor == here.Main) {
+				waiting = append(waiting, g)
+				continue
+			}
+		}
 		if _, ok := groups[to]; !ok {
 			order = append(order, to)
 		}
@@ -172,6 +183,9 @@ func (s *Service) sendDigest(ctx context.Context) {
 	}
 	for _, to := range order {
 		delivered = s.deliverDigest(ctx, here, to, groups[to], web, now, prev) || delivered
+	}
+	if len(waiting) > 0 {
+		s.deliverDigest(context.WithValue(ctx, supervisionEvent{}, true), here, here.Main, waiting, web, now, prev)
 	}
 	if delivered && len(order) > 1 {
 		// One message went out: what another left undone (put the last message back to prev) does not undo it.
@@ -250,7 +264,9 @@ func (s *Service) deliverDigest(ctx context.Context, here Settings, to string, l
 	queued := b.queued[to]
 	b.mu.Unlock()
 	msg := relayMsg{From: superviseTool, FromTitle: "督办", Tool: superviseTool, At: now.UTC()}
-	if len(queued) > 0 && !slices.ContainsFunc(kept, func(g superviseSignal) bool {
+	c, ok := s.session(ctx, here.MachineID, to)
+	msg.NeedsSupervisor = ctx.Value(supervisionEvent{}) == true || ok && runtimeSupervisionUnavailable(c) && !here.secretary(to)
+	if !msg.NeedsSupervisor && len(queued) > 0 && !slices.ContainsFunc(kept, func(g superviseSignal) bool {
 		return g.Kind == sigPRConflict || g.Kind == sigDraftPR || g.Kind == sigDecisionReply
 	}) {
 		// The last message may still wait in the queue: this one takes its place with both.
@@ -279,8 +295,7 @@ func (s *Service) deliverDigest(ctx context.Context, here Settings, to string, l
 	} else {
 		s.logf("supervise: %d signal(s) to the main conversation", len(entries))
 	}
-	c, ok := s.session(ctx, here.MachineID, to)
-	if !ok || c.Status == proto.StatusWorking || c.Starting || s.relayWaits(to, msg) {
+	if !ok || msg.NeedsSupervisor || c.Status == proto.StatusWorking || c.Starting || s.relayWaits(to, msg) {
 		if !s.queueDigest(to, msg, kept, now, prev) {
 			return false
 		}
@@ -336,6 +351,9 @@ func (s *Service) queueDigest(to string, msg relayMsg, kept []superviseSignal, a
 	}
 	b := &s.supervise
 	if s.queueRelay(to, msg) > 0 {
+		if msg.NeedsSupervisor {
+			return true // replay the persisted evidence without a second dedup reservation
+		}
 		b.mu.Lock()
 		b.setQueuedLocked(to, kept)
 		b.mu.Unlock()
@@ -396,9 +414,13 @@ func (s *Service) replaceQueuedSupervise(to string, msg relayMsg) bool {
 	}
 	q := b.st.Queue[to]
 	for i := range q {
-		if q[i].Tool == superviseTool && (i > 0 || !b.draining[to]) {
-			q[i] = msg.replacing(q[i], time.Now()) // it waited since then (relay_presence.go)
-			s.saveRelayLocked()
+		if q[i].Tool == superviseTool && !q[i].NeedsSupervisor && (i > 0 || !b.draining[to]) {
+			previous := q[i]
+			q[i] = msg.replacing(previous, time.Now()) // it waited since then (relay_presence.go)
+			if err := s.saveRelayLocked(); err != nil {
+				q[i] = previous
+				return false
+			}
 			return true
 		}
 	}

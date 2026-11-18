@@ -1,5 +1,6 @@
 {
   "archive_main": "主对话不能归档",
   "archive_background_supervisor": "后台督办对话不能归档",
-  "background_supervisor": "后台督办"
+  "background_supervisor": "后台督办",
+  "waiting_for_supervisor": "任务回报等待 Claude Code 或 Codex 督办"
 }

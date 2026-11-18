@@ -191,12 +191,15 @@ func validSessionID(id string) bool { return sessionIDRe.MatchString(id) }
 // --- messages between conversations ---
 
 type relayMsg struct {
-	From      string    `json:"from"`
-	FromTitle string    `json:"from_title"`
-	Tool      string    `json:"tool"`
-	Text      string    `json:"text"`
-	Hop       int       `json:"hop"`
-	At        time.Time `json:"at"`
+	// An already-rendered supervision message held for, or moved from, an incompatible
+	// conversation. Its original signals may no longer exist after a manager restart.
+	NeedsSupervisor bool      `json:"needs_supervisor,omitempty"`
+	From            string    `json:"from"`
+	FromTitle       string    `json:"from_title"`
+	Tool            string    `json:"tool"`
+	Text            string    `json:"text"`
+	Hop             int       `json:"hop"`
+	At              time.Time `json:"at"`
 	// State is a task notice's state (quiet.go: done | needs | interrupted | failed); "" for other relays.
 	State string `json:"state,omitempty"`
 	// Urgent: a supervision message with a signal that waits on a decision (relay_presence.go). A version that does
@@ -287,10 +290,10 @@ func (s *Service) relayLocked(ctx context.Context) bool {
 	return true
 }
 
-func (s *Service) saveRelayLocked() {
+func (s *Service) saveRelayLocked() error {
 	st := s.store()
 	if st == nil {
-		return
+		return nil
 	}
 	for id, hp := range s.relays.st.Hops {
 		if time.Since(hp.At) > relayHopMemory {
@@ -312,7 +315,9 @@ func (s *Service) saveRelayLocked() {
 	defer cancel()
 	if err := st.PutSetting(ctx, relayKey, s.relays.st); err != nil {
 		s.logf("save conversation relay: %v", err)
+		return err
 	}
+	return nil
 }
 
 // hopLocked is the hop a message from → to would be, and whether it is an answer: the first message back to the
@@ -408,8 +413,13 @@ func (s *Service) queueRelay(to string, msg relayMsg) int {
 		return 0
 	}
 	msg.QueuedAt, msg.Depth = time.Now().UTC(), len(b.st.Queue[to])+1
-	b.st.Queue[to] = append(b.st.Queue[to], msg)
-	s.saveRelayLocked()
+	previous := b.st.Queue[to]
+	b.st.Queue[to] = append(previous, msg)
+	if err := s.saveRelayLocked(); err != nil {
+		b.st.Queue[to] = previous
+		b.mu.Unlock()
+		return 0
+	}
 	n := len(b.st.Queue[to])
 	b.mu.Unlock()
 	go s.releaseHeldAsks(to)
@@ -433,6 +443,10 @@ func (s *Service) queuedRelays() (map[string][]string, bool) {
 		for _, msg := range q {
 			if msg.Tool == noticeTool || msg.Tool == askAnswerTool || msg.Tool == spawnNoticeTool || msg.Tool == taskEndTool { // a quiet task's notice (quiet.go), a question's answer (ask_todo.go): its title is enough
 				out[id] = append(out[id], msg.FromTitle+"的通知")
+				continue
+			}
+			if msg.Tool == superviseTool && msg.NeedsSupervisor {
+				out[id] = append(out[id], i18n.T(s.lang(context.Background()), "assistant-conversations.waiting_for_supervisor"))
 				continue
 			}
 			if msg.Tool == superviseTool { // the tasks to follow up (supervise_digest.go)
@@ -459,6 +473,9 @@ func (msg relayMsg) source() *proto.MessageSource {
 // deliverRelay sends one message into an assistant conversation and notes the hop it is working on. A quiet task's
 // notice (quiet.go) is its own text, and the work it starts is not a hop of any chain.
 func (s *Service) deliverRelay(ctx context.Context, machine, to string, msg relayMsg) error {
+	if msg.Tool == superviseTool {
+		ctx = context.WithValue(ctx, supervisionEvent{}, msg.NeedsSupervisor || !s.settings(ctx).secretary(to))
+	}
 	text := relayDeliveryText(msg)
 	s.availInput(machine, to, relayKind(msg), time.Now()) // a notice has no message source of its own
 	if msg.Tool == superviseTool {
@@ -534,14 +551,25 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 		b.mu.Unlock()
 		return
 	}
+	b.mu.Unlock()
+	// Queue selection needs only the saved role. The node can list sessions
+	// during a control call, before the hub is able to answer another hello.
+	cfg, _ := s.settingsLastGood(context.Background())
+	b.mu.Lock()
 	var due []string
 	held := map[string]time.Duration{}
 	now := time.Now()
 	for _, c := range list {
 		if len(b.st.Queue[c.SessionID]) > 0 && c.Status != proto.StatusWorking && !c.Starting && !b.draining[c.SessionID] {
-			i, wait := b.pickLocked(c.SessionID, now)
+			secretary := cfg.secretary(c.SessionID)
+			runtime := runtimeSupervisionUnavailable(c)
+			i, wait := b.pickLocked(c.SessionID, now, func(m relayMsg) bool {
+				return m.Tool == superviseTool && (runtime && !secretary || m.NeedsSupervisor && secretary)
+			})
 			if i < 0 {
-				held[c.SessionID] = wait
+				if wait > 0 { // a missing supervisor waits for routing, not a zero-delay timer
+					held[c.SessionID] = wait
+				}
 				continue
 			}
 			b.frontLocked(c.SessionID, i)

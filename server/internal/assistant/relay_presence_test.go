@@ -450,10 +450,10 @@ func TestDecisionWaitingMessagesAreHeldAtMost(t *testing.T) {
 		{Tool: "conversation_send", Text: "other", At: now.Add(-10 * time.Minute)},
 		{Tool: superviseTool, Urgent: true, Text: "soon", At: now.Add(-4 * time.Minute)},
 	}
-	if i, wait := b.pickLocked("conv1", now); i != -1 || wait != time.Minute {
+	if i, wait := b.pickLocked("conv1", now, nil); i != -1 || wait != time.Minute {
 		t.Fatalf("pick %d, wait %s", i, wait)
 	}
-	if i, wait := b.pickLocked("conv1", now.Add(time.Minute)); i != 1 || wait != 0 {
+	if i, wait := b.pickLocked("conv1", now.Add(time.Minute), nil); i != 1 || wait != 0 {
 		t.Fatalf("after the decision's hold: pick %d, wait %s", i, wait)
 	}
 	b.frontLocked("conv1", 1)

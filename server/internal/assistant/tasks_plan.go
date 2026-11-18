@@ -347,6 +347,8 @@ func (s *Service) planSupervisor(ctx context.Context, self, lead string) (string
 		return "", errors.New("supervisor: only the main conversation hands work to a leader conversation; leave it out to supervise the tasks yourself")
 	case !s.isLeader(ctx, lead):
 		return "", fmt.Errorf("supervisor: %s is not a leader conversation (assistant.leaders lists them); leave it out to supervise the tasks yourself", lead)
+	case !s.supervises(ctx, lead):
+		return "", errors.New("supervisor: this leader uses a runtime without separate supervision instructions; choose a Claude Code or Codex leader or leave supervisor empty")
 	}
 	return lead, nil
 }

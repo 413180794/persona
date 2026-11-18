@@ -149,7 +149,7 @@ func (s *Service) backgroundLost(ctx context.Context, old, to, web string) []sup
 	r.mu.Lock()
 	if s.relayLocked(ctx) && len(r.st.Queue[old]) > 0 && !r.draining[old] {
 		for _, msg := range r.st.Queue[old] {
-			if msg.Tool == superviseTool && len(lost) > 0 {
+			if msg.Tool == superviseTool && !msg.NeedsSupervisor && len(lost) > 0 {
 				continue // told again from its signals
 			}
 			if to != "" {

@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -11,40 +12,53 @@ import (
 // It is never read from RPC parameters or inferred from a model purpose supplied by a caller.
 type supervisionStartup struct{}
 
+// supervisionEvent marks a manager-owned relay. True requires an authorized reviewer;
+// the secretary may still receive its ordinary escalations without acquiring that role.
+type supervisionEvent struct{}
+
+func (cfg Settings) secretary(id string) bool {
+	return id != "" && id == cfg.Main && (cfg.MainSupervisesOwnTasks == nil || !*cfg.MainSupervisesOwnTasks)
+}
+
+var errSupervisorUnavailable = errors.New("task follow-up requires an authorized Claude Code or Codex supervisor")
+
 func (s *Service) supervisionInstructions(ctx context.Context, machine, id string) (string, error) {
 	cfg := s.settings(ctx)
 	if id == "" || s.isWorkMachine(machine) {
 		return "", nil
 	}
-	if id == cfg.Main {
-		if machine != cfg.mainRouteMachine() || cfg.MainSupervisesOwnTasks == nil || !*cfg.MainSupervisesOwnTasks {
+	main := id == cfg.Main
+	if main {
+		if machine != cfg.mainRouteMachine() || cfg.secretary(id) {
 			return "", nil
 		}
-	} else {
-		if machine != cfg.MachineID {
+	} else if machine != cfg.MachineID {
+		return "", nil
+	}
+	c, listed := s.session(ctx, machine, id)
+	if listed && runtimeSupervisionUnavailable(c) {
+		return "", nil
+	}
+	if !main && !(id == cfg.BackgroundSupervisor && cfg.BackgroundSupervisorMachineID == machine) && !slices.Contains(cfg.Leaders, id) {
+		// Side chats genuinely supervise their own open tasks (#4669). Sharing the
+		// directory, a scheduled purpose, or the ability to plan is not a role.
+		if listed && (!c.Assistant || c.Space != "") {
 			return "", nil
 		}
-		if !(id == cfg.BackgroundSupervisor && cfg.BackgroundSupervisorMachineID == machine) && !slices.Contains(cfg.Leaders, id) {
-			// Side chats genuinely supervise their own open tasks (#4669). Sharing the
-			// directory, a scheduled purpose, or the ability to plan is not a role.
-			if c, ok := s.session(ctx, machine, id); ok && (!c.Assistant || c.Space != "") {
-				return "", nil
+		if err := s.ensureTodosLoaded(ctx); err != nil {
+			return "", err // unknown ownership must not silently demote a side supervisor
+		}
+		owns := false
+		s.todos.mu.RLock()
+		for _, todo := range s.todos.todos {
+			if todo.DoneAt == nil && todo.Supervision != nil && todo.Supervision.Supervisor == id {
+				owns = true
+				break
 			}
-			if err := s.ensureTodosLoaded(ctx); err != nil {
-				return "", err // unknown ownership must not silently demote a side supervisor
-			}
-			owns := false
-			s.todos.mu.RLock()
-			for _, todo := range s.todos.todos {
-				if todo.DoneAt == nil && todo.Supervision != nil && todo.Supervision.Supervisor == id {
-					owns = true
-					break
-				}
-			}
-			s.todos.mu.RUnlock()
-			if !owns {
-				return "", nil
-			}
+		}
+		s.todos.mu.RUnlock()
+		if !owns {
+			return "", nil
 		}
 	}
 	// Only a candidate supervisor needs this fail-closed check. An unreadable guest
@@ -66,6 +80,9 @@ func (s *Service) putSupervisionInstructions(ctx context.Context, machine, id st
 	}
 	if id == "" && ctx.Value(supervisionStartup{}) == true && p["guest"] == nil {
 		text = prompts.RenderSupervisionInstructions()
+	}
+	if text == "" && ctx.Value(supervisionEvent{}) == true {
+		return errSupervisorUnavailable
 	}
 	p["supervision_instructions"] = text
 	return nil

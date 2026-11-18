@@ -36,7 +36,18 @@ func (s *Service) isLeader(ctx context.Context, id string) bool {
 
 // supervises: conversation id supervises the tasks it hands out with task_plan: the main conversation or a leader.
 func (s *Service) supervises(ctx context.Context, id string) bool {
-	return s.isMain(ctx, id) || s.isLeader(ctx, id)
+	if id == "" {
+		return false
+	}
+	cfg := s.settings(ctx)
+	if id == cfg.Main {
+		return true // the main ledger also represents its background supervisor
+	}
+	if !slices.Contains(cfg.Leaders, id) {
+		return false
+	}
+	c, ok := s.session(ctx, cfg.MachineID, id)
+	return !ok || !runtimeSupervisionUnavailable(c)
 }
 
 // defaultPlanSupervisor is who supervises a task conversation hands out with task_plan when conversation does not supervise
@@ -56,7 +67,7 @@ func (s *Service) defaultPlanSupervisor(ctx context.Context, conversation, paren
 	if s.supervises(ctx, conversation) {
 		return "", false // the main conversation and leaders supervise their own (supervises)
 	}
-	if c, ok := s.session(ctx, s.settings(ctx).MachineID, conversation); ok && c.Assistant && !s.isBackground(ctx, conversation) {
+	if c, ok := s.session(ctx, s.settings(ctx).MachineID, conversation); ok && c.Assistant && !runtimeSupervisionUnavailable(c) && !s.isBackground(ctx, conversation) {
 		return conversation, true
 	}
 	main := s.settings(ctx).Main
@@ -121,7 +132,7 @@ func (s *Service) escalateToMain(t Todo, round int, why, recommend string) {
 // with its own in-session subagents, so tasks do not spawn tasks without end. The main conversation and leaders hand
 // out freely.
 func (s *Service) workerRefusal(ctx context.Context, machine, self string) error {
-	if self == "" || s.supervises(ctx, self) {
+	if self == "" || s.isMain(ctx, self) || s.isLeader(ctx, self) {
 		return nil
 	}
 	if s.devs != nil {
@@ -169,6 +180,8 @@ func (s *Service) setLeaders(ctx context.Context, v json.RawMessage) (*ownChange
 		}
 		if c, ok := s.session(ctx, cfg.MachineID, id); !ok || !c.Assistant {
 			return nil, fmt.Errorf("%s is not a Persona conversation on the assistant's machine (conversations_list has their ids)", id)
+		} else if runtimeSupervisionUnavailable(c) {
+			return nil, errSupervisorUnavailable
 		}
 		list = append(list, id)
 	}

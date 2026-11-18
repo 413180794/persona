@@ -159,11 +159,14 @@ func (b *relayBook) holdLocked(to string, msg relayMsg, now time.Time) time.Dura
 // held for the owner, the one that queued first within it. The message that could not go in last time (b.stuck: its
 // agent's computer unreachable, a delivery that failed) is passed over while another may go, so it holds up nothing
 // but itself. None may go (-1): wait is how long until the first may. b.mu is held.
-func (b *relayBook) pickLocked(to string, now time.Time) (i int, wait time.Duration) {
+func (b *relayBook) pickLocked(to string, now time.Time, skip func(relayMsg) bool) (i int, wait time.Duration) {
 	i = -1
 	stuck := -1
 	q := b.st.Queue[to]
 	for j, m := range q {
+		if skip != nil && skip(m) {
+			continue
+		}
 		if h := b.holdLocked(to, m, now); h > 0 {
 			if wait == 0 || h < wait {
 				wait = h
@@ -366,7 +369,7 @@ func (s *Service) drainHeldRelays(ctx context.Context, now time.Time) {
 		if b.holds[id] != nil || b.draining[id] {
 			continue
 		}
-		if i, _ := b.pickLocked(id, now); i >= 0 {
+		if i, _ := b.pickLocked(id, now, nil); i >= 0 {
 			due = append(due, id)
 		}
 	}

@@ -40,6 +40,14 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 	if p.State != planOpen {
 		return nil, errPlanNotOpen
 	}
+	// Recheck at Start as well for plans that waited on the owner's card.
+	if cfg := s.settings(ctx); cfg.Main == "" {
+		if c, ok := s.session(ctx, cfg.MachineID, p.Conversation); ok && c.Assistant && runtimeSupervisionUnavailable(c) {
+			if _, reporter := s.reporterOf(ctx, p.Conversation); !reporter {
+				return nil, planInvalid{errors.New("configure a main conversation for task follow-up before dispatching from this runtime")}
+			}
+		}
+	}
 	for i := range p.Tasks {
 		if i < len(edits) {
 			applyPlanEdit(&p.Tasks[i], edits[i])
@@ -132,7 +140,7 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 		// The main conversation or a leader follows up what it hands out (supervise.go); a task the main conversation
 		// handed to a leader is that leader's, while it still is one (else the main conversation's again).
 		if sup := p.Conversation; s.supervises(ctx, sup) {
-			if t.Supervisor != "" && s.isLeader(ctx, t.Supervisor) {
+			if t.Supervisor != "" && s.isLeader(ctx, t.Supervisor) && s.supervises(ctx, t.Supervisor) {
 				sup = t.Supervisor
 				if t.ReuseTodo == "" {
 					s.taskCard(ctx, sup, todo.ID, "") // the leader sees its task's card too; the plan's stays where it was made
