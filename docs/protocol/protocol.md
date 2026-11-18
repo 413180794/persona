@@ -1197,6 +1197,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "questions":[{"question":"…","header":"…","multi_select":false,
                "options":[{"label":"…","description":"…"}]}],   // question
  "plan":"markdown",                                              // plan
+ "plan_then":"acceptEdits",                                     // plan: the supported mode recorded at start, authoritative on every approving surface; absent, plan or unknown keeps legacy choices (#3784)
  "tool_input":{...}, "summary":"rm -rf build",                   // permission
  "editable_text":"the current outgoing text",                    // permission, node → clients only on an eligible Claude Code Lark send/reply; absent everywhere else
  "screen":"visible terminal text",                                // screen (TUI dialogs hooks can't cover)
@@ -1209,7 +1210,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
 
 // Resolution (by kind)
 {"answers":{"<original question text>":"the chosen label; multiple joined with \", \"; or custom text"}}   // question
-{"approve":true,"mode":"bypassPermissions|acceptEdits|default"}               // plan approved
+{"approve":true,"mode":"bypassPermissions|acceptEdits|default|auto"}          // plan approved; plan_then on the card, when present, replaces an older client's mode
 {"approve":false,"feedback":"Change it to…"}                                  // plan sent back
 {"allow":true,"always":false} / {"allow":false,"message":"…"}                // permission
 {"allow":true,"edited_text":"replacement text"}                             // permission, only on the card's editable_text and with no other resolution field
@@ -1381,7 +1382,7 @@ Cards from before this change, and every other card (Agents' questions, permissi
 
 ### Who answered a card
 
-`resolution.answered_by` says who answered: absent for the user (in an app, a channel, or the to-do the question became), `assistant` for the assistant on the user's behalf (`reason` says why), `default` when nobody answered and the recommended options were taken at a reversible deadline (`reason` says so).
+`resolution.answered_by` says who answered, and where when it was not a direct answer on a card: absent for the user (in an app, a channel, or the to-do the question became), `assistant` for the assistant on the user's behalf (`reason` says why), `terminal` for a decision the terminal made on the computer (the card stays `dismissed`, with no fabricated approval), `default` when nobody answered and the recommended options were taken at a reversible deadline (`reason` says so).
 
 An `ask_user` card that expires unanswered becomes a to-do (`docs/assistant/todos.md`). Its history stays `expired`; what was answered after that is recorded on it with `resolution.late: true` (`assistant/late_answer.go`, `db.LateAnswer`): the user's own answers on the to-do (`answered_by` absent; one per question as each is given) or the default taken at the deadline (`answered_by: "default"`, with the deadline's `reason`), and `resolved_at` becomes when that happened. A question that cannot be undone is never taken by default, so its history keeps no answer until the user gives one. An expired card from before this change has no `late` answer. Only the manager writes `late` and `answered_by`: an app's answer has them dropped.
 
