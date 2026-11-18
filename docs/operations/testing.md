@@ -190,6 +190,37 @@ The Codex app-server fixture registers a reply waiter before sending each reques
 JSON-RPC response. Its five-second request budget, approval assertions and recorded responses remain intact;
 cancellation, transport errors and EOF remove pending waiters without leaving its reader blocked.
 
+## Go build cache across worktrees
+
+Unless `-trimpath` is set, Go's build cache key for a package includes the package's absolute directory. The same
+package at the same commit is then compiled and cached once per checkout: a machine with dozens of worktrees keeps a
+copy of every package for each, and every new worktree starts cold. With `-trimpath` all checkouts share one entry
+(#10614).
+
+The scripts that build and test Go for verification add `-trimpath` to `GOFLAGS`: `scripts/check-fast.sh`,
+`scripts/ci/server.sh`, `scripts/test/server_test_env.py` (so `scripts/test/test-server.sh` on the hub machine and the
+CI server shards), `scripts/test/relay_sim_e2e.sh` and the PR watcher's verification environment. Each keeps its base
+value and adds `-trimpath` unless that value already sets the flag; `-trimpath=false` opts out. All but the watcher
+start from the effective `GOFLAGS` (the environment, else `go env -w`). The watcher starts from the `GOFLAGS` in its
+own environment, else its default (`docs/operations/pr-review-automation.md`); either one overrides a
+`go env -w GOFLAGS`, so opt out there by setting `GOFLAGS` in the watcher's environment. `scripts/test/go_trimpath.sh`
+holds the rule for the shell scripts. Their steps that change one flag do it on the command line (`go vet -ldflags=`,
+`go build -mod=readonly`), never by replacing `GOFLAGS`. The server test launcher passes the value on explicitly: the
+temporary `HOME` it gives the tests would hide a `go env -w` setting.
+
+Tests find repository files from the working directory (`go test` runs in the package directory), never through
+`runtime.Caller`: under `-trimpath` its file names are module paths (#1133).
+
+On a machine with many worktrees, set it for every Go command:
+
+```sh
+go env -w GOFLAGS=-trimpath
+```
+
+The trade-off: binaries and stack traces then name source files by module path
+(`github.com/nwverse/persona/server/...`) instead of the local directory, so a debugger (Delve, an IDE) needs a
+source path mapping to open them. Release builds already use `-trimpath` (`docs/operations/release.md`).
+
 ## Fast local checks (`scripts/check-fast.sh`, #2849)
 
 Runs only relevant second-scale checks based on git changes, with independent checks in parallel; useful before committing:
