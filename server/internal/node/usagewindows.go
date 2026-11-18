@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -25,9 +26,8 @@ import (
 //   - Codex writes the limits into every rollout's token_count event (rate_limits.primary / secondary with
 //     used_percent, window_minutes and resets_at). The collector reads the tail of the newest rollouts of each Codex
 //     home. Moshi also asks ChatGPT's usage endpoint for them; that needs the login token, so it is not done here.
-//   - Claude Code hands the limits to a status line command (the rate_limits field of its JSON input) and keeps them
-//     nowhere else; the API that has them needs the OAuth token, so it is skipped too. The way in is opt-in: a
-//     status line wrapper drops the JSON into <node dir>/usage/claude*.json, which is read here.
+//   - Claude Code supplies windows in its status line input (an optional wrapper saves them in
+//     <node dir>/usage/claude*.json) and on the stdout of headless sessions started here.
 //
 // The node polls every usageWindowsEvery, keeps the last sample of every source (a source that goes quiet keeps its
 // number for three days), and answers usage.windows from that. hub.json machines[].usage_windows false turns it off.
@@ -41,7 +41,8 @@ const (
 )
 
 type usageWindowsState struct {
-	off atomic.Bool // the hub said usage_windows false
+	streams claudeUsageStreams
+	off     atomic.Bool // the hub said usage_windows false
 
 	mu       sync.Mutex
 	at       time.Time
@@ -55,6 +56,9 @@ func (n *Node) setUsageWindows(on bool) {
 	if !on {
 		n.usageWin.mu.Lock()
 		n.usageWin.at, n.usageWin.accounts = time.Time{}, nil
+		n.usageWin.streams.Lock()
+		n.usageWin.streams.samples = nil
+		n.usageWin.streams.Unlock()
 		n.usageWin.mu.Unlock()
 	}
 }
@@ -77,25 +81,34 @@ func (n *Node) runUsageWindows(done <-chan struct{}) {
 // usageSnapshot is usage.windows: the last poll, or a fresh one when there is none yet or it is older than the
 // schedule (force: poll anyway).
 func (n *Node) usageSnapshot(force bool) proto.UsageSnapshot {
-	if n.usageWin.off.Load() {
-		return proto.UsageSnapshot{Enabled: false, Accounts: []proto.UsageAccount{}}
-	}
 	st := &n.usageWin
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	if st.off.Load() {
+		return proto.UsageSnapshot{Enabled: false, Accounts: []proto.UsageAccount{}}
+	}
 	now := time.Now()
 	if force || st.accounts == nil || now.Sub(st.at) >= usageWindowsEvery {
 		st.accounts = mergeUsage(st.accounts, n.collectUsageWindows(now), now)
 		st.at = now
 	}
-	keys := make([]string, 0, len(st.accounts))
-	for k := range st.accounts {
+	accounts := maps.Clone(st.accounts)
+	st.streams.overlay(accounts, now)
+	keys := make([]string, 0, len(accounts))
+	for k := range accounts {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	out := proto.UsageSnapshot{Enabled: true, CollectedAt: st.at, Accounts: []proto.UsageAccount{}}
 	for _, k := range keys {
-		out.Accounts = append(out.Accounts, st.accounts[k])
+		a := accounts[k]
+		if a.Provider == "claude" {
+			a.Windows = liveClaudeWindows(a.Windows, now)
+			if len(a.Windows) == 0 {
+				continue
+			}
+		}
+		out.Accounts = append(out.Accounts, a)
 	}
 	return out
 }
@@ -345,9 +358,24 @@ func parseClaudeStatusLimits(data []byte, mod, now time.Time) (proto.UsageAccoun
 		}
 		wins = append(wins, win)
 	}
-	wins = liveWindows(wins, now)
+	wins = liveClaudeWindows(wins, now)
 	if len(wins) == 0 {
 		return proto.UsageAccount{}, false
 	}
 	return proto.UsageAccount{Provider: "claude", Name: "Claude", Windows: wins, SampledAt: mod.UTC()}, true
+}
+
+// The reset-free 0% row belongs to the live weekly window. Once that week ends it expires too.
+func liveClaudeWindows(windows []proto.UsageWindow, now time.Time) []proto.UsageWindow {
+	wins := liveWindows(windows, now)
+	if len(wins) == 1 {
+		w := wins[0]
+		if w.WindowMinutes == 10080 && w.ResetsAt != nil {
+			return []proto.UsageWindow{{Label: "5h", WindowMinutes: 300}, w}
+		}
+		if w.WindowMinutes == 300 && w.UsedPercent == 0 && w.ResetsAt == nil && len(windows) > 1 {
+			return nil
+		}
+	}
+	return wins
 }

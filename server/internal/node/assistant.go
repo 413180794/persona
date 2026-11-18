@@ -76,7 +76,8 @@ type assistantProc struct {
 	born     time.Time
 	// personaMCPOnly is fixed at a Claude or Codex process start. A warm spare must still match
 	// the hub's current capability before it becomes a new conversation.
-	personaMCPOnly bool
+	personaMCPOnly    bool
+	claudeUsageSource string // fixed at process start, local to this node
 	// origin is set before the process can make its first model tool call, including while Codex still has a proc-* id.
 	origin string
 	// stderrDone closes when its stderr ends (watchAssistantStderr has read all of it): what a failed start printed
@@ -1020,15 +1021,16 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 		}
 		p.printed()
 		var ev struct {
-			Type     string                   `json:"type"`
-			Subtype  string                   `json:"subtype"`
-			Tasks    json.RawMessage          `json:"tasks"`
-			Tools    []string                 `json:"tools"`
-			Version  string                   `json:"claude_code_version"`
-			Response assistantControlResponse `json:"response"`
-			Command  string                   `json:"command_uuid"` // command_lifecycle: the user message it is about
-			State    string                   `json:"state"`        // and what became of it (assistant_queue.go)
-			Event    struct {
+			Type          string                   `json:"type"`
+			Subtype       string                   `json:"subtype"`
+			RateLimitInfo json.RawMessage          `json:"rate_limit_info"`
+			Tasks         json.RawMessage          `json:"tasks"`
+			Tools         []string                 `json:"tools"`
+			Version       string                   `json:"claude_code_version"`
+			Response      assistantControlResponse `json:"response"`
+			Command       string                   `json:"command_uuid"` // command_lifecycle: the user message it is about
+			State         string                   `json:"state"`        // and what became of it (assistant_queue.go)
+			Event         struct {
 				Type  string `json:"type"`
 				Delta struct {
 					Type string `json:"type"`
@@ -1068,6 +1070,8 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			continue
 		}
 		switch ev.Type {
+		case "rate_limit_event":
+			n.recordClaudeUsage(p.claudeUsageSource, ev.RateLimitInfo, time.Now())
 		case "system":
 			if ev.Subtype == "init" {
 				// Claude Code prints its init as each turn starts (measured on 2.1.322), before the model is asked: the

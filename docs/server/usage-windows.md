@@ -4,7 +4,7 @@ Subscriptions like Codex and Claude Code have "5-hour" and "weekly" usage window
 The UI is at the bottom of the web sidebar (`docs/web/web.md` ("Subscription usage")), on the iOS Machines page and at the bottom of the Mac section column ("UI (iOS / Mac)" below). The data comes from the node on each computer, and from account-pool gateways the manager queries (such as relay gateways, see "Account-pool gateways" below, #2595).
 Collection, merging and the gateways all belong to the **manager** (the one that connects computers, the assistant process `personad assistant`, see "Who owns this" below); the hub only forwards the API.
 
-## Read local files only, never touch credentials
+## Local usage sources and credential privacy
 
 Principle: **local first, read-only, never read or send any token**. Sources that need the user's login credentials to query are never used, as spelled out below.
 
@@ -12,6 +12,7 @@ Principle: **local first, read-only, never read or send any token**. Sources tha
 | --- | --- | --- |
 | Codex rollout | Every `token_count` event in `~/.codex/sessions/…/rollout-*.jsonl` carries `rate_limits`: `primary` / `secondary` each have `used_percent`, `window_minutes`, `resets_at` (seconds), plus `plan_type`, `limit_id`. The node reads the tail (512 KB) of the most recent few rollouts and takes the last event whose `limit_id` is `codex` (or unset). Per-model quotas such as `premium` do not count | Yes |
 | Claude Code status line | Claude Code puts `rate_limits` (`five_hour` / `seven_day`, each with `used_percentage`, `resets_at`) in the **JSON input of the status line command** (see its changelog), and writes it to neither the transcript nor any other file | Yes, but the user has to wire it up (next section) |
+| Headless Claude Code | The node reads `rate_limit_event.rate_limit_info` from its assistant process's existing stream-json output. The event can contain either or both subscription windows | Yes |
 | Codex account usage API (ChatGPT's `wham/usage`) | Needs the login token in `~/.codex/auth.json` | **No**. Moshi uses it; Persona does not read `auth.json` |
 | Claude account usage API (`/api/oauth/usage`) and the `anthropic-ratelimit-*` response headers | Needs Claude's OAuth token (Keychain / `.credentials.json`); the headers also need a request of your own | **No**, same reason |
 | Others (Kimi, Grok, Antigravity, GLM / MiniMax API key plans) | All need an account API or a key | Not doing |
@@ -20,25 +21,61 @@ Moshi's approach (`moshi-hook usage`) is local files plus these account APIs, wi
 
 ### Wiring in Claude Code's usage (optional)
 
-Claude Code only exposes usage in the status line command's input, so Persona cannot read it out of thin air. **Persona never edits your `settings.json`**; if you want to see Claude's usage,
-wrap your status line command so it drops `rate_limits` into the node's directory `~/.persona/usage/claude.json` (for multiple config directories use `claude-<name>.json`; each file counts as one source):
+Headless assistant sessions report automatically. Claude Code 2.1.295 declares
+`rate_limit_info.unifiedWindows.{five_hour,seven_day}.{utilization,resetsAt}` and the optional top-level
+`rateLimitType`, `utilization` and `resetsAt` for the currently limiting window. Utilization is a fraction
+(values above 1 are displayed as 100%) and reset times are Unix seconds. A status change alone supplies no
+percentage. Persona keeps only measured subscription windows in node memory, by launcher and profile.
+The built-in Claude launcher with the default profile shares the source of `claude.json`. Each snapshot
+combines file and stream measurements by latest reset, then highest percentage. Disabling collection or
+restarting the node clears the stream samples. A new event can update the next node answer between file polls.
 
-```sh
-#!/bin/sh
-# Status line command wrapper: save rate_limits for Persona, then pass the input unchanged to the original status line command
+Interactive sessions can contribute through a status line wrapper. Persona leaves this opt-in.
+The following Bash wrapper uses jq and flock and accepts Claude Code's numeric epoch seconds.
+Use a distinct file and lock for each additional profile (`claude-<name>.json` and `claude-<name>.lock`).
+
+```bash
+#!/usr/bin/env bash
 payload=$(cat)
-dir="$HOME/.persona/usage"
-mkdir -p "$dir" && chmod 700 "$dir"
-printf '%s' "$payload" | jq -ec 'select(.rate_limits) | {rate_limits}' > "$dir/claude.json.tmp" 2>/dev/null \
-  && mv "$dir/claude.json.tmp" "$dir/claude.json"
+# Save only Claude's subscription windows. The stable lock covers read, merge and rename.
+persona_usage() (
+  umask 077
+  dir="$HOME/.persona/usage"
+  mkdir -p "$dir" && chmod 700 "$dir" || exit 1
+  exec 9>>"$dir/claude.lock" || exit 1
+  flock -x 9 || exit 1
+  file="$dir/claude.json"
+  old=/dev/null
+  [[ ! -e "$file" ]] || old="$file"
+  merged=$(jq -ce --slurpfile old "$old" '
+    def best($a; $b):
+      [$a, $b] | map(select(type == "object" and (.used_percentage | type) == "number"
+        and .used_percentage >= 0 and (.resets_at | type) == "number" and .resets_at > 0)
+        | {used_percentage, resets_at})
+      | max_by([.resets_at, .used_percentage]);
+    select(type == "object") | (.rate_limits // {}) as $new
+    | ($old[0].rate_limits // {}) as $prev
+    | {five_hour: best($prev.five_hour; $new.five_hour), seven_day: best($prev.seven_day; $new.seven_day)}
+    | if .seven_day.resets_at > now and (.five_hour.resets_at // 0) <= now
+      then .five_hour = {used_percentage: 0} else . end
+    | with_entries(select(.value != null))
+    | select(length > 0) | {rate_limits: .} | select(. != $old[0])
+  ') || exit 0
+  tmp=$(mktemp "$dir/.claude.XXXXXXXX") || exit 1
+  trap 'rm -f "$tmp"' EXIT
+  printf '%s\n' "$merged" >"$tmp" && mv -f "$tmp" "$file"
+)
+persona_usage <<<"$payload"
 printf '%s' "$payload" | <your original status line command>
 ```
 
-The file keeps only `rate_limits` (no session, directory or cost). The node uses its modification time as the sample time; `resets_at` is read as seconds, and milliseconds and RFC 3339 strings are accepted too.
-The gateway's `rate_limits.spend_limit` (an amount of money) is not a window and is not read.
+Only the two windows enter the drop. A newer reset starts a new period. Within one period the higher percentage
+wins. An identical merge preserves the file's mtime, which is the collector's sample time. The node also accepts
+existing drops with millisecond or RFC 3339 reset times.
 
-> Not verified: the status line field format comes from Claude Code's changelog ("5-hour and 7-day windows with `used_percentage` and `resets_at`"),
-> and the unit tests use samples written from it; the unit of `resets_at` has not been checked against real status line input from a Claude session.
+A live, dated Claude weekly window with a missing or expired 5-hour measurement yields an idle `5h` row
+at 0% before `7d`. Its reset time is omitted until a real 5-hour measurement arrives. The weekly reset also
+expires that idle row. When sources share the same Claude account, a measured live 5-hour period takes precedence over another source’s idle row.
 
 ## Collection and merging
 
@@ -246,7 +283,7 @@ Same rules as the web (pure functions in `apple/Packages/PersonaWire/Sources/Per
 
 ## Limitations
 
-- Claude's usage requires the user to wire up the status line (above); otherwise only Codex shows.
+- Interactive Claude usage requires the status line wrapper. Headless usage requires a CLI event carrying a subscription window.
 - Codex numbers only update when Codex is used; if no one on the machine has used it, the numbers stay at the last value. The sample time in the UI shows how old they are.
 - After the manager restarts (it restarts along with the hub), the last answers of machines that have gone offline are lost until they come back online and are asked again; the gateway's last answer is also in memory, so after a restart the sidebar lacks its accounts until the first round (within seconds) reads them.
 - **The different window types have not been verified against a real relay** (no gateway is running on this dev machine): the adapter follows the first connected relay's public API documentation (account read views, access control);

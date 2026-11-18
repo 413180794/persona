@@ -223,8 +223,8 @@ func TestCollectUsageWindowsReadsCodexAndTheClaudeDrop(t *testing.T) {
 		t.Errorf("codex = %+v", c)
 	}
 	cl := got["claude:claude.json"]
-	if len(cl.Windows) != 1 || cl.Windows[0].Label != "7d" {
-		t.Errorf("claude = %+v (the reset 5h window must be gone)", cl)
+	if len(cl.Windows) != 2 || cl.Windows[0] != (proto.UsageWindow{Label: "5h", WindowMinutes: 300}) || cl.Windows[1].Label != "7d" {
+		t.Errorf("claude = %+v", cl)
 	}
 }
 
@@ -278,5 +278,84 @@ func TestUsageSnapshotWithNothingToReadAnswersAnEmptyList(t *testing.T) {
 	n := &Node{home: t.TempDir(), dir: t.TempDir()}
 	if snap := n.usageSnapshot(true); !snap.Enabled || snap.Accounts == nil || len(snap.Accounts) != 0 {
 		t.Errorf("an empty answer must be [] not null: %+v", snap)
+	}
+}
+
+func TestClaudeIdleFiveHourRequiresLiveWeek(t *testing.T) {
+	now := time.Unix(2000000000, 0)
+	for _, five := range []string{"", `"five_hour":{"used_percentage":91,"resets_at":2000000000},`, `"five_hour":{"used_percentage":0},`} {
+		for _, weekly := range []int64{2000000001, 2000000000} {
+			data := fmt.Sprintf(`{"rate_limits":{%s"seven_day":{"used_percentage":74,"resets_at":%d}}}`, five, weekly)
+			a, ok := parseClaudeStatusLimits([]byte(data), now, now)
+			if weekly == now.Unix() {
+				if ok {
+					t.Errorf("expired week %s: %+v", data, a)
+				}
+				continue
+			}
+			if !ok || len(a.Windows) != 2 || a.Windows[0] != (proto.UsageWindow{Label: "5h", WindowMinutes: 300}) || a.Windows[1].UsedPercent != 74 {
+				t.Errorf("live week %s: %+v", data, a)
+			}
+		}
+	}
+}
+
+func TestClaudeHeadlessUsageOverlaysStatusLine(t *testing.T) {
+	n := &Node{home: t.TempDir(), dir: t.TempDir()}
+	weekly := time.Now().Add(48 * time.Hour).Unix()
+	five := time.Now().Add(time.Hour).Unix()
+	dir := filepath.Join(n.dir, "usage")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	data := fmt.Sprintf(`{"rate_limits":{"seven_day":{"resets_at":%d,"used_percentage":74}}}`, weekly)
+	if err := os.WriteFile(filepath.Join(dir, "claude.json"), []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := &assistantProc{claudeUsageSource: claudeStreamSource("claude", "", n.home)}
+	send := func(info string) {
+		n.readAssistant(p, strings.NewReader(`{"type":"rate_limit_event","rate_limit_info":`+info+"}\n"))
+	}
+	check := func(pct float64, reset int64) time.Time {
+		t.Helper()
+		s := n.usageSnapshot(true)
+		if len(s.Accounts) != 1 {
+			t.Fatalf("accounts %+v", s.Accounts)
+		}
+		a := s.Accounts[0]
+		if len(a.Windows) != 2 || a.Windows[0].UsedPercent != pct || a.Windows[0].ResetsAt == nil || a.Windows[0].ResetsAt.Unix() != reset || a.Windows[1].UsedPercent != 74 {
+			t.Fatalf("windows %+v", a.Windows)
+		}
+		return a.SampledAt
+	}
+	send(fmt.Sprintf(`{"unifiedWindows":{"five_hour":{"utilization":0.25,"resetsAt":%d},"seven_day":{"utilization":0.64,"resetsAt":%d}}}`, five, weekly))
+	first := check(25, five)
+	for _, info := range []string{
+		fmt.Sprintf(`{"rateLimitType":"five_hour","utilization":0.8,"resetsAt":%d}`, five-60),
+		fmt.Sprintf(`{"rateLimitType":"five_hour","utilization":0.1,"resetsAt":%d}`, five),
+		fmt.Sprintf(`{"rateLimitType":"seven_day_opus","utilization":1,"resetsAt":%d}`, weekly),
+		fmt.Sprintf(`{"unifiedWindows":{"five_hour":{"resetsAt":%d},"seven_day":{"utilization":"bad"}}}`, five),
+		`{"status":"allowed"}`,
+	} {
+		send(info)
+	}
+	if got := check(25, five); !got.Equal(first) {
+		t.Errorf("unchanged sample time %s -> %s", first, got)
+	}
+	send(fmt.Sprintf(`{"rateLimitType":"five_hour","utilization":1.12,"resetsAt":%d}`, five))
+	check(100, five)
+	send(fmt.Sprintf(`{"rateLimitType":"five_hour","utilization":0,"resetsAt":%d}`, five+300))
+	check(0, five+300)
+	p.claudeUsageSource = claudeStreamSource("claude", filepath.Join(n.home, "profile"), n.home)
+	extra := fmt.Sprintf(`{"unifiedWindows":{"five_hour":false,"seven_day":{"utilization":0.5,"resetsAt":%d}}}`, weekly+60)
+	send(extra)
+	if s := n.usageSnapshot(false); len(s.Accounts) != 2 {
+		t.Fatalf("distinct profiles: %+v", s)
+	}
+	n.setUsageWindows(false)
+	send(extra)
+	n.setUsageWindows(true)
+	if s := n.usageSnapshot(false); len(s.Accounts) != 1 || s.Accounts[0].Windows[0].ResetsAt != nil {
+		t.Fatalf("disabled stream: %+v", s)
 	}
 }

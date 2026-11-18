@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -166,6 +167,10 @@ func (u *usageWindowsHub) poll(ctx context.Context, sources []usageSource, now t
 	return u.merged
 }
 
+func undatedIdleFiveHour(w proto.UsageWindow) bool {
+	return w.Model == "" && w.WindowMinutes == 300 && w.UsedPercent == 0 && w.ResetsAt == nil
+}
+
 // mergeUsageAccounts makes one account of the samples that are the same account, drops what has run out and orders
 // the result for the sidebar.
 //
@@ -185,11 +190,18 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 			continue
 		}
 		var wins []proto.UsageWindow
+		expiredWeek := false
 		for _, w := range a.Windows {
 			if w.ResetsAt != nil && !w.ResetsAt.After(now) {
+				if w.Model == "" && w.WindowMinutes == 10080 {
+					expiredWeek = true
+				}
 				continue
 			}
 			wins = append(wins, w)
+		}
+		if expiredWeek && a.Local && a.Provider == "claude" {
+			wins = slices.DeleteFunc(wins, undatedIdleFiveHour)
 		}
 		if len(wins) == 0 {
 			continue
@@ -301,7 +313,8 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 			machines = append(machines, m.Machines...)
 			for _, w := range m.Windows {
 				k := slot{w.WindowMinutes, w.Model}
-				if _, ok := bySlot[k]; !ok {
+				// A local idle row is a fallback. Another source may have observed the live period.
+				if prior, ok := bySlot[k]; !ok || (m.Provider == "claude" && undatedIdleFiveHour(prior) && w.ResetsAt != nil) {
 					bySlot[k] = w
 				}
 			}

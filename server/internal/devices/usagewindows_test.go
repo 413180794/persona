@@ -351,3 +351,23 @@ func TestUsagePollKeepsTwoMachinesAccountsApart(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestMergeClaudeUsagePrefersMeasuredFiveHourOverIdleRow(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	week := uw("7d", 10080, 74, now.Add(24*time.Hour))
+	idle := proto.UsageAccount{Provider: "claude", Local: true, SampledAt: now, Windows: []proto.UsageWindow{{Label: "5h", WindowMinutes: 300}, week}}
+	measured := proto.UsageAccount{Provider: "claude", Local: true, SampledAt: now.Add(-time.Minute), Windows: []proto.UsageWindow{uw("5h", 300, 15, now.Add(time.Hour)), week}}
+	in := []proto.UsageAccount{idle, measured}
+	for _, test := range []struct {
+		at   time.Time
+		want proto.UsageWindow
+	}{{now, measured.Windows[0]}, {now.Add(time.Hour), idle.Windows[0]}} {
+		got := mergeUsageAccounts(in, test.at)
+		if len(got) != 1 || len(got[0].Windows) != 2 || got[0].Windows[0] != test.want {
+			t.Fatalf("merged: %+v", got)
+		}
+	}
+	if got := mergeUsageAccounts(in, *week.ResetsAt); len(got) != 0 {
+		t.Fatalf("expired idle account: %+v", got)
+	}
+}
