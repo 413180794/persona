@@ -28,6 +28,12 @@ import {
   workspacePathOf,
 } from './map.js'
 
+// Same accounts list the same models: compare IDs, from ACP session metadata or `agy models` alike.
+function sameModels(a, b) {
+  const ids = (list) => [...new Set(list.map((entry) => entry.modelId || entry.id))].sort().join('\n')
+  return ids(a) === ids(b)
+}
+
 export function createAgyRuntime(options = {}) {
   const home = options.home || homedir()
   const agyDir = options.agyDir || process.env.ANTIGRAVITY_CLI_CONFIG_DIR || join(home, '.gemini', 'antigravity-cli')
@@ -59,16 +65,26 @@ export function createAgyRuntime(options = {}) {
   const permissionAsks = new Map() // agyId -> Set of AbortControllers, one per permission card still on the phone
   const cancelling = new Set() // agyId: interrupted, its turn has not ended yet
 
+  // The CLI keeps its sign-in in this file and writes each refresh to it. Only its metadata is ever read, never the token.
+  const tokenFile = join(agyDir, 'antigravity-oauth-token')
+  let tokenSeen = '' // token file metadata when the running agy acp started or last compared its models with discovery
+  let stale = null // the agy acp process that is on another sign-in or model list; recycled once no request is in flight
+  let following = false
+  const signInCheckMs = options.signInCheckMs ?? 10_000
+
   const acp = new AgyAcpClient({
     bin: existsSync(agyBin) ? agyBin : 'agy',
     log,
     onPermissionRequest: async (params) => handlePermissionRequest(params),
+    onStart: () => { tokenSeen = tokenSignature() },
   })
 
   let catalog = []
   let catalogAt = 0
+  let catalogFreshAt = 0 // the last fresh discovery (`agy models`) published
   let catalogFlight
   let catalogTimer
+  let signInTimer
   const catalogAbort = new AbortController()
   let stopped = false
   const update = options.update?.store && typeof options.update.name === 'string' && typeof options.update.hash === 'string'
@@ -89,6 +105,28 @@ export function createAgyRuntime(options = {}) {
     rt.launchersChanged([{ name: 'agy', agent: RUNTIME, model: selected?.name || readAgySettings().model || '', models: catalog }])
   }
 
+  function applyDiscovery(entries) {
+    catalogAt = Date.now()
+    catalogFreshAt = catalogAt
+    publishModels(entries)
+  }
+
+  // A session's list comes from one agy acp process, which may be on an older sign-in. It only fills the catalog until
+  // the first fresh discovery, so it never overwrites a newer one.
+  function publishSessionModels(list) {
+    if (list && !catalogFreshAt) publishModels(list)
+  }
+
+  // Metadata only: the token itself is never read or logged.
+  function tokenSignature() {
+    try {
+      const { ino, size, mtimeMs } = statSync(tokenFile)
+      return `${ino}:${size}:${mtimeMs}`
+    } catch {
+      return 'missing'
+    }
+  }
+
   async function models(params = {}) {
     if (!params.refresh && catalog.length && Date.now() - catalogAt < 300_000) {
       publishModels()
@@ -96,10 +134,7 @@ export function createAgyRuntime(options = {}) {
     }
     if (!catalogFlight) {
       catalogFlight = discoverModels(acp.bin, { signal: catalogAbort.signal }).then((entries) => {
-        if (!stopped) {
-          catalogAt = Date.now()
-          publishModels(entries)
-        }
+        if (!stopped) applyDiscovery(entries)
         return { agent: RUNTIME, models: catalog }
       }).finally(() => { catalogFlight = undefined })
     }
@@ -108,7 +143,7 @@ export function createAgyRuntime(options = {}) {
 
   function sessionConfiguration(rawId, result) {
     if (!result) return
-    if (result.models?.availableModels) publishModels(result.models.availableModels)
+    if (result.models?.availableModels) publishSessionModels(result.models.availableModels)
     if (result.models?.currentModelId) sessionModels.set(rawId, result.models.currentModelId)
     if (result.modes?.currentModeId) {
       const cur = sessionModes.get(rawId) || {}
@@ -663,6 +698,72 @@ export function createAgyRuntime(options = {}) {
     } finally {
       inFlight--
       if (want) void maybeExit()
+      recycleIdle()
+    }
+  }
+
+  /** No request, turn, probe, rewind or phone card is in flight, apart from `own` calls of the caller (inside busyCall). */
+  function acpIdle(own = 0) {
+    return inFlight <= own && acp.pending.size === 0 && activeTurns.size === 0 && rewinding.size === 0 && checkTurns.size === 0 && !rt.busy()
+  }
+
+  /** End the stale agy acp once it is idle, so the next call starts on the CLI's current sign-in. */
+  function recycleIdle(own = 0) {
+    if (stale !== acp.proc) stale = null
+    if (!stale || !acpIdle(own) || !acp.recycle()) return false
+    stale = null
+    log('agy acp recycled to follow the CLI sign-in')
+    return true
+  }
+
+  /**
+   * An `Unknown model ID` for a model that a fresh discovery lists means the running agy acp is on an older sign-in.
+   * It is recycled when idle, and the caller retries once. Anything else, or a model the account lacks, is not handled.
+   */
+  async function recycleForModel(err, model) {
+    if (!model || !/Unknown model ID/.test(err?.message || '')) return false
+    let fresh
+    try {
+      fresh = await discoverModels(acp.bin, { signal: catalogAbort.signal })
+    } catch (error) {
+      log(`agy model discovery error: ${error.message}`)
+      return false
+    }
+    if (stopped || !fresh.some((entry) => entry.id === model || entry.name === model)) return false
+    applyDiscovery(fresh)
+    stale = acp.proc
+    return recycleIdle(1)
+  }
+
+  /** Compare the CLI's sign-in with the running agy acp when its token file changes (metadata only). */
+  async function followSignIn() {
+    const child = acp.proc
+    const advertised = acp.availableModels
+    const signature = tokenSignature()
+    if (!stopped && !following && child && advertised?.length && signature !== tokenSeen) {
+      // Recorded before the discovery, so a sign-in made while it runs is seen by the next check.
+      tokenSeen = signature
+      following = true
+      try {
+        const fresh = await discoverModels(acp.bin, { signal: catalogAbort.signal })
+        if (!stopped) applyDiscovery(fresh)
+        if (!stopped && acp.proc === child && !sameModels(fresh, advertised)) stale = child
+      } catch (err) {
+        log(`agy model discovery error: ${err.message}`)
+      } finally {
+        following = false
+      }
+    }
+    recycleIdle()
+  }
+
+  async function setModelOnce(rawId, model, reload) {
+    try {
+      return await acp.setModel(rawId, model)
+    } catch (err) {
+      if (!(await recycleForModel(err, model))) throw err
+      await reload()
+      return acp.setModel(rawId, model)
     }
   }
 
@@ -671,41 +772,51 @@ export function createAgyRuntime(options = {}) {
     return busyCall(async () => {
       const started = Date.now()
       const deadline = started + (options.checkTimeoutMs ?? 75_000)
-      const remaining = () => Math.max(1, deadline - Date.now())
-      let rawId
       try {
-        await acp.ensureStarted()
-        const session = await acp.call('session/new', { cwd: params.cwd, mcpServers: [] }, remaining())
-        rawId = session.sessionId
-        if (!rawId) throw new Error('Antigravity returned no check session')
-        // Probes have no tools or phone permission cards. The existing archived-session guard cancels their requests.
-        archived.add(rawId)
-        const probe = { text: '' }
-        checkTurns.set(rawId, probe)
-        if (session.models?.availableModels) publishModels(session.models.availableModels)
-        const model = configuredModel()
-        if (model) await acp.call('session/set_model', { sessionId: rawId, modelId: model }, remaining())
-        await acp.call('session/set_mode', { sessionId: rawId, modeId: 'default' }, remaining())
-        const result = await acp.call('session/prompt', { sessionId: rawId, prompt: [{ type: 'text', text: params.prompt }] }, remaining())
-        if (result?.stopReason !== 'end_turn') throw new Error(`Antigravity availability check ended with ${result?.stopReason || 'no stop reason'}`)
-        if (!probe.text.trim()) throw new Error('Antigravity availability check returned no answer')
-        return { ok: true, agent: RUNTIME, model: model || session.models?.currentModelId, answer: probe.text.trim().slice(0, 400), millis: Date.now() - started }
-      } finally {
-        if (rawId) {
-          await acp.cancel(rawId)
-          await acp.closeSession(rawId)
-          checkTurns.delete(rawId)
-          sessionModels.delete(rawId)
-          sessionModes.delete(rawId)
-        }
+        return await runCheck(params, started, deadline)
+      } catch (err) {
+        // The probe's model may be one the running agy acp was not signed in for: its session is gone, so probe again once.
+        if (!(await recycleForModel(err, configuredModel()))) throw err
+        return runCheck(params, started, deadline)
       }
     })
   }
 
-  async function applySessionOptions(rawId, { model, permission_mode, effort }) {
+  async function runCheck(params, started, deadline) {
+    const remaining = () => Math.max(1, deadline - Date.now())
+    let rawId
+    try {
+      await acp.ensureStarted()
+      const session = await acp.call('session/new', { cwd: params.cwd, mcpServers: [] }, remaining())
+      rawId = session.sessionId
+      if (!rawId) throw new Error('Antigravity returned no check session')
+      // Probes have no tools or phone permission cards. The existing archived-session guard cancels their requests.
+      archived.add(rawId)
+      const probe = { text: '' }
+      checkTurns.set(rawId, probe)
+      if (session.models?.availableModels) publishSessionModels(session.models.availableModels)
+      const model = configuredModel()
+      if (model) await acp.call('session/set_model', { sessionId: rawId, modelId: model }, remaining())
+      await acp.call('session/set_mode', { sessionId: rawId, modeId: 'default' }, remaining())
+      const result = await acp.call('session/prompt', { sessionId: rawId, prompt: [{ type: 'text', text: params.prompt }] }, remaining())
+      if (result?.stopReason !== 'end_turn') throw new Error(`Antigravity availability check ended with ${result?.stopReason || 'no stop reason'}`)
+      if (!probe.text.trim()) throw new Error('Antigravity availability check returned no answer')
+      return { ok: true, agent: RUNTIME, model: model || session.models?.currentModelId, answer: probe.text.trim().slice(0, 400), millis: Date.now() - started }
+    } finally {
+      if (rawId) {
+        await acp.cancel(rawId)
+        await acp.closeSession(rawId)
+        checkTurns.delete(rawId)
+        sessionModels.delete(rawId)
+        sessionModes.delete(rawId)
+      }
+    }
+  }
+
+  async function applySessionOptions(rawId, { model, permission_mode, effort }, reload) {
     try {
       if (model) {
-        await acp.setModel(rawId, model)
+        await setModelOnce(rawId, model, reload)
         sessionModels.set(rawId, model)
         const selected = catalog.find((entry) => entry.id === model)
         if (selected?.default_effort) {
@@ -745,14 +856,15 @@ export function createAgyRuntime(options = {}) {
       const pid = toPersonaId(rawId)
       sessionCwds.set(rawId, cwd)
       if (isAsst) assistants.add(pid)
+      const reload = () => loadSession(rawId, cwd, mcpServersFor(pid, isAsst))
 
       try {
-        await loadSession(rawId, cwd, mcpServersFor(pid, isAsst))
+        await reload()
         await applySessionOptions(rawId, {
           model: params.model || configuredModel(),
           permission_mode: params.permission_mode || configuredMode(),
           effort: params.effort,
-        })
+        }, reload)
       } catch (err) {
         archived.add(rawId)
         await acp.closeSession(rawId)
@@ -804,12 +916,13 @@ export function createAgyRuntime(options = {}) {
       const isAsst = Boolean(params.assistant) || assistants.has(pid) || isAssistantDir(cwd)
       if (isAsst) assistants.add(pid)
 
-      await loadSession(rawId, cwd, mcpServersFor(pid, isAsst))
+      const reload = () => loadSession(rawId, cwd, mcpServersFor(pid, isAsst))
+      await reload()
       await applySessionOptions(rawId, {
         model: params.model,
         permission_mode: params.mode,
         effort: params.effort,
-      })
+      }, reload)
 
       if (rewinding.has(pid)) throw new RpcError('The conversation is being rewound', 'rewind_busy')
 
@@ -878,6 +991,7 @@ export function createAgyRuntime(options = {}) {
             rt.sessionsChanged()
           }
           if (want) void maybeExit()
+          recycleIdle()
         })
       turn.promise = promise
       activeTurns.set(pid, turn)
@@ -968,6 +1082,7 @@ export function createAgyRuntime(options = {}) {
     } finally {
       rewinding.delete(pid)
       if (want) void maybeExit()
+      recycleIdle()
     }
   }
 
@@ -979,12 +1094,13 @@ export function createAgyRuntime(options = {}) {
         throw new Error('Antigravity session is busy')
       }
       const cwd = sessionCwds.get(rawId) || home
-      await loadSession(rawId, cwd, mcpServersFor(toPersonaId(rawId), assistants.has(toPersonaId(rawId))))
+      const reload = () => loadSession(rawId, cwd, mcpServersFor(toPersonaId(rawId), assistants.has(toPersonaId(rawId))))
+      await reload()
       await applySessionOptions(rawId, {
         model: params.model,
         permission_mode: params.permission_mode,
         effort: params.effort,
-      })
+      }, reload)
       rt.sessionsChanged()
     })
   }
@@ -1031,6 +1147,7 @@ export function createAgyRuntime(options = {}) {
     stopped = true
     clearInterval(idleTimer)
     clearInterval(catalogTimer)
+    clearInterval(signInTimer)
     catalogAbort.abort()
     rt.stop()
     // A turn's transcript poll would otherwise keep running; acp.stop() fails the prompts themselves.
@@ -1045,6 +1162,8 @@ export function createAgyRuntime(options = {}) {
       void models().catch((err) => log(`agy model discovery error: ${err.message}`))
       catalogTimer = setInterval(() => { void models({ refresh: true }).catch((err) => log(`agy model discovery error: ${err.message}`)) }, 300_000)
       catalogTimer.unref?.()
+      signInTimer = setInterval(() => { void followSignIn() }, signInCheckMs)
+      signInTimer.unref?.()
       return rt.start()
     },
     stop,

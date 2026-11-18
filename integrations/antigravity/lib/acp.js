@@ -15,6 +15,8 @@ export class AgyAcpClient extends EventEmitter {
     this.args = options.args || ['acp']
     this.log = options.log || (() => {})
     this.onPermissionRequest = options.onPermissionRequest || null
+    // Called with each agy process as it starts, before it has answered anything (the runtime notes the CLI sign-in then).
+    this.onStart = options.onStart || null
     this.proc = null
     this.readyPromise = null
     this.nextId = 1
@@ -52,6 +54,7 @@ export class AgyAcpClient extends EventEmitter {
     this.proc = child
     this.nativeLogs.set(child, { directory, file: nativeLog })
     this.loadedSessions.clear()
+    this.onStart?.(child)
     // A missing binary ('exit' never comes then) or a failed kill: without a listener the companion would crash.
     child.on('error', (err) => {
       this.log(`agy acp process error: ${err.message}`)
@@ -119,6 +122,18 @@ export class AgyAcpClient extends EventEmitter {
     const pending = [...this.pending.values()]
     this.pending.clear()
     for (const p of pending) p.reject(err)
+    return true
+  }
+
+  /**
+   * End the running agy so the next call starts a fresh one (sessions resume on it as after any restart). Does nothing
+   * while a request is in flight, a turn included. True when the process was ended.
+   */
+  recycle() {
+    const child = this.proc
+    if (!child || this.pending.size > 0) return false
+    this._forget(child, new Error('agy acp recycled'))
+    void this._kill(child)
     return true
   }
 

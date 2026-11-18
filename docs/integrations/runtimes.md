@@ -473,6 +473,17 @@ default. New sessions and availability checks explicitly apply that model throug
 settings file when choosing its initial model. An explicit caller model takes precedence, and resumed sessions retain
 their native selection. An unavailable catalog returns the native error instead of advertising a built-in model list.
 
+The CLI's sign-in can change under a running `agy acp`: the user signs in with another account, or a plan lapses or is
+renewed. The CLI keeps the account per process and writes each token refresh to `antigravity-oauth-token`, so an `agy acp`
+that stayed on the old account would write it back. While an `agy acp` runs, the companion checks that token file's
+metadata (inode, size and modification time; the token is never read or logged) about every ten seconds. When it changed,
+a fresh `agy models` discovery is compared with the models the running `agy acp` advertised. A different list marks that
+process stale and ends it once no request or turn is in flight; the next call starts a fresh `agy acp` and resumes the
+session on it. A `session/set_model` `Unknown model ID` for a model that discovery lists does the same once and retries
+the call; any other `Unknown model ID` still fails as `model_not_found`. Session model lists fill the catalog only until the
+first fresh discovery, so a stale process cannot overwrite it. Limit: a switch to an account with the same model list is
+not seen, so that process keeps the old account until its models differ or a request fails (#10368).
+
 Idle sessions can switch model, thinking level and permission mode through ACP. Native configuration updates determine
 the displayed model and effort. Each accepted field is published even if another field fails, and failures reach the caller.
 `auto` keeps native safe-operation approval, while Persona's explicit full bypass answers permission requests automatically.

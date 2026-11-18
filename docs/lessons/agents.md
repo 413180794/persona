@@ -1374,3 +1374,11 @@ can contain multiple workspaces sharing a directory; importing a pin into `pins.
 the timestamp on the workspace catalog and match machine, source and source ID. An unpin must also release retained
 old sessions even if pin and unpin happen before the coalesced catalog push: a session push can observe the temporary
 pin while the final catalog bytes equal the earlier unpinned snapshot.
+
+## A long-lived AGY ACP keeps the account it started with (#10368)
+
+The CLI keeps its sign-in per process and writes every token refresh to its shared token file. A runtime that keeps one
+`agy acp` for hours stays on the old account after a sign-in, and its next refresh writes that account back over the new
+one. Watch the token file's metadata (never its contents), compare a fresh `agy models` discovery with what the running
+process advertises, and recycle the process only when no request or turn is in flight. Session model lists must not
+overwrite a fresh discovery.
