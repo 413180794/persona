@@ -124,6 +124,7 @@
   "review_needs_user": "判断待ち",
   "review_dismissed": "対応しない",
   "review_parked": "保留中",
+  "next_check": "次回の確認 {time}",
   "review_parked_until": "{time} まで保留 · {reason}",
   "review_parked_reason": "保留中 · {reason}",
   "review_accepted": "検収済み",

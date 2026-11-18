@@ -1,8 +1,9 @@
 import { t } from "../i18n";
 import type { Session, Subagent, Workflow } from "./types";
-import type { SessionLookup, Todo } from "./todos";
+import type { SessionLookup, Todo, TodoAgent } from "./todos";
 import { backgroundCommandLine, backgroundWaitLine, waitingOnWorkflow, workflowCounts, type WaitLine } from "./workflows";
 import { runningChildren } from "./child-sessions";
+import { stateOf } from "./format";
 
 /** Live work, not a waiting label: summary counts win over omitted detail arrays. */
 export interface BackgroundWork {
@@ -12,8 +13,10 @@ export interface BackgroundWork {
   workflow?: Workflow;
 }
 
-export function backgroundWork(session: Session | undefined): BackgroundWork | undefined {
-  if (!session) return undefined;
+type WorkScope = "row" | "recheck";
+
+export function backgroundWork(session: Session | undefined, scope: WorkScope = "row"): BackgroundWork | undefined {
+  if (!session || (scope === "recheck" && session.background_waiting)) return undefined;
   const background = session.background ?? [];
   const summary = typeof session.waiting === "boolean";
   const workflow = summary ? session.workflow_progress : session.workflows?.find((w) => w.running);
@@ -23,12 +26,14 @@ export function backgroundWork(session: Session | undefined): BackgroundWork | u
     ?? background.filter((b) => b.kind === "agent").length;
   // its child sessions at work (#5120) are its subagents too; a Paseo parent may list the same ones as background
   // agents already, so the larger count stands rather than their sum
-  const subagents = Math.max(own, runningChildren(session));
+  // A display fold can also contain another task's worker in the same tab. Only the session's own jobs prove a recheck.
+  const subagents = scope === "recheck" ? own : Math.max(own, runningChildren(session));
   // Old summaries expose only a raw background count, which may include workflows and agents. It cannot be split
   // reliably: retain a generic active-work line rather than invent an independent job count.
   const tasks = session.background_tasks_count ?? (summary ? 0
     : background.filter((b) => b.kind !== "workflow" && b.kind !== "agent").length);
-  return tasks || subagents || workflows || session.background_working || (summary && session.background_tasks_count === undefined && (session.background_count ?? 0) > 0)
+  const generic = (scope === "row" || session.background_tasks_count === undefined) && session.background_working;
+  return tasks || subagents || workflows || generic || (summary && session.background_tasks_count === undefined && (session.background_count ?? 0) > 0)
     ? { tasks, subagents, workflows, workflow } : undefined;
 }
 
@@ -64,12 +69,31 @@ export function backgroundTurn(s: Session | undefined, subagents: Subagent[] | u
   return command ? { kind: "command", line: command } : null;
 }
 
+function boundSession(todo: Todo, agent: TodoAgent, lookup?: SessionLookup): Session | undefined {
+  if (agent.released_at || agent.start_error) return undefined;
+  const s = lookup?.(agent.machine_id, agent.session_id);
+  if (!s || s.archived || s.start_error || s.status === "offline" || stateOf(s) === "offline" || (s.todo && s.todo.id !== todo.id)) return undefined;
+  return s;
+}
+
+/** Evidence for a supervisor recheck. A blocked turn or a wait-only command can wake later without doing any work now. */
+export function hasRunningTaskWork(todo: Todo, lookup?: SessionLookup): boolean {
+  const review = todo.supervision?.auto_review;
+  // The hub records the run before launching its reviewer, then fills session_id when the launch succeeds.
+  if (review?.state === "running" && review.id && review.session_id && !review.ended_at) return true;
+  return (todo.agents ?? []).some((agent) => {
+    const s = boundSession(todo, agent, lookup);
+    if (!s || s.background_waiting) return false;
+    return !!s.starting || s.status === "working" || !!backgroundWork(s, "recheck");
+  });
+}
+
 /** One task can have several active agents: do not mistake a quiet lead for an idle task. */
-export function taskBackgroundWork(todo: Todo | undefined, lookup: SessionLookup): BackgroundWork | undefined {
+export function taskBackgroundWork(todo: Todo | undefined, lookup: SessionLookup, scope: WorkScope = "row"): BackgroundWork | undefined {
   if (!todo || todo.done_at) return undefined;
   // Deduplicate identities before lookup: an answered-state adapter may return a fresh object on each call.
-  const bindings = new Map((todo.agents ?? []).filter((a) => !a.released_at).map((a) => [JSON.stringify([a.machine_id, a.session_id]), a]));
-  const work = [...bindings.values()].map((a) => backgroundWork(lookup(a.machine_id, a.session_id))).filter((w): w is BackgroundWork => !!w);
+  const bindings = new Map((todo.agents ?? []).filter((a) => !a.released_at && !a.start_error).map((a) => [JSON.stringify([a.machine_id, a.session_id]), a]));
+  const work = [...bindings.values()].map((a) => backgroundWork(boundSession(todo, a, lookup), scope)).filter((w): w is BackgroundWork => !!w);
   if (!work.length) return undefined;
   const workflows = work.flatMap((w) => w.workflow ? [w.workflow] : []).sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
   return { tasks: work.reduce((n, w) => n + w.tasks, 0), subagents: work.reduce((n, w) => n + w.subagents, 0),

@@ -137,6 +137,7 @@
   "review_needs_user": "Needs your call",
   "review_dismissed": "Not handling",
   "review_parked": "Parked",
+  "next_check": "Next check {time}",
   "review_parked_until": "Parked until {time} · {reason}",
   "review_parked_reason": "Parked · {reason}",
   "review_accepted": "Accepted",

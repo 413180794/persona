@@ -82,12 +82,17 @@ describe("task wait information", () => {
     expect(host.querySelectorAll("a[href^='javascript:']")).toHaveLength(0);
     expect(host.querySelectorAll("a[href='https://example.test/review/8']")).toHaveLength(1);
     expect(text("[data-wait-wake]")).toContain("Review is approved");
-    await render(makeTodo({ kind: "date", target: "Release window", wake: "The date arrives", until: "2026-11-18T00:00:00Z", url: "https://example.test/calendar/3", recorded_by: "Supervisor" }));
+    await render(makeTodo({ kind: "date", target: "Release window", wake: "The date arrives", url: "https://example.test/calendar/3" }));
     expect(host.querySelector('[data-wait-kind="date"]')).not.toBeNull();
-    expect(host.querySelector('[data-wait-contact-missing]')).not.toBeNull();
+    expect(host.querySelector('[data-wait-contact-missing]')).toBeNull();
+    expect(text("[data-wait-target]")).toContain("Release window");
+    expect(text("[data-wait-wake]")).toContain("The date arrives");
+    expect(text("[data-wait-reason]")).toBe("Waiting on the external team");
+    expect(host.textContent).toContain("Fallback");
     expect([...host.querySelectorAll<HTMLAnchorElement>("[data-wait-source]")].map(a => a.href)).toEqual(["https://example.test/calendar/3"]);
     await render(makeTodo({ kind: "external_event", target: "Deployment", wake: "Health check passes", url: "javascript:alert(1)" }));
     expect(host.querySelectorAll("[data-wait-source]")).toHaveLength(0);
+    expect(text("[data-wait-contact-missing]")).toBe(t("task-wait.no_person_request"));
   });
 
   it("keeps legacy missing evidence visibly unknown rather than inventing a contact, wake or source", async () => {
@@ -97,6 +102,17 @@ describe("task wait information", () => {
     expect(text("[data-wait-age]")).toContain("Wait start not recorded");
     expect(text("[data-wait-wake]")).toContain("not recorded");
     expect(host.querySelectorAll("[data-wait-source]")).toHaveLength(0);
+  });
+
+  it("keeps a legacy date's schedule and reason without asking for a contact", async () => {
+    const todo = makeTodo();
+    todo.supervision!.parked!.waiting_on = "date";
+    await render(todo);
+    expect(host.querySelector('[data-wait-kind="date"]')).not.toBeNull();
+    expect(host.querySelector("[data-wait-contact-missing]")).toBeNull();
+    expect(text("[data-wait-reason]")).toBe(todo.supervision!.parked!.reason);
+    expect(host.textContent).toContain("Fallback");
+    expect(host.textContent).toContain(t("task-wait.missing_evidence_note"));
   });
 
   it("keeps PR blockers and one source when the request receipt is the PR page", async () => {

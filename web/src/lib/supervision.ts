@@ -93,6 +93,7 @@ export interface CriterionStatus {
 /** An independent reviewer's run over a supervised task's change: its state, counts and report. */
 export interface AutoReview {
   id: string;
+  session_id?: string;
   state: "running" | "clean" | "blocking" | "failed" | "cancelled";
   round?: number;
   count?: number;
@@ -163,6 +164,13 @@ export function parkedLine(todo: (Pick<Todo, "done_at"> & { supervision?: Superv
   if (!todo || !p || reviewState(todo) !== "parked") return undefined;
   const time = formatDate(p.until, { dateStyle: "medium", timeStyle: "short" });
   return time ? t("assistant-tasks.review_parked_until", { time, reason: p.reason }) : t("assistant-tasks.review_parked_reason", { reason: p.reason });
+}
+
+/** A short local clock time for today's check, with the date for checks on another day. */
+export function nextCheckLabel(until: string): string {
+  const at = new Date(until);
+  const today = at.toDateString() === new Date().toDateString();
+  return t("assistant-tasks.next_check", { time: formatDate(at, today ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" }) });
 }
 
 export type ReviewTone = "accent" | "red" | "orange" | "green" | "muted";

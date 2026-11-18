@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { t } from "../../i18n";
 import { ago } from "../../lib/format";
-import { checkCount, reportText, reviewBadge, type ReviewTone } from "../../lib/supervision";
+import { checkCount, nextCheckLabel, reportText, reviewBadge, type ReviewTone } from "../../lib/supervision";
 import type { Todo } from "../../lib/todos";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -20,14 +20,14 @@ const TONE: Record<ReviewTone, string> = {
 };
 
 /** The review's chip, with the criteria met; nothing for a task that is not supervised. */
-export function ReviewBadge({ todo, className }: { todo: Todo; className?: string }) {
+export function ReviewBadge({ todo, nextCheck, className }: { todo: Todo; nextCheck?: string; className?: string }) {
   const badge = reviewBadge(todo);
   if (!badge) return null;
   const count = checkCount(todo.supervision);
   return (
     <span data-testid="review-badge" className={cx("inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-[11.5px] font-semibold", TONE[badge.tone], className)}>
       <Icon name="target" size={11} stroke={2.2} />
-      {badge.label}
+      {nextCheck ? <time dateTime={nextCheck}>{nextCheckLabel(nextCheck)}</time> : badge.label}
       {count && <span className="font-medium tabular-nums opacity-80">· {count}</span>}
     </span>
   );

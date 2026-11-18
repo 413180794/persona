@@ -15,7 +15,7 @@ function elapsed(since: number | undefined, now: number, request: boolean): stri
 }
 
 /** One projection for rows and task details. This reads recorded evidence; it does not watch events or send messages. */
-export function TaskWaitInfo({ todo, merges = [], expanded = false }: { todo: Todo; merges?: readonly PRFacts[]; expanded?: boolean }) {
+export function TaskWaitInfo({ todo, merges = [], expanded = false, rechecking = false }: { todo: Todo; merges?: readonly PRFacts[]; expanded?: boolean; rechecking?: boolean }) {
   const now = useNow(60_000);
   const info = taskWait(todo, now, merges);
   const [draft, setDraft] = useState<string>();
@@ -40,13 +40,13 @@ export function TaskWaitInfo({ todo, merges = [], expanded = false }: { todo: To
       if (!(target instanceof Element) || !event.currentTarget.contains(target) || target.closest("a, button, summary, input, textarea")) event.stopPropagation();
     }}>
     <div className={cx("flex flex-wrap items-baseline gap-x-2 gap-y-1", info.overdue && "text-red")}>
-      <span data-wait-target className="min-w-0 break-words">{t(`task-wait.kind_${info.kind}`)}{t("task-wait.target", { target })}</span>
-      <span data-wait-age className="min-w-0 break-words tabular-nums" title={info.since ? new Date(info.since).toISOString() : undefined}>{age}</span>
+      <span data-wait-target className="min-w-0 break-words">{rechecking ? target : t(`task-wait.kind_${info.kind}`) + t("task-wait.target", { target })}</span>
+      {!rechecking && <span data-wait-age className="min-w-0 break-words tabular-nums" title={info.since ? new Date(info.since).toISOString() : undefined}>{age}</span>}
       {info.overdue && <span data-wait-due className="font-medium">{t("task-wait.follow_up_due")}</span>}
     </div>
     {contact ? <a data-wait-contact href={contact.url} target="_blank" rel="noreferrer noopener" className="block break-words text-accent-ink hover:underline pointer-coarse:min-h-11">
       {t("task-wait.last_contact", { sender: contact.sender, time: contactTime ?? contact.sent_at, channel: contact.channel })}
-    </a> : <p data-wait-contact-missing className="text-ink-3">{t(info.kind === "date" || info.kind === "external_event" ? "task-wait.no_person_request" : "task-wait.contact_unknown")}</p>}
+    </a> : info.kind !== "date" && <p data-wait-contact-missing className="text-ink-3">{t(info.kind === "external_event" ? "task-wait.no_person_request" : "task-wait.contact_unknown")}</p>}
     <p data-wait-wake className="break-words">{info.wake ? t("task-wait.wake", { wake: info.wake }) : t("task-wait.wake_unknown")}</p>
     {sourceLinks.length > 0 && <div className="space-y-1">{sourceLinks.map((url, i) => {
       const pr = merges.find((facts) => waitSource(facts.url) === url);

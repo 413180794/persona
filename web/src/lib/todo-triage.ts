@@ -2,7 +2,8 @@
 // agents' sessions (alive, running, asking), its PR / delivery state, the latest task_review verdict and when it last moved —
 // never from what an agent says about itself. The rules are the SOP's table, in its order; the first that holds wins.
 
-import { acceptanceStands, decisionDismissed, latestReview, reviewState } from "./supervision";
+import { hasRunningTaskWork } from "./background-work";
+import { acceptanceStands, decisionDismissed, latestReview, reviewState, type Parked } from "./supervision";
 import { openAsk, todoDueBy, todoStatus, type PRFacts, type SessionLookup, type Todo, type TodoStatus } from "./todos";
 
 /** Where a to-do shows. */
@@ -21,6 +22,11 @@ export const SHELVE_AFTER_MS = 48 * 3600_000;
  *  #5707) files it at once; the time is the fallback. */
 export const JUST_DONE_MS = 24 * 3600_000;
 export const PR_STATUS_FRESH_MS = 15 * 60_000;
+
+function scheduledCheck(park: Parked | undefined): string | undefined {
+  if (park?.waiting_on === "date" && (!park.evidence || park.evidence.kind === "date") && ms(park.until) > 0) return park.until;
+  return undefined;
+}
 
 function normalizedPR(url: string | undefined): string {
   return (url ?? "").trim().replace(/[#?].*$/, "").replace(/\/+$/, "").toLowerCase();
@@ -44,6 +50,7 @@ export function waitingForMerge(todo: Todo, lookup: SessionLookup | undefined, n
   if (todo.done_at || !openMergePRs(todo, now).length) return false;
   const status = todoStatus(todo, lookup);
   if (status === "failed" || status === "needs_you" || status === "interrupted" || status === "working" || status === "waiting") return false;
+  if (reviewState(todo) === "parked" && status !== "usage_limit" && scheduledCheck(todo.supervision?.parked) && hasRunningTaskWork(todo, lookup)) return false;
   if (!decisionDismissed(todo) && (reviewState(todo) === "needs_user" || openAsk(todo)?.outcome === "decide" || openAsk(todo)?.outcome === "cannot")) return false;
   return true;
 }
@@ -81,6 +88,8 @@ export type TriageRule =
 export interface Triage {
   section: TriageSection;
   rule: TriageRule;
+  /** The supervisor's scheduled check while this task is still running. */
+  nextCheck?: string;
   /** The last moment anything of it moved, ms (0 when nothing says). */
   last: number;
 }
@@ -167,6 +176,15 @@ export function triage(todo: Todo, lookup: SessionLookup | undefined, now: numbe
   if (status === "needs_you" || status === "interrupted") return at("waiting", "agent_asks");
   // a decision the owner chose Don't handle on no longer waits on them (decisionDismissed)
   if (!todo.done_at && !decisionDismissed(todo) && (reviewState(todo) === "needs_user" || ask?.outcome === "decide" || ask?.outcome === "cannot")) return at("waiting", "owner_decides");
+  const park = reviewState(todo) === "parked" ? todo.supervision?.parked : undefined;
+  const running = status === "working" || status === "waiting";
+  if (park) {
+    const nextCheck = scheduledCheck(park);
+    // An unread turn may lead the task's status. Look at every binding before treating its date or PR as a hold.
+    if ((nextCheck || running) && status !== "usage_limit" && hasRunningTaskWork(todo, lookup)) {
+      return { section: "working", rule: "agent_running", last, nextCheck };
+    }
+  }
   // rule 8's signals, read here so rule 9 yields to them: a turn or review nobody has looked at stays Just finished
   const finished = status === "unread" || reviewState(todo) === "pending_review" || (ask && !ask.outcome) || ask?.outcome === "done";
   // a parked hold is its supervisor's reading of the latest turn: an agent session left unread does not hide its PR
@@ -176,10 +194,10 @@ export function triage(todo: Todo, lookup: SessionLookup | undefined, now: numbe
     // Seeing a supervisor's review does not finish its open PR or turn that internal review into an external wait.
     return reviewState(todo) === "pending_review" ? at("other", "rest") : at("parked", "pr_open");
   }
-  if (status === "working" || status === "waiting") return at("working", "agent_running");
+  if (!park && running) return at("working", "agent_running");
   if (todo.done_at) return at(fresh(ms(todo.done_at)) ? "just_done" : "done", "closed");
   // A fallback date is not a state transition: keep overdue waits visible until the hub actually wakes them.
-  if (reviewState(todo) === "parked") return at("parked", "parked");
+  if (park) return at("parked", "parked");
   if (!concern && acceptanceStands(todo)) return at(fresh(ms(latestReview(todo.supervision)?.at)) ? "just_done" : "done", "accepted");
   if (!concern && todo.delivery?.state === "live") return at(fresh(ms(todo.delivery.at) || last) ? "just_done" : "done", "deployed");
   if (finished && !seen(last)) return at("just_done", "finished_unseen");

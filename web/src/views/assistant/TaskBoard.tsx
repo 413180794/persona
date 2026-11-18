@@ -11,6 +11,7 @@ import { usageLimitLabel } from "../../lib/usage-limit";
 import { sessionTitle } from "../../lib/format";
 import { stateName } from "../../lib/state-labels";
 import { openMergePRs, triage } from "../../lib/todo-triage";
+import { nextCheckLabel } from "../../lib/supervision";
 import { t } from "../../i18n";
 import { TaskWaitInfo } from "./TaskWaitInfo";
 import { Dialog, IconButton, Menu } from "../../ui/atoms";
@@ -58,7 +59,10 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
   const sections = useMemo(() => {
     if (!open) return [];
     const now = Date.now();
-    const rows = todos.filter((td) => td.origin === conversation).map((todo) => ({ todo, status: statusOf(todo, lookup, plans), parked: triage(todo, lookup, now).section === "parked" }));
+    const rows = todos.filter((td) => td.origin === conversation).map((todo) => {
+      const { section, nextCheck } = triage(todo, lookup, now);
+      return { todo, status: statusOf(todo, lookup, plans), parked: section === "parked", nextCheck };
+    });
     return boardSections(rows, dockAgents(answeredSessions(Object.values(sessions).flat(), interactions, answered), todos, conversation, main));
   }, [open, todos, sessions, conversation, main, lookup, plans, interactions, answered]);
   const subtitle = (todo: Todo, status: TodoStatus) => {
@@ -86,7 +90,7 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
                 {t("assistant-task-actions.board_section", { title: BOARD_TITLE[sec.key], count: sec.rows.length + sec.agents.length })}
               </h3>
               <div className="divide-y divide-line overflow-hidden rounded-card bg-field">
-                {sec.rows.map(({ todo, status }) => (
+                {sec.rows.map(({ todo, status, nextCheck }) => (
                   <div key={todo.id} className="min-w-0 hover:bg-hover">
                     <div className="flex items-center">
                     <button
@@ -107,6 +111,7 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="truncate text-[13.5px] font-medium text-ink">{todo.title}</span>
+                        {nextCheck && <time dateTime={nextCheck} className="text-xs text-ink-2">{nextCheckLabel(nextCheck)}</time>}
                         {sec.key !== "parked" && <span className="truncate text-[12px] text-ink-3">{subtitle(todo, status)}</span>}
                       </span>
                       <Icon name="chevronRight" size={13} className="shrink-0 text-ink-3" />

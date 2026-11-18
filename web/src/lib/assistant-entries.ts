@@ -1,8 +1,8 @@
 import { backgroundWork, taskBackgroundWork, type BackgroundWork } from "./background-work";
 import { cardDismissed, cardFiled, cardSent, startFailure, type FeedItem, type TaskPlan } from "./feed";
-import { cardBucket, taskCardSlots, type TaskCardMetadata } from "./task-cards";
+import { taskCardSlots, type TaskCardMetadata } from "./task-cards";
 import { decisionDismissed, reviewState } from "./supervision";
-import { supersededFailedStarts, triage } from "./todo-triage";
+import { countsAsOpen, supersededFailedStarts, triage } from "./todo-triage";
 import { awaitsReview, dockAgents, makeSessionLookup, openAsk, todoRank, todoStatus, type SessionLookup, type Todo, type TodoStatus } from "./todos";
 import { byTime } from "./times";
 import { homeKey } from "./folded-rows";
@@ -30,7 +30,7 @@ export type NeedsYouItem =
 
 export type RunningItem =
   /** A dispatched task not finished and not waiting on the user. `countsOpen`: see NeedsYouItem. */
-  | { kind: "task"; key: string; card: TaskCardMetadata; todo: Todo; status: TodoStatus; activity?: BackgroundWork; countsOpen: boolean }
+  | { kind: "task"; key: string; card: TaskCardMetadata; todo: Todo; status: TodoStatus; activity?: BackgroundWork; nextCheck?: string; countsOpen: boolean }
   /** A working Agent that belongs to no task. */
   | { kind: "agent"; key: string; session: Session; activity?: BackgroundWork };
 
@@ -174,10 +174,10 @@ export function assistantEntries(input: AssistantEntriesInput): AssistantEntries
     const status = own.length < active.length ? withNeeds(entryStatus(todo, lookup, plans), todoStatus({ ...todo, agents: own }, lookup)) : entryStatus(todo, lookup, plans);
     const asks = own.flatMap((a) => asksOf.get(sessionKey(a.machine_id, a.session_id)) ?? []);
     const key = `task:${todo.id}`;
-    const bucket = cardBucket(card, todo, plans, lookup, now, input.restored?.get(todo.id) ?? 0, superseded.has(todo.id));
-    const countsOpen = bucket === "open";
+    const tr = triage(todo, lookup, now, input.restored?.get(todo.id) ?? 0, superseded.has(todo.id));
+    const countsOpen = countsAsOpen(todo, tr);
     // a failed start carries done_at (the hub ends it), yet it is the user's to retry while its bucket says open
-    const waits = status === "failed" ? bucket === "open" : !todo.done_at && WAITS_ON_YOU.has(status);
+    const waits = status === "failed" ? countsOpen : !todo.done_at && WAITS_ON_YOU.has(status);
     const decision = taskAwaitsDecision(todo);
     if (asks.length) asking.push({ kind: "task", key, todo, status, asks, countsOpen });
     else if (waits || decision) {
@@ -191,12 +191,14 @@ export function assistantEntries(input: AssistantEntriesInput): AssistantEntries
     // on the PR) the PR rule below files it
     else if (underReview(todo, status)) review.push({ item: { kind: "task", key, card, todo, status, countsOpen }, rank: todoRank(todo, status), at: card.at });
     // Use the To-dos page's wait classification. Live work and owner decisions outrank a hold or an open PR.
-    else if (reviewState(todo) !== "pending_review" && triage(todo, lookup, now, input.restored?.get(todo.id) ?? 0, superseded.has(todo.id)).section === "parked") parked.push({ item: { kind: "task", key, card, todo, status, countsOpen }, at: card.at });
-    else if (bucket === "open" || reviewState(todo) === "pending_review") open.push({ item: { kind: "task", key, card, todo, status, activity: taskBackgroundWork(todo, lookup), countsOpen }, rank: todoRank(todo, status), at: card.at });
-    else if (bucket === "shelved") shelved.push({ item: { kind: "task", key, card, todo, status, countsOpen: false }, at: card.at });
+    else if (reviewState(todo) !== "pending_review" && tr.section === "parked") parked.push({ item: { kind: "task", key, card, todo, status, countsOpen }, at: card.at });
+    else if (countsOpen || reviewState(todo) === "pending_review") {
+      const activity = taskBackgroundWork(todo, lookup, tr.nextCheck ? "recheck" : "row");
+      open.push({ item: { kind: "task", key, card, todo, status, activity, nextCheck: tr.nextCheck, countsOpen }, rank: todoRank(todo, status), at: card.at });
+    }
+    else if (tr.section === "shelved") shelved.push({ item: { kind: "task", key, card, todo, status, countsOpen: false }, at: card.at });
     else {
       // finished work a conversation handed out (a failed start a related to-do finished is history, not news)
-      const tr = triage(todo, lookup, now, input.restored?.get(todo.id) ?? 0, superseded.has(todo.id));
       if (tr.section === "just_done" && status !== "failed" && todo.origin) finished.push({ item: { kind: "task", key, card, todo, status, countsOpen: false }, at: tr.last });
       continue;
     }

@@ -12,6 +12,7 @@ export interface BoardRow {
   status: TodoStatus;
   /** The web caller's triage result, using its live session lookup, puts external waits together. */
   parked?: boolean;
+  nextCheck?: string;
 }
 
 export interface BoardSection {
@@ -22,8 +23,9 @@ export interface BoardSection {
 
 /** Which section a task is in: by its status, but a supervised one awaiting the user's review in Awaiting review, not with the
  *  stopped or finished-unseen ones (#4896). The web keeps Interrupted (interrupted) apart; it waits for the user like Needs you. */
-export function boardSectionOf({ todo, status, parked }: BoardRow): BoardSectionKey {
+export function boardSectionOf({ todo, status, parked, nextCheck }: BoardRow): BoardSectionKey {
   if (parked) return "parked";
+  if (nextCheck) return "working";
   if (awaitsReview(todo, status)) return "review";
   switch (status) {
     case "needs_you":

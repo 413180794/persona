@@ -69,7 +69,7 @@ const ruleLine = (of: RuleCard) => (of.suggestion || underCard.made?.has(of.id!)
 underCard.line = ruleLine;
 import { SentLine } from "./Sent";
 import { feedWake, HandoffCard, HandoffCards, taskHandoffs, whyNotStarted } from "./Handoff";
-import { latestReview, parkedLine, progressLine } from "../../lib/supervision";
+import { latestReview, nextCheckLabel, parkedLine, progressLine } from "../../lib/supervision";
 import { namedLauncher, providerIdNote, providerTitle, useProviderNames } from "../../lib/provider-names";
 import { useChosenManager, useLinkManager } from "../../lib/manager-choice";
 import { AnsweredSummary, InteractionCard, underCard } from "../chat/Interactions";
@@ -776,7 +776,7 @@ function TaskHandoffs({ item }: { item: FeedItem }) {
 }
 
 /** One slot, one row: live task/session state wins over historical feed metadata. */
-function ProgressTaskRow({ card, conversation, activity, countsOpen, supervisorReview, onOpen }: { card: TaskCardMetadata; conversation: string; activity?: BackgroundWork; countsOpen: boolean; supervisorReview?: boolean; onOpen?: () => void }) {
+function ProgressTaskRow({ card, conversation, activity, nextCheck, countsOpen, supervisorReview, onOpen }: { card: TaskCardMetadata; conversation: string; activity?: BackgroundWork; nextCheck?: string; countsOpen: boolean; supervisorReview?: boolean; onOpen?: () => void }) {
   const todo = useTodo(card.todo_id);
   const task = useTaskNow(todo);
   const plans = useFeed((s) => s.plans);
@@ -802,7 +802,8 @@ function ProgressTaskRow({ card, conversation, activity, countsOpen, supervisorR
   const liveWork = !finished && state !== "cancelled" ? activity : undefined;
   const liveLine = backgroundWorkLine(liveWork);
   // parked by its supervisor (#3804): the row says so, until when and why, ahead of what its agent last did
-  const parked = liveWork || finished || state === "cancelled" ? undefined : parkedLine(todo);
+  const parked = liveWork || finished || state === "cancelled" ? undefined
+    : nextCheck ? todo?.supervision?.parked?.reason : parkedLine(todo);
   // the status column is the Agent's own state, drawn with the Agents' marks; the to-do's own state is its chip (#6492)
   const agentKey = agentRowKey({ live: !!liveWork, status: state, lead: task?.lead, todo: !!todo, starting });
   const rowIsFinished = !countsOpen && finished;
@@ -835,8 +836,9 @@ function ProgressTaskRow({ card, conversation, activity, countsOpen, supervisorR
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 truncate text-sm font-semibold" title={title}>{title}</span>
-          {chip && <span data-task-todo-state className="max-w-1/2 shrink-0 truncate rounded-full bg-field px-1.5 text-xs text-ink-2">{todoChipLabel(chip)}</span>}
+          {!nextCheck && chip && <span data-task-todo-state className="max-w-1/2 shrink-0 truncate rounded-full bg-field px-1.5 text-xs text-ink-2">{todoChipLabel(chip)}</span>}
         </div>
+        {nextCheck && <time dateTime={nextCheck} className="block text-xs text-ink-2">{nextCheckLabel(nextCheck)}</time>}
         <BackgroundWorkDetail activity={liveWork} detail={detail} pr={prNumber ? t("assistant-tasks.progress_pr", { number: prNumber }) : undefined} />
         {!finished && state !== "cancelled" && meter && <TaskProgressMeter value={meter.value} total={meter.total} blocked={blocked} title={title} />}
       </div>
@@ -1239,7 +1241,7 @@ export const AssistantActionBar = memo(function AssistantActionBar({ conversatio
           <div className="flex shrink-0 items-center gap-2 bg-surface px-3 py-2 text-sm"><h2 className="min-w-0 flex-1 truncate font-semibold">{labels[tray]}</h2><Button onClick={() => setBoard(true)}>{t("assistant-tasks.all")}</Button><IconButton icon={expanded ? "collapse" : "expand"} label={t(expanded ? "assistant-tasks.tray_restore" : "assistant-tasks.tray_expand")} onClick={() => setExpanded((v) => !v)} /><IconButton icon="x" label={t("ui-atoms.close")} onClick={() => setTray(null)} /></div>
           <div data-tray-list className="min-h-0 grow overflow-y-auto overscroll-contain">
           {tray === "running" && <div className="divide-y divide-line">
-            {entries.running.map((item) => item.kind === "task" ? <ProgressTaskRow key={item.key} card={item.card} conversation={conversation} activity={item.activity} countsOpen={item.countsOpen} /> : <RunningAgentRow key={item.key} session={item.session} activity={item.activity} />)}
+            {entries.running.map((item) => item.kind === "task" ? <ProgressTaskRow key={item.key} card={item.card} conversation={conversation} activity={item.activity} nextCheck={item.nextCheck} countsOpen={item.countsOpen} /> : <RunningAgentRow key={item.key} session={item.session} activity={item.activity} />)}
             {!entries.running.length && <p className="px-3 py-3 text-sm text-ink-2">{t("assistant-tasks.tray_empty_progress")}</p>}
             {entries.shelved.length > 0 && (
               <button type="button" data-progress-shelved aria-expanded={showShelved} onClick={() => setShowShelved((v) => !v)} title={t("assistant-tasks.tray_shelved_hint")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink-2 hover:bg-hover">

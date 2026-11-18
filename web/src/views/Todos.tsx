@@ -24,7 +24,7 @@ import { composing } from "../lib/send-history";
 import { useScrollMemory } from "../lib/scroll-memory";
 import { useAgentSessions, useFullAgentSessions } from "../lib/sessions";
 import { useScoped } from "../lib/current-assistant";
-import { dropTodo, refresh, refreshTodos, useStore, withTaskRows } from "../lib/store";
+import { dropTodo, refresh, refreshTodos, useStore } from "../lib/store";
 import {
   addTodoDecision,
   createTodo,
@@ -39,7 +39,6 @@ import {
   formatAgentSource,
   formatTodoContext,
   isLegacySpacesRouteError,
-  makeSessionLookup,
   mostUrgentAgent,
   orphanedLine,
   sortTodos,
@@ -77,7 +76,7 @@ import { formatDate, t } from "../i18n";
 import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeState } from "../lib/todo-tree";
 import { directionTitle, groupsByDirection, useDirectionTree, type Direction } from "../lib/direction-tree";
 import { DirectionCountsText } from "./DirectionMarks";
-import { FOLDED_SECTIONS, TRIAGE_SECTIONS, checksAsOpen, countsAsOpen, lastActivity, openMergePRs, supersededFailedStarts, triage, triageTodos, type TriageGroup, type TriageResult, type TriageSection } from "../lib/todo-triage";
+import { FOLDED_SECTIONS, TRIAGE_SECTIONS, checksAsOpen, countsAsOpen, lastActivity, openMergePRs, supersededFailedStarts, triage, triageTodos, type Triage, type TriageGroup, type TriageResult, type TriageSection } from "../lib/todo-triage";
 import { orderWaitGroups } from "../lib/task-wait";
 import {
   TODO_LIST_FILTERS,
@@ -99,7 +98,7 @@ import { prLink } from "./TodoStageBar";
 import { projectChoices, projectNames, useTodoProjects } from "../lib/todo-projects";
 import { useFolded } from "../lib/use-folded";
 import { stateName } from "../lib/state-labels";
-import { answeredLookup } from "./assistant/answered-lookup";
+import { useTaskLookup } from "./assistant/Tasks";
 import { Empty, Segmented, Tag } from "./assistant/parts";
 import { OfflineState, useShownOffline } from "./ManagerParts";
 import { TodoCalendar, type CalendarSlot } from "./TodoCalendar";
@@ -191,11 +190,7 @@ export function TodosView({
   const offline = useShownOffline();
   const machines = useStore((s) => s.machines);
   const interactions = useStore((s) => s.interactions);
-  const allSessions = useAgentSessions();
-  const answered = useStore((s) => s.answered);
-  // a card answered here stops its agent's "Needs you" at once, not at the hub's next push (#4186)
-  const taskRows = useStore((s) => s.taskRows);
-  const lookup = useMemo(() => answeredLookup(withTaskRows(makeSessionLookup(allSessions), taskRows), interactions, answered), [allSessions, taskRows, interactions, answered]);
+  const lookup = useTaskLookup();
 
   const [activeId, setActiveId] = useState<string | undefined>(selectedId);
   const [search, setSearch] = useState("");
@@ -263,13 +258,13 @@ export function TodosView({
   const superseded = useMemo(() => supersededFailedStarts(todos), [todos]);
   // Each to-do's own status section (docs/assistant/todo-status-sop.md), whatever the list is grouped by: its checkbox
   // and its page read a failed start waiting on the owner as open (audit item 13).
-  const sectionOf = useMemo(
-    () => new Map(todos.map((td) => [td.id, triage(td, lookup, Date.now(), restored.get(td.id) ?? 0, superseded.has(td.id)).section])),
+  const triageOf = useMemo(
+    () => new Map(todos.map((td) => [td.id, triage(td, lookup, Date.now(), restored.get(td.id) ?? 0, superseded.has(td.id))])),
     [todos, lookup, restored, superseded, tick],
   );
   // A sessions push builds a new lookup: what it leaves in the same order stays the same list (and the same groups,
   // the same row views below), so the rows and sections it did not touch skip their render.
-  const views = useSteady(useMemo(() => todoRowViews(todos, lookup, interactions, sectionOf), [todos, lookup, interactions, sectionOf]), steadyViews);
+  const views = useSteady(useMemo(() => todoRowViews(todos, lookup, interactions, triageOf), [todos, lookup, interactions, triageOf]), steadyViews);
 
   // The filter by due date and the order inside each section (#3740): this browser's, in both groupings
   const [listFilter, setListFilter] = useState<TodoListFilter>(() => {
@@ -335,7 +330,7 @@ export function TodosView({
   const projectName = useMemo(() => projectNames(kbProjects), [kbProjects]);
   const projectGroups = useSteady(
     // a folder holding a to-do in Needs you says so, a failed start waiting on the owner too (audit item 13)
-    useMemo(() => groupTodosByProject(filteredUncompleted, lookup, Date.now(), projectName, (td) => sectionOf.get(td.id) === "waiting"), [filteredUncompleted, lookup, projectName, sectionOf]),
+    useMemo(() => groupTodosByProject(filteredUncompleted, lookup, Date.now(), projectName, (td) => triageOf.get(td.id)?.section === "waiting"), [filteredUncompleted, lookup, projectName, triageOf]),
     steadyGroups,
   );
   // each section gets only its own rows' views, so one row's change re-renders that row's section alone
@@ -734,7 +729,7 @@ export function TodosView({
                 interactions={interactions}
                 showReleased={showReleased}
                 onToggleReleased={() => setShowReleased((v) => !v)}
-                open={checksAsOpen(selectedTodo, sectionOf.get(selectedTodo.id))}
+                open={checksAsOpen(selectedTodo, triageOf.get(selectedTodo.id)?.section)}
                 onToggleDone={(open) => toggleDone(selectedTodo, open)}
                 onOpenHandover={() => openHandover()}
                 onDeleteClick={() => askDelete(selectedTodo.id)}
@@ -986,7 +981,7 @@ export function TodosView({
               interactions={interactions}
               showReleased={showReleased}
               onToggleReleased={() => setShowReleased((v) => !v)}
-              open={checksAsOpen(activeTodo, sectionOf.get(activeTodo.id))}
+              open={checksAsOpen(activeTodo, triageOf.get(activeTodo.id)?.section)}
               onToggleDone={(open) => toggleDone(activeTodo, open)}
               onOpenHandover={() => openHandover()}
               onDeleteClick={() => askDelete(activeTodo.id)}
@@ -1445,8 +1440,9 @@ export type TodoRowView = {
   orphaned: boolean;
   /** One of its agents runs with ultracode on (#12): the Agent list row's mark after its title. */
   ultracode: boolean;
-  /** Its status section (sectionOf), in every grouping: its checkbox reads open or done by it (checksAsOpen). */
+  /** Its status section in every grouping: its checkbox reads open or done by it (checksAsOpen). */
   section?: TriageSection;
+  nextCheck?: string;
 };
 
 const DOT_STATE: Record<TodoStatus, AgentState> = {
@@ -1464,11 +1460,13 @@ const DOT_STATE: Record<TodoStatus, AgentState> = {
 
 /** The view of one todo's row (TodoRowView). Every open row says its latest progress: what its agent asks or does,
  *  else what its agent last reported to its supervisor (#3156). */
-export function todoRowView(todo: Todo, lookup: SessionLookup, interactions: Interaction[]): TodoRowView {
+export function todoRowView(todo: Todo, lookup: SessionLookup, interactions: Interaction[], placement?: Triage): TodoRowView {
   const view = agentRowView(todo, lookup, interactions);
+  view.section = placement?.section;
+  view.nextCheck = placement?.nextCheck;
   // Nobody is working on it (#3618): the hub's finding goes ahead of what a stopped agent last said (Interrupted,
   // Follow up; docs/assistant/todos.md). A card that waits for the user still says its question.
-  const orphan = view.status !== "needs_you" ? orphanedLine(todo) : undefined;
+  const orphan = view.status !== "needs_you" && !view.nextCheck ? orphanedLine(todo) : undefined;
   if (orphan) {
     view.urgentLine = true;
     view.orphaned = true;
@@ -1477,7 +1475,7 @@ export function todoRowView(todo: Todo, lookup: SessionLookup, interactions: Int
     return view;
   }
   if (!view.urgentLine && !todo.done_at) {
-    const said = parkedLine(todo) ?? progressLine(todo.supervision);
+    const said = (view.nextCheck ? todo.supervision?.parked?.reason : parkedLine(todo)) ?? progressLine(todo.supervision);
     if (said) {
       view.urgentLine = true;
       view.urgentText = said;
@@ -1518,8 +1516,8 @@ function agentRowView(todo: Todo, lookup: SessionLookup, interactions: Interacti
 }
 
 /** Every todo's row view by id, with its status section. */
-function todoRowViews(todos: Todo[], lookup: SessionLookup, interactions: Interaction[], sections: ReadonlyMap<string, TriageSection>): ReadonlyMap<string, TodoRowView> {
-  return new Map(todos.map((td) => [td.id, { ...todoRowView(td, lookup, interactions), section: sections.get(td.id) }]));
+function todoRowViews(todos: Todo[], lookup: SessionLookup, interactions: Interaction[], placements: ReadonlyMap<string, Triage>): ReadonlyMap<string, TodoRowView> {
+  return new Map(todos.map((td) => [td.id, todoRowView(td, lookup, interactions, placements.get(td.id))]));
 }
 
 const TONE_CLASS = TODO_TONE_CLASS;
@@ -1648,7 +1646,7 @@ const TodoListItem = memo(function TodoListItem({
               <SeenButton onClick={() => onSeen(todo.id)} />
             </span>
           ) : (
-            !todo.done_at && <ReviewBadge todo={todo} className="ml-auto" />
+            !todo.done_at && <ReviewBadge todo={todo} nextCheck={view.nextCheck} className="ml-auto" />
           )}
         </div>
 
@@ -1939,14 +1937,14 @@ export function ReviewChecklist({ todo, lookup }: { todo: Todo; lookup?: Session
   if (!sup) return null;
   const list = checklist(sup);
   const review = latestReview(sup);
-  const parked = triage(todo, lookup, Date.now()).section === "parked";
+  const { section, nextCheck } = triage(todo, lookup, Date.now());
   // What this list cannot say of finished work (#3822): the criteria a scope change dropped, and what was done beyond the brief.
   const extras = todo.done_at ? resultExtras(todo) : undefined;
   return (
     <section data-testid="review-checklist" className="mt-4 rounded-control bg-inset p-3.5 shadow-hairline">
       <div className="flex items-center gap-2">
         <span className="text-[12.5px] font-semibold text-ink-2">{t("assistant-tasks.review_title")}</span>
-        <ReviewBadge todo={todo} />
+        <ReviewBadge todo={todo} nextCheck={nextCheck} />
         <span className="flex-1" />
         {sup.expect_minutes ? <span className="text-[12px] text-ink-3">{t("assistant-tasks.review_expect", { minutes: sup.expect_minutes })}</span> : null}
       </div>
@@ -1981,7 +1979,7 @@ export function ReviewChecklist({ todo, lookup }: { todo: Todo; lookup?: Session
           <BriefResultExtras dropped={extras.dropped} alsoDone={extras.alsoDone} />
         </Suspense>
       )}
-      {parked && <div data-testid="review-parked" className="mt-2 select-text"><TaskWaitInfo todo={todo} merges={openMergePRs(todo, Date.now())} expanded /></div>}
+      {(section === "parked" || nextCheck) && <div data-testid="review-parked" className="mt-2 select-text"><TaskWaitInfo todo={todo} merges={openMergePRs(todo, Date.now())} rechecking={!!nextCheck} expanded /></div>}
       {review?.note && <p className="mt-2 text-[12.5px] leading-[1.6] text-ink-2 select-text">{t("assistant-tasks.review_note", { note: review.note })}</p>}
       <AutoReviewResult sup={sup} />
     </section>
@@ -2035,7 +2033,7 @@ function TodoDetail({
   owner: string;
   activeAgents: TodoAgent[];
   releasedAgents: TodoAgent[];
-  lookup: ReturnType<typeof makeSessionLookup>;
+  lookup: SessionLookup;
   machines: Machine[];
   interactions: Interaction[];
   showReleased: boolean;
@@ -2556,7 +2554,7 @@ function ThreadSection({ todo }: { todo: Todo }) {
  * opens it whole (#6447, `shownDecisions`). Nothing is stored: each to-do opens with the first five, and one just
  * recorded or revised shows the whole list so it is in view.
  */
-function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typeof makeSessionLookup> }) {
+function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: SessionLookup }) {
   const [all, setAll] = useState<TodoDecision[] | null>(null);
   const [failed, setFailed] = useState("");
   const [unsupported, setUnsupported] = useState(false);

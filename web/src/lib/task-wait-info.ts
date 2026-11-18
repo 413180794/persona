@@ -25,7 +25,7 @@ export function taskWait(todo: Todo, now: number, merges: readonly PRFacts[] = [
   if (!p && !merges.length) return undefined;
   const e = p?.evidence;
   const kinds: string[] = ["person_reply", "merge_review", "external_event", "date"];
-  const kind = e && kinds.includes(e.kind) ? e.kind : p ? "legacy" : "merge_review";
+  const kind = e && kinds.includes(e.kind) ? e.kind : p?.waiting_on === "date" ? "date" : p ? "legacy" : "merge_review";
   const contact = (kind === "person_reply" || kind === "merge_review") ? sentWaitContact(e, now) : undefined;
   const deadline = p?.until ? Date.parse(p.until) : NaN;
   const until = Number.isFinite(deadline) && deadline > 0 ? deadline : undefined;
