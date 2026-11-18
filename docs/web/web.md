@@ -2127,17 +2127,29 @@ selector; where Persona's earlier rules differ, Cindy's wins, built from Persona
   read before at once and reads every list again behind them, the session's own first, at most three at a time.
 - **Quota and prices** (#5056): the opening also reads each launcher's existing `GET /launchers/{name}/quota?machine=<mid>`
   answer without `refresh=1`, so the hub's one-minute cache absorbs repeated openings and an unsupported gateway draws
-  nothing. A provider rail cell shows the tightest weekly window's remaining percentage in its 22 × 3 px bar and the reset
+  nothing. A launcher summary shows the tightest weekly window's remaining percentage and bar and the reset
   time in its tooltip (warning at ≤ 30% left, critical at ≤ 10% or exhausted, matching `quotaTone`). An exact built-in
   catalog entry's global, standard USD reference price (without an input-size tier) gives the model row one to three `$`
   marks by output price (≤ 3 / ≤ 15 / > 15 per million tokens) and the flyout's "Per 1M tokens · Input · Output · Cache
   read" line. Unknown, inherited, malformed, regional-only and input-size-tiered prices draw nothing; a reference price is
   not a quote from the gateway and is never inherited by another model.
-- **Long lists** (#6478): the rail fades its top / bottom edge while more cells lie beyond it (it has no scrollbar). Not
-  searching, the All view shows each provider group's first 8 rows (and the one that runs now) when several providers
-  are listed, then **Show all N models** (显示全部 N 个; N 件をすべて表示), which opens that provider's view. A row whose name
-  is cut short shows the whole model ID as its second line (monospace, wrapping, two lines at most); on a touch screen,
-  which has no tooltips, every row whose name is not its ID shows the ID there instead of the provider's name.
+- **Launcher-first column** (#10249): Agent, handover, Assistant and New Agent all use the same shared column.
+  Panel-only color and motion values load from `web/src/ui/model-panel/ModelPanel.css`, keeping the first screen
+  within its unchanged budget; Tailwind color aliases remain shared. Reduce Motion skips the opening clip entirely,
+  avoiding a stale initial compositor frame from a 1 ms morph. New Agent loads the panel on intent through the same lazy overlay boundary as chat pickers; the pill and draft stay
+  mounted while it loads, and a failed chunk closes only the panel so opening it again retries.
+  Follow model configuration stays first where supported. Below it are up to three distinct saved setups, favorites
+  first then recent, labeled with launcher and model and preserving their saved effort/speed; a pick is one action.
+  Every launcher has a disclosure row in one scrollable list: full name, Agent kind, known default model, model count
+  (catalog entries except the synthetic New Agent Default row), Current/configured Default, known weekly quota and
+  supplied health or unavailable reason. Only the current launcher starts expanded; with no current launcher all start
+  collapsed. A collapsed launcher takes two actions to pick a model, an expanded one one. There is no separate rail,
+  eight-row cutoff or More launchers bucket. The existing model rows, family folds, setup controls and selection gates
+  are reused. Unknown model defaults use the existing Default model wording, not an inferred first model.
+  Search shows matching launcher rows first, then one flat model list; every model and typed-ID result names its
+  launcher, including on phones and when a long model ID wraps. Selecting a matching launcher clears search and opens
+  its models. Typed-ID selection sends exactly its named launcher. Clearing search restores the disclosure state.
+  Existing model-ID disclosure on touch screens and clipped names remains, alongside the launcher in search results.
 - **Families and earlier versions** (`lib/model-families.ts`): a provider group (and Recommended, after the model that
   runs) keeps each model family together under its name in small type: Claude Fable, Opus, Sonnet and Haiku (in that
   order, by capability), a GPT line per variant ("GPT Sol", "GPT Terra"), a Gemini tier ("Gemini Pro", "Gemini Flash";
@@ -2159,15 +2171,14 @@ selector; where Persona's earlier rules differ, Cindy's wins, built from Persona
 - **Context below the composer** (#5056): `ContextMeter` sits in the right-aligned usage row below the composer card.
   The visible label and fill show the used share at every width (#9155). The popover still shows the remaining share and
   token counts. Unknown context mounts no meter.
-- **Switching rules**: the session's own launcher switches its model at once. Its group "Recommended" is the model that
-  runs, then its other models. On a hub with `launcher_switch` (#5035, docs/protocol/protocol.md "Switching a running
+- **Switching rules**: the session's own launcher switches its model at once. Its models stay under its launcher. On a hub with `launcher_switch` (#5035, docs/protocol/protocol.md "Switching a running
   Agent to another provider"), a Claude Code Agent in a terminal may also pick a model of another Claude Code launcher on
   its computer (never one a runtime runs, Paseo's: the node refuses it, so its other launchers stay off with why, #8142): the pick is recorded and the user's next message from this chat carries it out (the node quits the agent
   and resumes the same conversation through that launcher in the same terminal), so a pick never interrupts the agent.
   Only that message does: the composer sends it with `apply_switch: true` while the session shows `pending_switch`;
   every other sender's message goes on the launcher the agent runs on. A message sent while the agent works, waits on
   you or has background work goes there too, and the switch waits for a later one. Those launchers keep
-  their own groups (they don't switch at once, so they are not "Recommended"); one that fixes its own `--model` offers
+  their own groups; one that fixes its own `--model` offers
   only its default entry. While a switch waits, the panel's list starts with a warning line: "Switches on your next
   message: the Agent restarts on work and keeps this conversation", and its target is the panel's `pending` setup.
   Picking the session's own launcher drops the waiting switch first. On an older hub another launcher of the same engine
