@@ -436,6 +436,8 @@ Lives under the assistant service, which already knows machine, launcher, and mo
 | `probe` | Present only with `?probe=1`; the `{ok, model, answer, millis, error}` from `POST /api/v1/launchers/{name}/check` (`assistant/models_launchers_routes.go:242`) |
 | `dismissed` | User tapped "Later" |
 
+A passing probe also takes the failing health record of that launcher on that computer back to `ok`, as a passing Test does; a failed probe records nothing (`docs/server/launcher-health.md`, "Test availability").
+
 Evaluation order and data sources (all existing, plus one new node RPC):
 
 1. `computer`: device list, online status, trust state (5.3). Later steps are `unknown` until the computer is `ok`.

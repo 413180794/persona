@@ -45,6 +45,11 @@ func (s *Service) healthLaunchers(ctx context.Context, machine string) ([]string
 	if err != nil {
 		return nil, err
 	}
+	return s.healthNames(ctx, list), nil
+}
+
+// healthNames are healthLaunchers for machine's list (machineLaunchers): its startable launchers and the default.
+func (s *Service) healthNames(ctx context.Context, list []proto.Launcher) []string {
 	var out []string
 	for _, l := range list {
 		if startableLauncher(l) {
@@ -54,7 +59,32 @@ func (s *Service) healthLaunchers(ctx context.Context, machine string) ([]string
 	if d := s.startLauncher(ctx, ""); !slices.Contains(out, d) && s.launcherEverywhere(ctx, d) {
 		out = append(out, d)
 	}
-	return out, nil
+	return out
+}
+
+// runtimeChecks are the runtime launchers (not startable, see healthLaunchers) on machine that a check adds: the one
+// named (check now's launcher=) when the machine lists it, else the main chat's launcher and the Agents' default when
+// the machine lists them. The periodic rounds check no other runtime's launcher. External launchers are never checked
+// (probeLauncherHealth).
+func (s *Service) runtimeChecks(ctx context.Context, list []proto.Launcher, only string) []string {
+	listed := func(name string) bool {
+		return name != "" && !proto.IsExternalLauncher(name) && slices.ContainsFunc(list, func(l proto.Launcher) bool {
+			return l.Name == name && l.Source != proto.ExternalLauncherSource
+		})
+	}
+	if only != "" {
+		if listed(only) {
+			return []string{only}
+		}
+		return nil
+	}
+	var out []string
+	for _, name := range []string{s.launcherNow(ctx), s.startLauncher(ctx, "")} {
+		if listed(name) && !slices.Contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // startLauncher is the launcher a start with launcher runs: itself, else model settings › Agents', else claude.
@@ -121,17 +151,29 @@ func (s *Service) healthRound(ctx context.Context, wait bool) {
 }
 
 // checkMachine checks machine d's launchers that are due (only: one by that name, at once); the records of launchers
-// it no longer has go.
+// it no longer lists go. A launcher that is not checked (a runtime's) keeps its record: "not checked" is not "gone".
 func (s *Service) checkMachine(ctx context.Context, d Device, cfg healthConfig, cameOnline bool, only string) []LauncherHealth {
-	names, err := s.healthLaunchers(ctx, d.ID)
+	list, err := s.machineLaunchers(ctx, d.ID)
 	if err != nil {
 		s.logf("launcher health: %s: launchers: %v", d.ID, err)
 		return nil
 	}
+	names := s.healthNames(ctx, list)
+	for _, name := range s.runtimeChecks(ctx, list, only) {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	listed := make([]string, 0, len(list))
+	for _, l := range list {
+		listed = append(listed, l.Name)
+	}
 	b := &s.health
 	b.mu.Lock()
 	for key, r := range b.recs {
-		if r.Machine == d.ID && !slices.Contains(names, r.Launcher) {
+		// names keeps the default when the machine does not list it (plain claude where it is not installed): its
+		// record is what the next start reads, and dropping it each round would re-probe it each round.
+		if r.Machine == d.ID && !slices.Contains(listed, r.Launcher) && !slices.Contains(names, r.Launcher) {
 			delete(b.recs, key)
 			delete(b.recheckAt, key)
 		}

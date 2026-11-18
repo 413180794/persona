@@ -795,10 +795,15 @@ func (s *Service) readinessProbe(ctx context.Context, machine, launcher string) 
 	ctx = context.WithoutCancel(ctx)
 	cctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
 	defer cancel()
+	observed, _ := s.launcherHealth(ctx, machine, launcher) // as the apps' Test reads it, before the check
 	var res proto.LauncherCheck
 	if err := s.call(cctx, machine, assistantwire.DeviceLaunchersCheck, map[string]any{"name": launcher, "purpose": "assistant"}, &res); err != nil {
 		// Not the model's answer (the machine could not be asked): said, not kept.
 		return &proto.LauncherCheck{Error: i18n.Localize(err, s.requestCtxLang(ctx))}
+	}
+	if res.OK {
+		// A passing check takes a failing record of this launcher back to ok, as a passing Test does (#1838).
+		s.recordTestPassed(ctx, machine, launcher, res, observed)
 	}
 	// Detached from the client, the save needs its own deadline: one the database does not answer would hold the
 	// readiness lock, and every readiness request behind it, for good.
