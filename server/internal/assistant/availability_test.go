@@ -223,8 +223,9 @@ func TestAvailabilityReplyWaitWithoutQueue(t *testing.T) {
 	ft, ref, list := availConv(t)
 	s := ft.s
 	superviseRound(t, ft, list, "earlier")
-	// The owner spoke more than one input window before the background round ended.
-	s.availOwnerSpoke(ref, time.Now().Add(-availInputFor-time.Second))
+	s.UserSpoke(t.Context(), ref)
+	// Expire the input window while the current round still holds the owner's message.
+	s.availInput(ref.MachineID, ref.SessionID, roundOwner, time.Now().Add(-availInputFor))
 	list(proto.StatusWorking, "Checking the PR.")
 	list(proto.StatusWorking, "Merged it.")
 	if got := availEvents(s, replyWaitEvent); len(got) != 0 {
