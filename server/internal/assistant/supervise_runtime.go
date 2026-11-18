@@ -90,11 +90,6 @@ func (s *Service) rehomeRuntimeSupervision(ctx context.Context, cfg Settings) ma
 	for _, from := range waiting {
 		if from != to && s.moveRuntimeRelays(ctx, from, to, runtimes[from] && !cfg.secretary(from)) {
 			if to != "" {
-				if runtimes[from] && !cfg.secretary(from) {
-					s.supervise.mu.Lock()
-					s.supervise.setQueuedLocked(from, nil)
-					s.supervise.mu.Unlock()
-				}
 				s.drainConversations(cfg.MachineID, []string{to})
 			}
 			s.publish(ctx)
@@ -125,6 +120,7 @@ func (s *Service) moveRuntimeRelays(ctx context.Context, from, to string, runtim
 		if to == "" {
 			keep = append(keep, m) // visibly waiting; retry when a compatible supervisor is available
 		} else {
+			m.OnceID = "" // another destination has its own delivery identity
 			b.st.Queue[to] = append(b.st.Queue[to], m)
 		}
 		moved = true

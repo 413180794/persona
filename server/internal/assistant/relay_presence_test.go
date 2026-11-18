@@ -524,7 +524,7 @@ func TestReplacedQueuedMessageKeepsItsWait(t *testing.T) {
 	}
 	s.relays.mu.Unlock()
 	before := time.Now()
-	if !s.replaceQueuedSupervise("conv1", relayMsg{From: superviseTool, Tool: superviseTool, Urgent: true, Text: "both", At: before.UTC()}) {
+	if !s.replaceQueuedSupervise("conv1", queuedRelays(s, "conv1")[0], relayMsg{From: superviseTool, Tool: superviseTool, Urgent: true, Text: "both", At: before.UTC()}) {
 		t.Fatal("not replaced")
 	}
 	if !s.replaceQueuedNotice("conv1", relayMsg{From: "t1", Tool: noticeTool, State: "failed", Text: "failed", At: before.UTC()}) {

@@ -356,7 +356,13 @@ func TestBackgroundQueuedWakeAfterManagerRestart(t *testing.T) {
 	f.mu.Lock()
 	f.settings = nil // the new manager reads its settings from the database, as on a hub
 	f.mu.Unlock()
-	again := newServiceOn(t, f, st)
+	// The plan fixture persists settings but keeps tasks in memory. Restore
+	// the open task as well, as the database would on a real restart.
+	restarted := &relayLedgerStore{
+		ruleTodos: &ruleTodos{ruleStore: ruleStore{st.(planUpdateStore).memStore}, todos: []db.TodoRow{{ID: todo.ID, Title: todo.Title, Origin: todo.Origin}}},
+		ledgers:   []db.TodoSupervisionRow{todo.Supervision.row(todo.ID)},
+	}
+	again := newServiceOn(t, f, restarted)
 	again.noBackground = false
 	stopHolds(t, again)
 	if again.queuedFor(bg) != 1 {

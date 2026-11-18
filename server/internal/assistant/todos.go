@@ -460,6 +460,7 @@ func (s *Service) todosPushSoon() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		s.event(ctx, map[string]any{"type": "todos"})
+		s.pruneQueuedSupervision(ctx)
 		p.mu.Lock()
 		p.sending--
 		p.mu.Unlock()

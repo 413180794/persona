@@ -362,10 +362,9 @@ func TestBackgroundSupervisorGoneIsReplaced(t *testing.T) {
 	b := &s.supervise
 	b.mu.Lock()
 	b.init()
-	b.setQueuedLocked("gone1", []superviseSignal{g})
 	b.sent[g.id()] = g.Key
 	b.mu.Unlock()
-	if s.queueRelay("gone1", relayMsg{From: superviseTool, Tool: superviseTool, Text: "📋 督办", At: time.Now().UTC()}) == 0 {
+	if s.queueRelay("gone1", relayMsg{From: superviseTool, Tool: superviseTool, Text: "📋 督办", Digest: &queuedSupervision{Prompt: prompts.Supervise{Entries: []prompts.SuperviseEntry{{ID: todo.ID, Kind: g.Kind}}}, signals: []superviseSignal{g}}, At: time.Now().UTC()}) == 0 {
 		t.Fatal("could not queue for the old background supervisor")
 	}
 
