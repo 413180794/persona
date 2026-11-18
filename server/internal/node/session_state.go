@@ -31,7 +31,7 @@ type stateFile struct {
 }
 
 type sessionState struct {
-	AssistantPrepared       bool            `json:"assistant_prepared,omitempty"` // runtime instructions still await the first real message
+	AssistantPrepared       bool            `json:"assistant_prepared,omitempty"` // legacy handoff state, migrated to AwaitingFirstMessage on load
 	CreationID              string          `json:"creation_id,omitempty"`
 	Incarnation             string          `json:"incarnation,omitempty"`
 	Pane                    string          `json:"pane,omitempty"`
@@ -39,7 +39,7 @@ type sessionState struct {
 	Model                   string          `json:"model,omitempty"`
 	ModelFingerprint        string          `json:"model_fingerprint,omitempty"`
 	ModelEffort             string          `json:"model_effort,omitempty"`
-	Runtime                 string          `json:"runtime,omitempty"` // the assistant runtime it was asked to run on (assistant_sdk.go)
+	Origin                  string          `json:"origin,omitempty"` // manager-recorded conversation source, for model-call authorization
 	ConfigDir               string          `json:"config_dir,omitempty"`
 	Cwd                     string          `json:"cwd"`
 	IsMain                  bool            `json:"is_main,omitempty"`
@@ -47,6 +47,9 @@ type sessionState struct {
 	StartedAt               time.Time       `json:"started_at"`
 	StopCause               proto.StopCause `json:"stop_cause,omitempty"`
 	StopCauseAt             int64           `json:"stop_cause_at,omitempty"`
+	// AwaitingFirstMessage: an empty start reserved this conversation without sending
+	// a model input. Runtime instructions and the idle state wait for actual delivery.
+	AwaitingFirstMessage bool `json:"awaiting_first_message,omitempty"`
 	// MainCompactWindow: the window the main conversation last ran with (modelExecution.MainCompactWindow), kept like
 	// IsMain (the hub's copy keeps neither, so until the node restarts) for a start that carries no execution: a manual
 	// compaction with no process running (assistant_compact.go).
@@ -128,6 +131,9 @@ func (s *stateFile) merge(m map[string]sessionState) {
 			continue // not Persona's, and what it says of the user's session is not kept either (observationOnly)
 		}
 		if _, ok := s.Sessions[id]; !ok {
+			if v.AssistantPrepared {
+				v.AwaitingFirstMessage, v.AssistantPrepared = true, false
+			}
 			s.Sessions[id] = v
 		}
 	}

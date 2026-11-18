@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -30,43 +29,6 @@ func runtimeSupervisorFixture(t *testing.T, s *Service, f *fakeHub) []proto.Sess
 	f.mu.Unlock()
 	f.setSessions("server", rows...)
 	return rows
-}
-
-func lastSendTo(f *fakeHub, id string) map[string]any {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for i := len(f.sends) - 1; i >= 0; i-- {
-		if sent := f.sends[i]; sent["session_id"] == id {
-			return sent
-		}
-	}
-	return nil
-}
-
-func newRoundService(t *testing.T) (*Service, *fakeHub, Todo, Store) {
-	t.Helper()
-	st := planUpdateStore{&planMemStore{memStore: &memStore{}, plans: map[string]db.TaskPlanRow{}}}
-	s, f, todo := newSupervisedServiceOn(t, st)
-	s.noBackground = false
-	f.mu.Lock()
-	f.made = 100
-	f.mu.Unlock()
-	return s, f, todo, st
-}
-
-func wakeRound(s *Service, signals ...superviseSignal) {
-	b := &s.supervise
-	b.mu.Lock()
-	b.init()
-	for _, signal := range signals {
-		if signal.At.IsZero() {
-			signal.At = time.Now().Add(-time.Minute)
-		}
-		b.pending[signal.id()] = signal
-	}
-	b.last = time.Time{}
-	b.mu.Unlock()
-	s.sendDigest(context.Background())
 }
 
 func TestRuntimeTaskPlanFollowsUpInBackground(t *testing.T) {

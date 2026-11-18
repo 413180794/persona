@@ -2,5 +2,6 @@
   "archive_main": "メインチャットはアーカイブできません",
   "archive_background_supervisor": "バックグラウンド監督のチャットはアーカイブできません",
   "background_supervisor": "バックグラウンド監督",
+  "background_supervisor_former": "バックグラウンド監督 · {month}月{day}日まで",
   "waiting_for_supervisor": "タスクの報告は Claude Code または Codex の管理役を待っています"
 }

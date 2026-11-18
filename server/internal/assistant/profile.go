@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -147,6 +148,9 @@ type Settings struct {
 	// them (Claude Code 2.1.139 or later, node/assistant_interject.go). nil is off (the default). A round the
 	// user did not start is moved to the background by their message either way (owner_preempt.go).
 	InterjectBackground *bool `json:"interject_background,omitempty"`
+	// LoadAllTools: every Persona tool of an assistant conversation is loaded up front, as before #7317. nil is off
+	// (the default): only the frequently used ones are, the rest wait behind ToolSearch (tool_loading.go).
+	LoadAllTools *bool `json:"load_all_tools,omitempty"`
 	// NextSuggestions: chats that have no suggestion of their own (Persona's conversations, Codex and the other
 	// runtimes) get the next message suggested by the suggest.next model after a turn (#4644, suggest_next.go). nil is
 	// off (the default).
@@ -154,6 +158,11 @@ type Settings struct {
 	// MainSupervisesOwnTasks: the main conversation follows up the tasks no leader supervises itself. nil is off (the
 	// default, #4927): the background supervisor does (supervise_background.go).
 	MainSupervisesOwnTasks *bool `json:"main_supervises_own_tasks,omitempty"`
+	// BackgroundSupervisorKeepsContext: the background supervisor is one long conversation again from its next round,
+	// keeping each later round in context, as before #7315 (rounds already run from the first turn stay on their own
+	// branches). nil is off (the default): each round starts from its first turn with only that round's facts and tools
+	// (supervise_round.go).
+	BackgroundSupervisorKeepsContext *bool `json:"background_supervisor_keeps_context,omitempty"`
 	// BackgroundSupervisor is the background supervisor's conversation, on BackgroundSupervisorMachineID, started at
 	// BackgroundSupervisorAt: made on first use, "" until then. BackgroundSupervisorAnnounced: the main conversation
 	// was told once that it follows up its tasks. The assistant writes these itself; PUT /api/v1/assistant does not.
@@ -222,6 +231,9 @@ func (s *Service) updateSettings(ctx context.Context, fn func(*Settings) error) 
 	}
 	if err := fn(&v); err != nil {
 		return Settings{}, err
+	}
+	if proto.IsExternalLauncher(v.Launcher) {
+		return Settings{}, i18n.Err("external-adapter.purpose_unsupported")
 	}
 	if st := s.store(); st != nil {
 		if err := st.PutSetting(ctx, settingsKey, v); err != nil {
@@ -616,6 +628,9 @@ func (s *Service) profileRoutes() {
 			return
 		}
 		out := s.view(r.Context(), archived == "1" || archived == "true", space)
+		if tag := strings.TrimSpace(r.URL.Query().Get("tag")); tag != "" {
+			out.Conversations = slices.DeleteFunc(out.Conversations, func(c proto.Session) bool { return !hasTag(c, tag) })
+		}
 		if r.Header.Get(RoleHeader) == roleExtension {
 			out.StartDefaults = nil // read with its own scope (GET /api/v1/assistant/start-defaults), not assistant.ask
 		}
@@ -698,6 +713,9 @@ func (s *Service) warm(launcher string) {
 		if h := s.loadHandoff(ctx); h.Pick != nil {
 			pick, picked = *h.Pick, true
 		}
+	}
+	if proto.IsExternalLauncher(launcher) || picked && proto.IsExternalLauncher(pick.Launcher) {
+		return // no real session exists for a prewarm's external scope
 	}
 	if launcher == "" && !picked {
 		launcher = s.launcherNow(ctx)
