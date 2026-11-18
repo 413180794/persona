@@ -754,9 +754,12 @@ type ChannelCapabilities struct {
 	MaxText  int    `json:"max_text,omitempty"`
 	Asks     string `json:"asks,omitempty"`
 	Push     bool   `json:"push,omitempty"`
-	Typing   bool   `json:"typing,omitempty"`
-	Progress bool   `json:"progress,omitempty"`
-	Threads  bool   `json:"threads,omitempty"`
+	// Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit transport
+	// selection by the operator.
+	FeishuOwnerCards bool `json:"feishu_owner_cards,omitempty"`
+	Typing           bool `json:"typing,omitempty"`
+	Progress         bool `json:"progress,omitempty"`
+	Threads          bool `json:"threads,omitempty"`
 }
 
 type EventsItem struct {
@@ -4448,12 +4451,28 @@ type ChannelSendParams struct {
 	Text         string `json:"text"`
 	Kind         string `json:"kind"`
 	// The owner's message it answers (ChannelMessage.id).
-	ReplyTo string `json:"reply_to,omitempty"`
+	ReplyTo    string                  `json:"reply_to,omitempty"`
+	FeishuCard *ChannelFeishuOwnerCard `json:"feishu_card,omitempty"`
+}
+
+// ChannelFeishuOwnerCard: A native interactive card for the paired owner's DM. Register the ref and pairing in the
+// selected channel's outbox before the hub sends with its paired bot. A second call with the verified message_id
+// confirms the same delivery.
+type ChannelFeishuOwnerCard struct {
+	Purpose     string `json:"purpose"`
+	AppID       string `json:"app_id"`
+	OwnerOpenID string `json:"owner_open_id"`
+	// The complete Feishu JSON 2.0 card serialized as message content.
+	Card string `json:"card"`
+	// The hub read this interactive message back in the paired owner's DM. Finalize the matching outbox entry.
+	MessageID string `json:"message_id,omitempty"`
 }
 
 // ChannelSendResult: channel.send's answer: the chat app's id of what was sent, for channel.edit.
 type ChannelSendResult struct {
 	MessageID string `json:"message_id,omitempty"`
+	// Only for feishu_card. The matching paired delivery is durably prepared; the hub may send with its stable ref.
+	Prepared bool `json:"prepared,omitempty"`
 }
 
 // ChannelTypingParams: channel.typing (capabilities.typing): show typing, or stop.
@@ -6479,6 +6498,7 @@ var newDef = map[string]func() any{
 	"ChannelStatusParams":           func() any { return new(ChannelStatusParams) },
 	"ChannelAccount":                func() any { return new(ChannelAccount) },
 	"ChannelSendParams":             func() any { return new(ChannelSendParams) },
+	"ChannelFeishuOwnerCard":        func() any { return new(ChannelFeishuOwnerCard) },
 	"ChannelSendResult":             func() any { return new(ChannelSendResult) },
 	"ChannelTypingParams":           func() any { return new(ChannelTypingParams) },
 	"ChannelEditParams":             func() any { return new(ChannelEditParams) },

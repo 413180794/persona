@@ -42,15 +42,16 @@ func TestItemValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	bad := map[string]func(*Item){
-		"reserved id":  func(i *Item) { i.ID = "feishu" },
-		"uuid-like id": func(i *Item) { i.ID = "cafebabe" },
-		"no name":      func(i *Item) { i.Name = " " },
-		"kind":         func(i *Item) { i.Kind = KindApp },
-		"format":       func(i *Item) { i.Capabilities.Format = "html" },
-		"asks":         func(i *Item) { i.Capabilities.Asks = "cards" },
-		"max_text":     func(i *Item) { i.Capabilities.MaxText = 50 },
-		"bind alone":   func(i *Item) { i.Connector = "" },
-		"bind value":   func(i *Item) { i.Bind = BindNone },
+		"reserved id":              func(i *Item) { i.ID = "feishu" },
+		"uuid-like id":             func(i *Item) { i.ID = "cafebabe" },
+		"no name":                  func(i *Item) { i.Name = " " },
+		"kind":                     func(i *Item) { i.Kind = KindApp },
+		"format":                   func(i *Item) { i.Capabilities.Format = "html" },
+		"asks":                     func(i *Item) { i.Capabilities.Asks = "cards" },
+		"max_text":                 func(i *Item) { i.Capabilities.MaxText = 50 },
+		"bind alone":               func(i *Item) { i.Connector = "" },
+		"bind value":               func(i *Item) { i.Bind = BindNone },
+		"owner cards without push": func(i *Item) { i.Capabilities.FeishuOwnerCards = true },
 	}
 	for what, f := range bad {
 		it := good

@@ -192,6 +192,23 @@ notifications companion accepts the push); an extension channel records it only 
 A failed push leaves that channel's mirror eligible, regardless of whether another channel received its copy.
 A channel with `pushes` off and `sync` on still receives main-chat mirrors.
 
+An owner can select an extension to deliver the paired Lark bot's task conclusions and notification cards.
+Set `bots.feishu.owner_card_channel` in the manager configuration to the exact `extension_id/channel_id`.
+The connected channel must declare both `push` and `feishu_owner_cards`. The bot's pairing, reports,
+pushes and low-distraction settings still determine when these cards are due. Each eligible notification
+goes to the selected channel once even if the channel also has regular pushes enabled.
+
+The hub calls `channel.send` with `kind: "push"`, the delivery `ref` and an additional `feishu_card`.
+It contains `purpose` (`conclusion` or `notify`), the paired `app_id`, its owner's `owner_open_id`,
+and `card` (serialized Feishu JSON 2.0). Record the exact card, pairing and ref durably in the outbox,
+then return `{"prepared":true}`. The hub sends the original card with its paired bot and a stable
+platform UUID and reads it back in that bot's DM. It calls the channel a second time with the same ref,
+card and pairing plus `feishu_card.message_id`. Commit and return that message ID. A repeat of a
+completed delivery returns the original ID. Keep retries of an uncertain send inside the platform's
+idempotency window. Reject changes to the card or pairing under an existing ref. The hub records the
+receipt for that review. Buttons and quoted OK replies return through the bot's existing owner
+action handlers. All bot credentials stay in the manager.
+
 ### Source markers
 
 - **Per message**: channel messages sent into chats have `client_msg_id = <channel id>-<message id>` (the Lark bot has always used `feishu-…`, WeChat `wechat-…`), and node carries it onto the transcript item (`Item.client_msg_id`).
@@ -257,7 +274,7 @@ Requires a process that speaks the protocol (`NeedsRPC`). Version 1.
 
 | Method | Parameters | Returns |
 | --- | --- | --- |
-| `channel.send` | `{contribution, ref, text, kind, reply_to?}`: `text` is Markdown (already split by `max_text`), `kind` is `answer` / `note` / `ask` / `push` | `{message_id?}`; if sending is impossible (no conversation it can send to yet), return error code `cannot_send` |
+| `channel.send` | `{contribution, ref, text, kind, reply_to?, feishu_card?}`: `text` is Markdown (already split by `max_text`), `kind` is `answer` / `note` / `ask` / `push` | `{message_id?}`, or `{prepared:true}` for the first paired card call above; if sending is impossible, return `cannot_send` |
 | `channel.typing` | `{contribution, on}` | `{}` (called only with `typing`) |
 | `channel.edit` | `{contribution, message_id, text}` | `{}` (called only with `progress`) |
 

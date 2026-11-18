@@ -43,6 +43,11 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 	}
 	t, ok := s.todoNow(id)
 	ask, _ := s.askCopy(id)
+	parent := slices.IndexFunc(ids, func(mid string) bool { return mid != "" && slices.Contains(ask.Messages, mid) })
+	if parent < 0 { // superseded between looking up the reply and reading the round
+		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
+		return true
+	}
 	if decideAsk(&ask) && !ask.AcceptedAt.IsZero() { // taken, or its review moved on: over
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
 		return true
@@ -56,7 +61,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 				return true
 			}
 		}
-		if result, err := s.acceptTry(ctx, id, ""); errors.Is(err, errAcceptStore) {
+		if result, err := s.acceptTry(ctx, id, ids[parent]); errors.Is(err, errAcceptStore) {
 			s.botNote(ctx, messageID, i18n.T(l, "http-status.unavailable"))
 		} else if err != nil { // the recommendation did not reach the agent: nothing recorded, "OK" can be said again
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accept_not_taken", i18n.Args{"error": clip(oneLine(i18n.Localize(err, l)), 120)}))

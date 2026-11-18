@@ -40,6 +40,13 @@ func (h *Manager) extensionCall(ctx context.Context, id, method string, params, 
 	if !ok || h.extensions == nil {
 		return fmt.Errorf("no channel %s", id)
 	}
+	if p, ok := params.(channel.SendParams); ok && p.FeishuCard != nil {
+		if h.cfg == nil || h.cfg.Bots.Feishu.OwnerCardChannel != pc.extension.Record.ID+"/"+id ||
+			!pc.item.Capabilities.FeishuOwnerCards || !pc.extension.Record.Enabled ||
+			h.extensionChannelView(ctx, pc).State != channel.StateConnected {
+			return errCannotSend
+		}
+	}
 	hp := h.extensions.get(pc.extension.Record.ID)
 	if hp == nil || hp.proc == nil {
 		return errors.New(i18n.T(h.botLang(ctx), "hub-channels_extension.not_running", i18n.Args{"name": pc.item.Name}))

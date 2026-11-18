@@ -760,6 +760,11 @@ export interface ChannelCapabilities {
   max_text?: number;
   asks?: string;
   push?: boolean;
+  /**
+   * Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit
+   * transport selection by the operator.
+   */
+  feishu_owner_cards?: boolean;
   typing?: boolean;
   progress?: boolean;
   threads?: boolean;

@@ -63,7 +63,7 @@ func (s *Service) feishuPushTold(ctx context.Context, machine, session, title, b
 			ac.card.Buttons(s.openButton(ctx, machine, session))
 		}
 	}
-	if s.divertAnswer(ctx, "push", cards) { // a notifications companion takes it (feishu_companions.go)
+	if st.OwnerCardChannel == "" && s.divertAnswer(ctx, "push", cards) { // a notifications companion takes it (feishu_companions.go)
 		s.markPushed(channel.Feishu, machine, session)
 		r.went(channel.Feishu, nil)
 		return nil
@@ -90,6 +90,9 @@ func (s *Service) feishuPushTold(ctx context.Context, machine, session, title, b
 		}
 		if i == 0 {
 			s.markPushed(channel.Feishu, machine, session) // only after the first card lands: a failed push must not suppress the mirror
+			if _, id, ok := strings.Cut(st.OwnerCardChannel, "/"); ok {
+				s.markPushed(id, machine, session)
+			}
 			r.went(channel.Feishu, nil)
 		}
 		if session != "" {

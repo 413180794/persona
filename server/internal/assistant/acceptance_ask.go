@@ -124,7 +124,7 @@ func (s *Service) postAsk(ctx context.Context, t Todo, a acceptAsk) bool {
 	case stErr != nil:
 		s.logf("task %s: acceptance: %v (its card is tried again later)", t.ID, stErr)
 	case st.Ready && st.Features.Reports:
-		mid, err := s.botPostKeyed(ctx, "", s.acceptCard(ctx, t, a, false), askSummary(s.botLang(ctx), &a), acceptCardKey(t.ID, a.AskedAt))
+		mid, err := s.postAcceptCard(ctx, t, a)
 		if err != nil {
 			s.logf("task %s: acceptance: %v (its card is tried again later)", t.ID, err)
 			break
@@ -160,6 +160,15 @@ func (s *Service) postAsk(ctx context.Context, t Todo, a acceptAsk) bool {
 	b.mu.Unlock()
 	s.askChanged(ctx) // it waits for the owner now: the apps and the board
 	return posted
+}
+
+// A conclusion sent through an owner-selected transport enters the same acceptance book as a
+// native send. The ID returned here is the actual bot message the owner can click or reply to.
+func (s *Service) postAcceptCard(ctx context.Context, t Todo, a acceptAsk) (string, error) {
+	if a.Conclusion {
+		ctx = feishuSendAs(ctx, "conclusion", a.MachineID, a.SessionID)
+	}
+	return s.botPostKeyed(ctx, "", s.acceptCard(ctx, t, a, false), askSummary(s.botLang(ctx), &a), acceptCardKey(t.ID, a.AskedAt))
 }
 
 // acceptLines are the card's three lines: the small model reads the task and the reply; without it (or when it

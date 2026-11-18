@@ -1082,6 +1082,11 @@ data class ExtensionChannelCapabilities(
     @SerialName("max_text") val maxText: Int? = null,
     val asks: String? = null,
     val push: Boolean? = null,
+    /**
+     * Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit
+     * transport selection by the operator.
+     */
+    @SerialName("feishu_owner_cards") val feishuOwnerCards: Boolean? = null,
     val typing: Boolean? = null,
     val progress: Boolean? = null,
     val threads: Boolean? = null,

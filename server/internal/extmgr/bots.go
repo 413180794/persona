@@ -34,9 +34,12 @@ type BotsConfig struct {
 // FeishuBotConfig: the app's credentials, for those who would rather keep them in manager.json (0600) than enter them in
 // the app. What the app saves wins.
 type FeishuBotConfig struct {
-	AppID     string `json:"app_id,omitempty"`
-	AppSecret string `json:"app_secret,omitempty"`
-	Domain    string `json:"domain,omitempty"` // feishu (default) | lark | the open platform's URL
+	// OwnerCardChannel selects an installed extension/channel for conclusions and notify_user.
+	// The paired bot still authenticates clicks and quoted replies.
+	OwnerCardChannel string `json:"owner_card_channel,omitempty"`
+	AppID            string `json:"app_id,omitempty"`
+	AppSecret        string `json:"app_secret,omitempty"`
+	Domain           string `json:"domain,omitempty"` // feishu (default) | lark | the open platform's URL
 }
 
 // FeishuBotSettings is what the app set, in settings (botSettingsKey).

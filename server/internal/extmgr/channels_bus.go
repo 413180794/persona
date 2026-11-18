@@ -109,6 +109,9 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		api, set := h.botAPI()
 		nudge := set.nudgeAfter()
 		st := assistantwire.FeishuStatus{Ready: api != nil, Enabled: set.Enabled, Features: assistantwire.FeishuFeatures(set.Features), NudgeAfter: &nudge}
+		if h.cfg != nil {
+			st.OwnerCardChannel = h.cfg.Bots.Feishu.OwnerCardChannel
+		}
 		if set.Owner != nil {
 			st.Owner, st.PairedAt = set.Owner.OpenID, set.Owner.At
 			st.Chats = botSendChats(set)
@@ -135,6 +138,12 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		chatID, err := botSendChat(set, a.ChatID)
 		if err != nil {
 			return nil, err
+		}
+		if h.cfg != nil && h.cfg.Bots.Feishu.OwnerCardChannel != "" && (a.Kind == "conclusion" || a.Kind == "push") {
+			if a.ChatID != "" || a.ReplyTo != "" || a.InThread {
+				return nil, errBotChatDenied
+			}
+			return h.sendOwnerCard(ctx, api, set, a.Kind, a.UUID, a.Fallback, a.Card)
 		}
 		parent, err := h.checkReplyParent(ctx, api, set, a.ReplyTo)
 		if err != nil {
@@ -181,7 +190,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 	case assistantwire.FeishuUpdateCard:
 		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)
 	case assistantwire.FeishuPin:
-		if err := checkOwnDMMessage(ctx, api, set, a.MessageID); err != nil {
+		if err := checkOwnDMMessage(ctx, api, set, a.MessageID, ""); err != nil {
 			return nil, err
 		}
 		if err := api.Pin(ctx, a.MessageID); err != nil {
@@ -194,7 +203,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		}
 		return map[string]any{}, nil
 	case assistantwire.FeishuRecall:
-		if err := checkOwnDMMessage(ctx, api, set, a.MessageID); err != nil {
+		if err := checkOwnDMMessage(ctx, api, set, a.MessageID, ""); err != nil {
 			return nil, err
 		}
 		return map[string]any{}, feishuCoded(api.Recall(ctx, a.MessageID))
@@ -259,6 +268,63 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 	return nil, fmt.Errorf("app %s has no method %s", assistantwire.AppFeishu, method)
 }
 
+func (h *Manager) sendOwnerCard(ctx context.Context, api *feishubot.Client, set FeishuBotSettings, kind, ref, fallback, card string) (channel.SendResult, error) {
+	if set.Owner == nil || set.Owner.OpenID == "" || set.Owner.ChatID == "" {
+		return channel.SendResult{}, errBotOff
+	}
+	extensionID, channelID, ok := strings.Cut(h.cfg.Bots.Feishu.OwnerCardChannel, "/")
+	if !ok || extensionID == "" || channelID == "" {
+		return channel.SendResult{}, errors.New("bots.feishu.owner_card_channel must name extension/channel")
+	}
+	purpose := "conclusion"
+	if kind == "push" {
+		purpose = "notify"
+	}
+	if ref == "" {
+		ref = feishuSendUUID()
+	}
+	msg := channel.SendParams{
+		Ref: ref, Kind: channel.OutPush, Text: fallback,
+		FeishuCard: &channel.FeishuOwnerCard{Purpose: purpose, AppID: api.AppID(), OwnerOpenID: set.Owner.OpenID, Card: card},
+	}
+	out, err := h.channelSendPiece(ctx, channelID, msg)
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	if out.Prepared == (out.MessageID != "") {
+		return channel.SendResult{}, errors.New("owner card needs an outbox reservation or a delivery receipt")
+	}
+	id := out.MessageID
+	if out.Prepared {
+		// The extension owns the outbox. Only the existing paired client owns credentials and chooses the destination.
+		// The same app and owner get one platform UUID per logical delivery even across restarts.
+		current, now := h.botAPI()
+		if current == nil || current.AppID() != api.AppID() || now.Owner == nil || now.Owner.OpenID != set.Owner.OpenID || now.Owner.ChatID != set.Owner.ChatID {
+			return channel.SendResult{}, errBotOff
+		}
+		key := feishuReplyUUIDIn(set.Owner.ChatID, "owner", purpose+"\x00"+ref, false)
+		id, err = current.Send(ctx, "chat_id", now.Owner.ChatID, feishubot.TypeInteractive, card, key)
+		if err != nil {
+			return channel.SendResult{}, feishuCoded(err)
+		}
+	}
+	if err := checkOwnDMMessage(ctx, api, set, id, feishubot.TypeInteractive); err != nil {
+		return channel.SendResult{}, err
+	}
+	if out.Prepared {
+		msg.FeishuCard.MessageID = id
+		confirmed, err := h.channelSendPiece(ctx, channelID, msg)
+		if err != nil {
+			return channel.SendResult{}, err
+		}
+		if confirmed.Prepared || confirmed.MessageID != id {
+			return channel.SendResult{}, errors.New("owner card outbox returned a different receipt")
+		}
+	}
+	h.rememberMessageChat(id, set.Owner.ChatID)
+	return channel.SendResult{MessageID: id}, nil
+}
+
 func (h *Manager) channelsCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	var a struct {
 		Channel string            `json:"channel"`
@@ -276,6 +342,19 @@ func (h *Manager) channelsCall(ctx context.Context, method string, params json.R
 	case assistantwire.ChannelsList:
 		return map[string]any{"channels": h.channelList(ctx)}, nil
 	case assistantwire.ChannelsSend:
+		if a.FeishuCard != nil {
+			return nil, errors.New("native owner cards require the paired Feishu transport")
+		}
+		if a.Kind == channel.OutPush && h.cfg != nil {
+			if _, id, ok := strings.Cut(h.cfg.Bots.Feishu.OwnerCardChannel, "/"); ok && id == a.Channel {
+				api, set := h.botAPI()
+				if api == nil || a.ReplyTo != "" {
+					return nil, errBotOff
+				}
+				card := feishubot.NewCard("", "", a.Text).Markdown(feishubot.EscapeMarkdown(a.Text))
+				return h.sendOwnerCard(ctx, api, set, "push", a.Ref, a.Text, card.JSON())
+			}
+		}
 		return h.channelSendPiece(ctx, a.Channel, a.SendParams)
 	case assistantwire.ChannelsTyping:
 		return map[string]any{}, h.extensionCall(ctx, a.Channel, channel.MTyping, channel.TypingParams{On: a.On}, nil)
@@ -324,9 +403,8 @@ func (h *Manager) checkReactTarget(ctx context.Context, api *feishubot.Client, s
 // errNotBotDMMessage: a pin or a withdrawal named a message that is not the bot's own in the owner's private chat.
 var errNotBotDMMessage = errors.New("feishu: only the bot's own messages in the owner's private chat can be pinned or withdrawn")
 
-// checkOwnDMMessage: messageID is a message the bot sent in the owner's private chat, the only ones feishu.pin and
-// feishu.recall take (the workbench's cards).
-func checkOwnDMMessage(ctx context.Context, api *feishubot.Client, set FeishuBotSettings, messageID string) error {
+// checkOwnDMMessage verifies a message this app sent in the paired private chat. Owner-card receipts also require a live interactive message.
+func checkOwnDMMessage(ctx context.Context, api *feishubot.Client, set FeishuBotSettings, messageID, msgType string) error {
 	if messageID == "" || set.Owner == nil || set.Owner.ChatID == "" {
 		return errNotBotDMMessage
 	}
@@ -338,8 +416,11 @@ func checkOwnDMMessage(ctx context.Context, api *feishubot.Client, set FeishuBot
 		return errNotBotDMMessage
 	}
 	it := items[0]
-	if it.ChatID != set.Owner.ChatID || it.Sender.SenderType != "app" || it.Sender.ID != api.AppID() {
+	if it.MessageID != messageID || it.ChatID != set.Owner.ChatID || it.Sender.SenderType != "app" || it.Sender.ID != api.AppID() {
 		return errNotBotDMMessage
+	}
+	if msgType != "" && (it.Deleted || it.MsgType != msgType) {
+		return errors.New("feishu: owner card receipt must identify a live interactive message")
 	}
 	return nil
 }

@@ -775,6 +775,7 @@
         "max_text": {"type": "integer", "minimum": 0},
         "asks": {"type": "string", "enum": ["none", "text", "buttons"]},
         "push": {"type": "boolean"},
+        "feishu_owner_cards": {"type": "boolean", "description": "Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit transport selection by the operator."},
         "typing": {"type": "boolean"},
         "progress": {"type": "boolean"},
         "threads": {"type": "boolean"}

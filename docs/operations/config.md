@@ -521,6 +521,7 @@ A manager's own sections of the configuration are in its `manager.json`, not in 
   and existing data on the hub can be deleted separately. Logs contain neither numbers nor bodies (`docs/plans/plan-connectors.md` ("V")).
 - `bots.feishu` (optional): application credentials for the bot used to chat with Persona in Lark: `app_id`, `app_secret`, `domain` (`feishu` / `lark` / open-platform address),
   for people who do not want to enter them in the App. Values saved in the App (**Settings › Connectors › Lark Bot**) win; switches, pairing, and all features are in the App (`docs/extensions/bots.md`).
+  The optional `owner_card_channel` selects `extension_id/channel_id` for task conclusions and notification cards in the paired owner's DM. The channel must advertise `feishu_owner_cards`. An unavailable selected channel returns a delivery error. Omit the setting to use the built-in sender.
 - `extensions` (old `plugins` key still read): extensions hand-written in manager.json, started by the manager and forwarded to the App (voice chat, etc.): `id`, `name`, `kind`, `command` + `args` (or only `socket` for an extension running elsewhere),
   `dir` (working directory), `env` (extra environment variables), `disabled` (`true` disables while keeping the config), `config` (the extension's own settings), see `docs/extensions/extensions.md` ("Extensions in manager.json");
   extensions installed with `personad extension install` are registered in the database, not here. For personad's built-in voice extension (GPT-Live), use `"command": "personad", "args": ["voice"]`,

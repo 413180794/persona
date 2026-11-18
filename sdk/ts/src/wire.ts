@@ -760,6 +760,11 @@ export interface ChannelCapabilities {
   max_text?: number;
   asks?: string;
   push?: boolean;
+  /**
+   * Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit
+   * transport selection by the operator.
+   */
+  feishu_owner_cards?: boolean;
   typing?: boolean;
   progress?: boolean;
   threads?: boolean;
@@ -4729,6 +4734,21 @@ export interface ChannelSendParams {
   kind: ChannelSendKind;
   /** The owner's message it answers (ChannelMessage.id). */
   reply_to?: string;
+  feishu_card?: ChannelFeishuOwnerCard;
+}
+
+/**
+ * A native interactive card for the paired owner's DM. Register the ref and pairing in the selected channel's outbox
+ * before the hub sends with its paired bot. A second call with the verified message_id confirms the same delivery.
+ */
+export interface ChannelFeishuOwnerCard {
+  purpose: string;
+  app_id: string;
+  owner_open_id: string;
+  /** The complete Feishu JSON 2.0 card serialized as message content. */
+  card: string;
+  /** The hub read this interactive message back in the paired owner's DM. Finalize the matching outbox entry. */
+  message_id?: string;
 }
 
 /**
@@ -4736,6 +4756,10 @@ export interface ChannelSendParams {
  */
 export interface ChannelSendResult {
   message_id?: string;
+  /**
+   * Only for feishu_card. The matching paired delivery is durably prepared; the hub may send with its stable ref.
+   */
+  prepared?: boolean;
 }
 
 /**

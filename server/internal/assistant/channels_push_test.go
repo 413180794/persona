@@ -60,6 +60,36 @@ func enableChannelPushFeishu(f *fakeHub) {
 	})
 }
 
+func TestPairedOwnerCardTransportGetsOneNotifyCopy(t *testing.T) {
+	s, f := channelPushService(t, true)
+	ctx := context.Background()
+	f.answerApp(AppChannels, ChannelsList, func(json.RawMessage) (any, error) {
+		return map[string]any{"channels": []channel.View{{ID: "examplechat", Plugin: "example", Name: "Example",
+			Source: channel.SourcePlugin, Kind: channel.KindIM, Installed: true, Enabled: true, State: channel.StateConnected,
+			Capabilities: channel.Capabilities{Push: true, FeishuOwnerCards: true}}}}, nil
+	})
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: true, Enabled: true, OwnerCardChannel: "example/examplechat", Features: FeishuFeatures{Pushes: true}}, nil
+	})
+	var native int
+	f.answerApp(AppFeishu, FeishuPost, func(raw json.RawMessage) (any, error) {
+		var p struct{ Kind, Card string }
+		if err := json.Unmarshal(raw, &p); err != nil || p.Kind != "push" || !strings.Contains(p.Card, "What you need to do") {
+			t.Errorf("notify transport got %q (%v)", raw, err)
+		}
+		native++
+		return map[string]any{"message_id": "om_pushed"}, nil
+	})
+	s.forgetChannelList()
+	if err := s.feishuPushTold(ctx, "server", "s1", "Test", "What you need to do", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	copies, err := s.channelPushTold(ctx, "server", "s1", "Test", "What you need to do", "", nil, nil)
+	if err != nil || native != 1 || len(copies) != 0 || !s.pushedLately("examplechat", "server", "s1") {
+		t.Fatalf("native=%d channel copies=%v err=%v", native, copies, err)
+	}
+}
+
 func TestExtensionPushSkipsItsTurnEndMirror(t *testing.T) {
 	for _, main := range []bool{true, false} {
 		name := "scheduled task"

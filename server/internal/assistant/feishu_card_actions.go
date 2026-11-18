@@ -44,14 +44,18 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 		var result acceptResult
 		var err error
 		ask, _ := s.askCopy(a.Str("id"))
+		round := a.Str("asked_at")
+		if round == "" { // older buttons carry only the card's message ID
+			round = ask.AskedAt.Format(timeKeyLayout)
+		}
 		if resp := a.Str("resp"); resp != "" { // "I can't answer this": to its supervisor, nothing taken (decision.go)
-			if s.askCardNow(a.Str("id"), a.Context.MessageID) {
-				result.taken, err = s.ownerCannotAnswer(ctx, a.Str("id"), "", resp)
+			if a.Context.MessageID != "" && s.askCardNow(a.Str("id"), a.Context.MessageID) {
+				result.taken, err = s.ownerCannotAnswer(ctx, a.Str("id"), round, resp)
 			}
 			ask.Response = resp
 		} else if opt := a.Str("opt"); opt != "" { // an option of the decision other than the recommended one
-			if s.askCardNow(a.Str("id"), a.Context.MessageID) {
-				result, err = s.chooseOption(ctx, a.Str("id"), "", opt)
+			if a.Context.MessageID != "" && s.askCardNow(a.Str("id"), a.Context.MessageID) {
+				result, err = s.chooseOption(ctx, a.Str("id"), round, opt)
 			}
 			ask.Chosen = opt
 			if opt == ask.Recommend {

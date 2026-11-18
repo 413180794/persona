@@ -118,6 +118,53 @@ func cardsWith(posts []string, want string) (out []string) {
 	return out
 }
 
+func TestConclusionReceiptBindsOwnerChoiceToThisReview(t *testing.T) {
+	s, f, todo, _, _ := conclusionService(t, true)
+	waitsForReview(t, s, f, todo.ID, "Review the rollout options")
+	const messageID = "om_owner_card_receipt"
+	var roundKey string
+	f.answerApp(AppFeishu, FeishuPost, func(raw json.RawMessage) (any, error) {
+		var p struct{ Kind, UUID, Card string }
+		if err := json.Unmarshal(raw, &p); err != nil {
+			t.Error(err)
+		}
+		if p.Kind == "conclusion" {
+			roundKey = p.UUID
+			if !strings.Contains(p.Card, "直接全量") {
+				t.Errorf("missing alternative on the card")
+			}
+		}
+		return map[string]any{"message_id": messageID}, nil
+	})
+	if _, err := reviewErr(s, todo.ID, rolloutDecision()); err != nil {
+		t.Fatal(err)
+	}
+	ask := askOf(s, todo.ID)
+	if roundKey != acceptCardKey(todo.ID, ask.AskedAt) || ask.MessageID != messageID {
+		t.Fatalf("receipt not bound to the review: ref %q, card %q", roundKey, ask.MessageID)
+	}
+	before := len(sentToAgent(f))
+	press := feishubot.CardAction{}
+	press.Action.Value = map[string]any{"a": "accept", "id": todo.ID, "opt": "直接全量"}
+	press.Context.MessageID = "om_forwarded"
+	s.botCardAction(context.Background(), &press, "")
+	if len(sentToAgent(f)) != before {
+		t.Fatal("a forwarded copy took the option")
+	}
+	press.Context.MessageID = messageID
+	press.Action.Value["asked_at"] = ask.AskedAt.Add(-time.Minute).Format(timeKeyLayout)
+	s.botCardAction(context.Background(), &press, "")
+	if len(sentToAgent(f)) != before {
+		t.Fatal("a stale round took the option")
+	}
+	press.Action.Value["asked_at"] = ask.AskedAt.Format(timeKeyLayout)
+	s.botCardAction(context.Background(), &press, "")
+	s.botCardAction(context.Background(), &press, "")
+	if got := sentToAgent(f)[before:]; len(got) != 1 || !strings.Contains(got[0], "直接全量") {
+		t.Fatalf("expected one delivery of the chosen option, got %q", got)
+	}
+}
+
 // A supervised research task that ends with "cannot be done" is one card: that verdict, the reason, the link; its
 // closing is not a line of the task report as well. The supervisor checked it, so the card says so and nothing waits
 // for the owner's "OK" (#3240).

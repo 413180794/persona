@@ -89,15 +89,30 @@
         "ref": {"type": "string", "minLength": 1},
         "text": {"type": "string"},
         "kind": {"$ref": "#/$defs/ChannelSendKind"},
-        "reply_to": {"type": "string", "description": "The owner's message it answers (ChannelMessage.id)."}
+        "reply_to": {"type": "string", "description": "The owner's message it answers (ChannelMessage.id)."},
+        "feishu_card": {"$ref": "#/$defs/ChannelFeishuOwnerCard"}
       },
       "required": ["contribution", "ref", "text", "kind"]
+    },
+    "ChannelFeishuOwnerCard": {
+      "description": "A native interactive card for the paired owner's DM. Register the ref and pairing in the selected channel's outbox before the hub sends with its paired bot. A second call with the verified message_id confirms the same delivery.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {"type": "string", "enum": ["conclusion", "notify"]},
+        "app_id": {"type": "string", "minLength": 1},
+        "owner_open_id": {"type": "string", "minLength": 1},
+        "card": {"type": "string", "minLength": 1, "description": "The complete Feishu JSON 2.0 card serialized as message content."},
+        "message_id": {"type": "string", "minLength": 1, "description": "The hub read this interactive message back in the paired owner's DM. Finalize the matching outbox entry."}
+      },
+      "required": ["purpose", "app_id", "owner_open_id", "card"]
     },
     "ChannelSendResult": {
       "description": "channel.send's answer: the chat app's id of what was sent, for channel.edit.",
       "type": "object",
       "properties": {
-        "message_id": {"type": "string"}
+        "message_id": {"type": "string"},
+        "prepared": {"type": "boolean", "description": "Only for feishu_card. The matching paired delivery is durably prepared; the hub may send with its stable ref."}
       }
     },
     "ChannelTypingParams": {

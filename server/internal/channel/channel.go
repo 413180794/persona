@@ -91,8 +91,10 @@ type Capabilities struct {
 	MaxText int  `json:"max_text,omitempty"`
 	Asks    Asks `json:"asks,omitempty"`
 	// Push: it can send to the owner unprompted (pushes, sync, what is asked).
-	Push   bool `json:"push,omitempty"`
-	Typing bool `json:"typing,omitempty"`
+	Push bool `json:"push,omitempty"`
+	// FeishuOwnerCards accepts the paired bot's owner-only cards when the operator selects this transport.
+	FeishuOwnerCards bool `json:"feishu_owner_cards,omitempty"`
+	Typing           bool `json:"typing,omitempty"`
 	// Progress: it can post a message and change it (a progress card the answer goes into).
 	Progress bool `json:"progress,omitempty"`
 	// Threads: a reply to one of the bot's messages goes to that message's conversation.
@@ -294,6 +296,9 @@ func (it Item) Validate() error {
 
 // Validate checks the values that have a closed set.
 func (c Capabilities) Validate() error {
+	if c.FeishuOwnerCards && !c.Push {
+		return errors.New("capabilities.feishu_owner_cards requires push")
+	}
 	switch c.Format {
 	case "", FormatMarkdown, FormatPlain:
 	default:
@@ -395,13 +400,24 @@ type (
 	SendParams struct {
 		Contribution string `json:"contribution,omitempty"`
 		// Ref is the hub's id for this message: the same when the hub sends it again (the program sends it once).
-		Ref     string `json:"ref"`
-		Text    string `json:"text"`
-		Kind    string `json:"kind"`
-		ReplyTo string `json:"reply_to,omitempty"`
+		Ref        string           `json:"ref"`
+		Text       string           `json:"text"`
+		Kind       string           `json:"kind"`
+		ReplyTo    string           `json:"reply_to,omitempty"`
+		FeishuCard *FeishuOwnerCard `json:"feishu_card,omitempty"`
+	}
+	// FeishuOwnerCard binds the extension's outbox entry to the card and pairing.
+	// The manager uses the paired bot to send it and confirm its platform message ID.
+	FeishuOwnerCard struct {
+		Purpose     string `json:"purpose"`
+		AppID       string `json:"app_id"`
+		OwnerOpenID string `json:"owner_open_id"`
+		Card        string `json:"card"`
+		MessageID   string `json:"message_id,omitempty"` // receipt for a previously prepared ref
 	}
 	SendResult struct {
 		MessageID string `json:"message_id,omitempty"`
+		Prepared  bool   `json:"prepared,omitempty"` // owner card registered in the selected extension's outbox
 	}
 	TypingParams struct {
 		Contribution string `json:"contribution,omitempty"`
