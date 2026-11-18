@@ -282,6 +282,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - On the iOS 27.0 simulator `app.screenshot()` and `XCUIScreen.main.screenshot()` leave the keyboard's place blank (2026-11-09, #1580). Take keyboard screenshots with
   `xcrun simctl io <udid> screenshot` while it is up.
 - XCUITest misses the key bar during keyboard animation (the bar is moving with it); wait for the keyboard, pause, then tap.
+- `typeText` can return before a burst of Delete keys and the resulting SwiftUI resize have settled. Wait for the expected value and geometry with a bounded predicate before asserting either; an immediate frame read races the intended animation. After a sheet collapses, wait for `hasKeyboardFocus` before typing too: a visible keyboard does not prove that the field has accepted focus (#9807).
 - XCUITest `typeText` inserts text directly, bypassing the input method, so it cannot test pinyin marked text. Tap onscreen keys (`app.keys["y"].tap()`, space selects the first candidate).
   Third-party keyboards (2026-11-03, #909): outside the repository, build a tiny app with only a keyboard extension whose buttons use `textDocumentProxy` `setMarkedText` / `unmarkText` / `insertText` to enter fixed text.
   After `simctl install`, UI tests add it in **Settings › General › Keyboard › Keyboards › Add New Keyboard**, return to the app, and hold **Next keyboard** to select it (a tap toggles only the last two).
