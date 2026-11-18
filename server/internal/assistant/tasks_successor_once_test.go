@@ -45,9 +45,6 @@ func (h *successorGateHub) DeviceCall(ctx context.Context, p DeviceCall) (json.R
 // stopped (read-only, #4754).
 func stoppedTaskOnGate(t *testing.T) (*Service, *successorGateHub, Todo) {
 	t.Helper()
-	old := quietNoticeDelay
-	quietNoticeDelay = 30 * time.Millisecond
-	t.Cleanup(func() { quietNoticeDelay = old })
 	reachA, reachB, reachM := agentReachAttempts, agentReachBackoff, agentReachMax
 	agentReachAttempts, agentReachBackoff, agentReachMax = 2, time.Millisecond, 200*time.Millisecond
 	t.Cleanup(func() { agentReachAttempts, agentReachBackoff, agentReachMax = reachA, reachB, reachM })
@@ -59,6 +56,7 @@ func stoppedTaskOnGate(t *testing.T) (*Service, *successorGateHub, Todo) {
 	f.ownModels = true
 	h := &successorGateHub{fakeHub: f, arrived: make(chan struct{}, 4), gate: make(chan struct{})}
 	s := withSettings(t, f, New(Options{Hub: h, Logf: testLogf(t)}))
+	shortQuietNotices(t, s)
 	shortSupervise(t, s)
 	f.hello.Assistant.MachineID = "server"
 	setSettings(t, s, func(v *Settings) { v.Main = "conv1" })

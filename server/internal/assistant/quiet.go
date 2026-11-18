@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -24,7 +25,7 @@ import (
 // conversation_send uses; a notice still queued there is replaced, not followed by a second one.
 
 // quietNoticeDelay is how long a task's change waits for the next one before the main conversation is told.
-var quietNoticeDelay = 15 * time.Second
+const quietNoticeDelay = 15 * time.Second
 
 // noticeTool marks a queued task notice (relayMsg.Tool); relayMsg.From is then the todo id.
 const noticeTool = "task_notice"
@@ -41,6 +42,7 @@ type quietNotice struct {
 type quietBook struct {
 	mu      sync.Mutex
 	pending map[string]*quietNotice // by todo id
+	delay   time.Duration           // zero uses quietNoticeDelay
 }
 
 // noticeStates are the words for a state in the notice's "meanwhile it also…".
@@ -65,9 +67,10 @@ func (s *Service) quietNotify(ctx context.Context, t Todo, machine, state, ask, 
 		n.earlier = appendOnce(n.earlier, noticeStates[n.state])
 	}
 	n.todo, n.machine, n.state, n.ask, n.text = t, machine, state, ask, text
+	delay := cmp.Or(b.delay, quietNoticeDelay)
 	b.mu.Unlock()
 	if !waiting {
-		time.AfterFunc(quietNoticeDelay, func() { s.sendQuietNotice(t.ID) })
+		time.AfterFunc(delay, func() { s.sendQuietNotice(t.ID) })
 	}
 }
 
@@ -164,13 +167,14 @@ func (s *Service) queueNotice(id string, n *quietNotice, to string, msg relayMsg
 	} else {
 		b.pending[id] = n
 	}
+	delay := cmp.Or(b.delay, quietNoticeDelay)
 	b.mu.Unlock()
 	if newer {
 		s.logf("task %s: quiet notice: the relay queue can't be read; a newer one waits", id)
 		return false
 	}
-	s.logf("task %s: quiet notice: the relay queue can't be read; trying again in %s", id, quietNoticeDelay)
-	time.AfterFunc(quietNoticeDelay, func() { s.sendQuietNotice(id) })
+	s.logf("task %s: quiet notice: the relay queue can't be read; trying again in %s", id, delay)
+	time.AfterFunc(delay, func() { s.sendQuietNotice(id) })
 	return false
 }
 

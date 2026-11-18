@@ -266,6 +266,8 @@ func TestAudioSocketStartTakesAWholeTimeline(t *testing.T) {
 
 func wholeTimeline(t *testing.T, said string) {
 	h := newHubFixture(t)
+	// A maximum-size start frame needs the production handshake budget under the race detector.
+	audioStartWait = 10 * time.Second
 	h.hubUpload(meetingRec, 1, nil)
 	roles := make([]map[string]any, 0, kb.MaxTimelineRoles)
 	for i := range kb.MaxTimelineRoles {

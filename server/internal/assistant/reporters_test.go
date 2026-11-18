@@ -77,7 +77,7 @@ func TestStopReportingStopsItsTasks(t *testing.T) {
 		t.Fatalf("interrupted %q", got)
 	}
 	agentTurn(s, f, proto.StatusDone, "停在一半", 0)
-	time.Sleep(10 * quietNoticeDelay)
+	time.Sleep(10 * testQuietNoticeDelay)
 	if n := f.sentTo("lark1"); n != 0 {
 		t.Fatalf("the stopped conversation got %d notice(s)", n)
 	}
