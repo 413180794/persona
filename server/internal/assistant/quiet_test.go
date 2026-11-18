@@ -20,16 +20,30 @@ func newQuietService(t testing.TB) (*Service, *fakeHub) {
 	return newQuietServiceOn(t, nil)
 }
 
+const testQuietNoticeDelay = 30 * time.Millisecond
+
+func shortQuietNotices(t testing.TB, s *Service) {
+	t.Helper()
+	b := &s.quiet
+	b.mu.Lock()
+	b.delay = testQuietNoticeDelay
+	b.mu.Unlock()
+	t.Cleanup(func() {
+		b.mu.Lock()
+		b.delay = 0
+		clear(b.pending)
+		b.mu.Unlock()
+	})
+}
+
 // newQuietServiceOn is newQuietService with st as its database (nil: none).
 func newQuietServiceOn(t testing.TB, st Store) (*Service, *fakeHub) {
 	t.Helper()
-	old := quietNoticeDelay
-	quietNoticeDelay = 30 * time.Millisecond
-	t.Cleanup(func() { quietNoticeDelay = old })
 	reachA, reachB, reachM := agentReachAttempts, agentReachBackoff, agentReachMax
 	agentReachAttempts, agentReachBackoff, agentReachMax = 2, time.Millisecond, 200*time.Millisecond
 	t.Cleanup(func() { agentReachAttempts, agentReachBackoff, agentReachMax = reachA, reachB, reachM })
 	s, f := newTaskServiceOn(t, st)
+	shortQuietNotices(t, s)
 	shortSupervise(t, s)
 	f.hello.Assistant.MachineID = "server"
 	setSettings(t, s, func(v *Settings) { v.Main = "conv1" })
@@ -112,7 +126,7 @@ func TestQuietTaskTellsTheMainConversation(t *testing.T) {
 	if now := todoNow(s, todo.ID); now.DoneAt != nil || now.Supervision.State != reviewPending {
 		t.Fatalf("todo = %+v, %+v", now, now.Supervision)
 	}
-	time.Sleep(3 * quietNoticeDelay)
+	time.Sleep(3 * testQuietNoticeDelay)
 	if got := len(f.notices()); got != 1 {
 		t.Fatalf("%d notices", got)
 	}
@@ -134,7 +148,7 @@ func TestQuietNoticesMerge(t *testing.T) {
 	if !strings.Contains(n, "做完了，等你验收") || strings.Contains(n, "用哪个分支") || strings.Count(n, "任务「") != 1 {
 		t.Fatalf("notice:\n%s", n)
 	}
-	time.Sleep(3 * quietNoticeDelay)
+	time.Sleep(3 * testQuietNoticeDelay)
 	if got := len(f.notices()); got != 1 {
 		t.Fatalf("%d notices", got)
 	}
@@ -144,7 +158,7 @@ func TestQuietNoticesMerge(t *testing.T) {
 	agentTurn(s2, f2, proto.StatusBlocked, "", 1)
 	s2.InteractionRaised(context.Background(), InteractionRaised{Interaction: ix})
 	agentTurn(s2, f2, proto.StatusWorking, "", 0) // answered on the watch: working again
-	time.Sleep(4 * quietNoticeDelay)
+	time.Sleep(4 * testQuietNoticeDelay)
 	if got := f2.notices(); len(got) != 0 {
 		t.Fatalf("a question answered meanwhile was told: %q", got)
 	}
@@ -218,7 +232,7 @@ func TestNotQuietTasksAreNotTold(t *testing.T) {
 			}
 			agentTurn(s, f, proto.StatusWorking, "", 0)
 			agentTurn(s, f, proto.StatusDone, "好了", 0)
-			time.Sleep(4 * quietNoticeDelay)
+			time.Sleep(4 * testQuietNoticeDelay)
 			if told := len(f.notices()) > 0; told != c.told {
 				t.Fatalf("told = %v: %q", told, f.notices())
 			}
@@ -437,7 +451,7 @@ func TestQuietNeedsNoticeDroppedWhenAnswered(t *testing.T) {
 			idleLark.Status = proto.StatusIdle
 			f.setSessions("server", idle1, idleLark)
 			s.drainRelays("server", []proto.Session{idleLark})
-			time.Sleep(4 * quietNoticeDelay)
+			time.Sleep(4 * testQuietNoticeDelay)
 			if got := f.sentTo("lark1"); got != tc.wantSent {
 				t.Fatalf("%d notice(s) sent, want %d", got, tc.wantSent)
 			}
@@ -504,7 +518,7 @@ func TestQueuedNeedsNoticeRecheckedAtDrain(t *testing.T) {
 				s.drainRelays("server", []proto.Session{idleLark})
 			}
 			waitFor(t, "the stale notice to leave the queue", func() bool { return s.queuedFor("lark1") == 0 })
-			time.Sleep(2 * quietNoticeDelay)
+			time.Sleep(2 * testQuietNoticeDelay)
 			if got := f.sentTo("lark1"); got != 0 {
 				t.Fatalf("%d stale notice(s) sent", got)
 			}

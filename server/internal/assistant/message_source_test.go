@@ -34,6 +34,7 @@ func assertSentSource(t *testing.T, f *fakeHub, want *proto.MessageSource) {
 func TestMessageSourcesRelayQueueRestart(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeHub().withMachine()
+	f.settings = &Settings{MachineID: "server", Leaders: []string{"receiver"}}
 	f.known["receiver"] = true
 	s := newTestService(t, f)
 	msg := relayMsg{From: "conversation-1", FromTitle: "Research", Tool: "conversation_send", Text: "Read the result.", Hop: 1, At: time.Now().UTC()}
@@ -134,7 +135,7 @@ func TestMessageSourcesUserEntryAndFilters(t *testing.T) {
 func TestRelayCarriesIsMain(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeHub().withMachine()
-	f.settings = &Settings{MachineID: "server", Main: "main-conv"}
+	f.settings = &Settings{MachineID: "server", Main: "main-conv", Leaders: []string{"other-conv"}}
 	f.known["main-conv"], f.known["other-conv"] = true, true
 	s := newTestService(t, f)
 	for _, tt := range []struct {
