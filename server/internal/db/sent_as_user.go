@@ -34,17 +34,75 @@ const (
 	SentAsUserMost    = 200
 )
 
+var ErrSentRecordConflict = errors.New("sent ledger message reference is ambiguous or has different contents")
+
+const insertSentAsUser = `INSERT INTO sent_as_user (at, connector, action, target, text, summary, origin, let_through, message_ref)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
+
 // RecordSentAsUser adds a row (At: now when zero) and returns its id. An empty JSON field is an empty object.
 func (d *DB) RecordSentAsUser(ctx context.Context, s SentAsUser) (int64, error) {
+	return insertSent(ctx, d.pool, s)
+}
+
+func insertSent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, s SentAsUser) (int64, error) {
 	if s.At.IsZero() {
 		s.At = time.Now()
 	}
 	var id int64
-	err := d.pool.QueryRow(ctx, `INSERT INTO sent_as_user (at, connector, action, target, text, summary, origin, let_through, message_ref)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+	err := q.QueryRow(ctx, insertSentAsUser,
 		s.At, s.Connector, s.Action, objectOrEmpty(s.Target), s.Text, s.Summary, objectOrEmpty(s.Origin), objectOrEmpty(s.LetThrough),
 		s.MessageRef).Scan(&id)
 	return id, err
+}
+
+// RecordSentAsUserOnce reuses a retained ledger row only when the reference is
+// unambiguous and the normalized contents match. Lookup-only calls never insert.
+// The transaction lock serializes concurrent calls using this contract.
+func (d *DB) RecordSentAsUserOnce(ctx context.Context, s SentAsUser, lookupOnly bool) (int64, error) {
+	if s.MessageRef == "" {
+		return 0, errors.New("sent record requires a message reference")
+	}
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('sent.record_once:' || $1), hashtext($2))`,
+		s.Connector, s.MessageRef); err != nil {
+		return 0, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id, target = $4::jsonb AND text = $5 AND summary = $6 AND origin = $7::jsonb AND let_through = $8::jsonb
+		FROM sent_as_user WHERE connector = $1 AND action = $2 AND message_ref = $3 LIMIT 2`,
+		s.Connector, s.Action, s.MessageRef, objectOrEmpty(s.Target), s.Text, s.Summary, objectOrEmpty(s.Origin), objectOrEmpty(s.LetThrough))
+	if err != nil {
+		return 0, err
+	}
+	type match struct {
+		id    int64
+		exact bool
+	}
+	matches, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (v match, err error) {
+		err = r.Scan(&v.id, &v.exact)
+		return v, err
+	})
+	if err != nil {
+		return 0, err
+	}
+	var id int64
+	switch {
+	case len(matches) == 1 && matches[0].exact:
+		id = matches[0].id
+	case len(matches) != 0:
+		return 0, ErrSentRecordConflict
+	case !lookupOnly:
+		id, err = insertSent(ctx, tx, s)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return id, tx.Commit(ctx)
 }
 
 func objectOrEmpty(raw json.RawMessage) []byte {

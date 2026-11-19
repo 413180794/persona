@@ -318,12 +318,19 @@ func (l *sentLimiter) take(id string) time.Duration {
 // and session it names are its own word, kept beside it), let_through is auto (with the setting that allowed it). A
 // failed write is the caller's to see, as an error with a message and no code: the send already happened and stays so.
 func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw json.RawMessage) (any, error) {
+	return ps.extensionRecordSent(ctx, id, raw, false)
+}
+
+func (ps *extensions) extensionRecordSent(ctx context.Context, id string, raw json.RawMessage, once bool) (any, error) {
 	if wait := ps.sentLimit.take(id); wait > 0 {
 		data, _ := json.Marshal(map[string]float64{"retry_after": wait.Seconds()})
 		return nil, &rpc.Error{Code: serve.CodeRateLimited, Data: data,
 			Message: fmt.Sprintf("sent.record: more than %d calls in a minute, try again in %.0f seconds", sentRecordBurst, max(1, wait.Seconds()))}
 	}
-	var p connector.SentRecordParams
+	var p struct {
+		connector.SentRecordParams
+		LookupOnly bool `json:"lookup_only"`
+	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record: " + err.Error()}
@@ -368,6 +375,30 @@ func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw js
 		Origin: mustJSON(origin), LetThrough: mustJSON(through), MessageRef: proto.CleanMessageRef(p.MessageRef)}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
+	if once {
+		if row.MessageRef == "" || row.MessageRef != p.MessageRef {
+			return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record_once: an exact message_ref is required"}
+		}
+		store, ok := st.(interface {
+			RecordSentAsUserOnce(context.Context, db.SentAsUser, bool) (int64, error)
+		})
+		if !ok {
+			return nil, &rpc.Error{Code: "no_database", Message: "sent.record_once: the ledger does not support exact records"}
+		}
+		rowID, err := store.RecordSentAsUserOnce(ctx, row, p.LookupOnly)
+		if errors.Is(err, db.ErrSentRecordConflict) {
+			return nil, &rpc.Error{Code: "conflict", Message: "sent.record_once: ambiguous or mismatched ledger entry"}
+		}
+		if err != nil {
+			ps.logf("sent ledger: %s: %s: %v", id, p.Contribution, err)
+			return nil, errors.New("sent.record_once: the ledger could not be reconciled")
+		}
+		status := "recorded"
+		if rowID == 0 {
+			status = "missing"
+		}
+		return map[string]string{"message_ref": row.MessageRef, "status": status}, nil
+	}
 	if _, err := st.RecordSentAsUser(ctx, row); err != nil {
 		ps.logf("sent ledger: %s: %s: %v", id, p.Contribution, err)
 		return nil, errors.New("sent.record: the ledger could not be written")

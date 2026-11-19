@@ -51,6 +51,9 @@ const SentTextMost = 4000
 // MethodSentRecord is the call an extension's connector makes to put a send of its own in the ledger.
 const MethodSentRecord = "sent.record"
 
+// MethodSentRecordOnce records or verifies one retained ledger row for a stable message reference.
+const MethodSentRecordOnce = "sent.record_once"
+
 // SentRecordParams are sent.record's params (schema/extension/connector.schema.json ConnectorSentRecordParams): an
 // extension's connector that declares sends_as_user tells the hub about a message it sent in the user's name outside
 // the write gate. Where it came from and how it was let through are the hub's to say, not these.

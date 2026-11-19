@@ -47,6 +47,38 @@ func sentRecord(spec host.Spec, params string) error {
 	return err
 }
 
+func TestSentRecordOnceRPC(t *testing.T) {
+	st := storagePostgres(t)
+	h := newTestManager(t)
+	h.store = st
+	spec := sentExtensionSpec(t, h, "record-once", `[
+		{"id":"exactrecord","name":"Exact Record","capabilities":["status"],"sends_as_user":true}]`)
+	params := `{"contribution":"exactrecord","target":{"chat":"private"},"text":"synthetic","message_ref":"exact-test-1"}`
+	lookup := strings.TrimSuffix(params, "}") + `,"lookup_only":true}`
+	call := func(fields string, want string) {
+		t.Helper()
+		result, err := spec.Handle(t.Context(), connector.MethodSentRecordOnce, json.RawMessage(fields))
+		got, ok := result.(map[string]string)
+		if err != nil || !ok || got["message_ref"] != "exact-test-1" || got["status"] != want {
+			t.Fatalf("expected %s, got %#v, %v", want, result, err)
+		}
+	}
+	call(lookup, "missing")
+	call(params, "recorded")
+	call(params, "recorded")
+	call(lookup, "recorded")
+	rows, _, err := st.SentAsUsers(t.Context(), 0, 10, "exactrecord")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ledger after replay: %d rows, %v", len(rows), err)
+	}
+	_, err = spec.Handle(t.Context(), connector.MethodSentRecordOnce,
+		json.RawMessage(strings.Replace(params, "synthetic", "mismatch", 1)))
+	wantRPCCode(t, "ref reuse with a different payload", err, "conflict")
+	_, err = spec.Handle(t.Context(), connector.MethodSentRecordOnce,
+		json.RawMessage(strings.Replace(params, "exactrecord", "other-connector", 1)))
+	wantRPCCode(t, "another connector", err, "permission_denied")
+}
+
 func wantRPCCode(t *testing.T, what string, err error, code string) {
 	t.Helper()
 	var re *rpc.Error
