@@ -1221,6 +1221,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "folded_as":"worker",     // beside folded_under when the asking session is a tab's worker folded under its lead, "side" when it is a side session (its folded_as, #5180, #7944). Set by the manager when sending to clients; absent otherwise
  "folded_side":"<sid>",    // beside folded_under when the asking session folds through a side session and is not that side (its folded_side, #7944): the side whose chat the card is in. Set by the manager when sending to clients; absent otherwise
  "kind":"question|plan|permission|screen|elicitation",
+ "format":"markdown",       // optional script-ask opt-in: iOS and web draw summary / question text with the reply Markdown renderer; absent keeps literal text
  "created_at":"…","expires_at":"…","tool_name":"AskUserQuestion","tool_use_id":"…",
  "questions":[{"question":"…","header":"…","multi_select":false,
                "options":[{"label":"…","description":"…"}]}],   // question
