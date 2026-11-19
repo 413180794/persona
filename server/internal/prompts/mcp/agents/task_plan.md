@@ -174,11 +174,16 @@ Workspace policy: "new" makes an isolated checkout; {"new":{"branch":"task/my-ch
           },
           "tier": {
             "type": "string",
-            "description": "An Agent preset: one of the tiers the snapshot's 模型档位 line lists for the profile in use, each with what it is for; pick the one whose description fits the work. Resolved when the task actually starts, with the profile in use then. Explicit launcher/model/effort override its values."
+            "description": "An Agent preset: one of the tiers the snapshot's 模型档位 line lists for the profile in use, each with what it is for; pick the one whose description fits the work. Resolved when the task actually starts, with the profile in use then. Explicit launcher/model/effort/speed override its values."
           },
           "effort": {
             "type": "string",
             "description": "Explicit effort override; omit to use the tier or purpose default."
+          },
+          "speed": {
+            "type": "string",
+            "enum": ["standard", "fast", "ultrafast"],
+            "description": "How fast the agent runs: standard (the launcher's own speed), fast (Codex's native Fast tier, or Claude Code's fast mode on Opus), or ultrafast (Codex models that offer it). fast and ultrafast cost more quota: use them only when the work is urgent or the user asked. Overrides the tier's speed; omit to use the tier's or the launcher's own. Any other agent (agy, pi, cursor, traex, omp, a runtime's) is refused and nothing starts."
           }
         }
       }

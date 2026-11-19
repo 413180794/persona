@@ -808,6 +808,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		SecretTicket   string                        `json:"secret_ticket"` // session.start: a hand-off's values for this new Claude Code start (secretenv.go)
 		Effort         string                        `json:"effort"`
 		ServiceTier    string                        `json:"service_tier"`
+		Speed          string                        `json:"speed"` // session.start: a new Agent's speed (start_speed.go)
 		Ultracode      *bool                         `json:"ultracode"`
 		Goal           string                        `json:"goal"` // session.start: a /goal typed after the first message is in (startgoal.go)
 		DismissLost    bool                          `json:"dismiss_lost"`
@@ -1378,6 +1379,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 				return nil, err
 			}
 		}
+		// A faster speed costs more: refused for any start that would not run it, before anything starts.
+		if err := n.checkStartSpeed(ctx, p.Speed, p.Launcher, p.AgentType, p.Host, p.ResumeSessionID, method == devicewire.MethodStartWorkSession); err != nil {
+			return nil, err
+		}
 		tab := ""
 		if p.TabName != nil {
 			tab = *p.TabName
@@ -1429,11 +1434,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		// Only Claude Code has a session id before it starts; another agent picks its own (start_agent.go).
 		asyncAgent := n.startAgentType(p.Launcher, p.AgentType)
 		if p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude") && asyncAgent != traexAgent && asyncAgent != ompAgent {
-			s, err := n.startAsyncIn(p.Host, p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{InPane: p.InPane, PlanThen: p.PlanThen, Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode, SecretTicket: p.SecretTicket, Goal: goal})
+			s, err := n.startAsyncIn(p.Host, p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{InPane: p.InPane, PlanThen: p.PlanThen, Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode, SecretTicket: p.SecretTicket, Goal: goal, Speed: p.Speed})
 			return n.creationResult(s, err, p.ResumeSessionID, p.CreationID, p.Incarnation)
 		}
 		r := resumed{cwd: p.Cwd, launcher: p.Launcher, mode: p.PermissionMode, effort: p.Effort, tab: tab,
-			execution: modelExecution{InPane: p.InPane, PlanThen: p.PlanThen, Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode, SecretTicket: p.SecretTicket, Goal: goal}}
+			execution: modelExecution{InPane: p.InPane, PlanThen: p.PlanThen, Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode, SecretTicket: p.SecretTicket, Goal: goal, Speed: p.Speed}}
 		if p.ResumeSessionID != "" {
 			// A message carrying out a launcher switch quits the agent and starts it again in its terminal
 			// (launcher_switch.go): the Resume waits for it, then finds the agent running, or resumes it as it is.

@@ -61,33 +61,38 @@ func (s *Service) applyStartTier(ctx context.Context, params map[string]any) err
 	launcher, _ := params["launcher"].(string)
 	model, _ := params["model"].(string)
 	effort, _ := params["effort"].(string)
-	layTier(t, &launcher, &model, &effort)
+	speed, _ := params["speed"].(string)
+	layTier(t, &launcher, &model, &effort, &speed)
 	params["launcher"], params["model"], params["effort"] = launcher, model, effort
+	if speed != "" {
+		params["speed"] = speed
+	}
 	return nil
 }
 
-// layTier lays tier t over a start's launcher, model and effort, and says whether it gave them anything: not when the
-// start names a launcher of its own (withTier). An explicit different model does not inherit effort intended for the
-// tier's model.
-func layTier(t ModelTier, launcher, model, effort *string) bool {
+// layTier lays tier t over a start's launcher, model, effort and speed, and says whether it gave them anything: not
+// when the start names a launcher of its own (withTier). An explicit different model does not inherit the effort or
+// speed intended for the tier's model (a Codex speed tier is the model's own).
+func layTier(t ModelTier, launcher, model, effort, speed *string) bool {
 	if *launcher != "" && *launcher != t.Launcher {
 		return false
 	}
 	if *model != "" && *model != t.Model {
-		t.Effort = ""
+		t.Effort, t.Speed = "", ""
 	}
-	withTier(t, launcher, model, effort)
+	withTier(t, launcher, model, effort, speed)
 	return true
 }
 
 func (s *Service) applyTaskTier(ctx context.Context, t *PlanTask) error {
-	p := map[string]any{"tier": t.Tier, "launcher": t.Launcher, "model": t.Model, "effort": t.Effort}
+	p := map[string]any{"tier": t.Tier, "launcher": t.Launcher, "model": t.Model, "effort": t.Effort, "speed": t.Speed}
 	if err := s.applyStartTier(ctx, p); err != nil {
 		return err
 	}
 	t.Launcher, _ = p["launcher"].(string)
 	t.Model, _ = p["model"].(string)
 	t.Effort, _ = p["effort"].(string)
+	t.Speed, _ = p["speed"].(string)
 	return nil
 }
 
@@ -108,7 +113,7 @@ func (s *Service) modelProfileContext(ctx context.Context) *prompts.SnapshotProf
 	out := &prompts.SnapshotProfile{ID: p.ID, Name: p.Name}
 	for _, name := range slices.Sorted(maps.Keys(p.Tiers)) {
 		t := p.Tiers[name]
-		out.Tiers = append(out.Tiers, prompts.SnapshotTier{Name: name, Launcher: t.Launcher, Model: t.Model, Effort: t.Effort, Description: t.Description})
+		out.Tiers = append(out.Tiers, prompts.SnapshotTier{Name: name, Launcher: t.Launcher, Model: t.Model, Effort: t.Effort, Speed: t.Speed, Description: t.Description})
 	}
 	return out
 }

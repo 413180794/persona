@@ -63,8 +63,11 @@ type PlanTask struct {
 	Launcher          string `json:"launcher,omitempty"`
 	Model             string `json:"model,omitempty"`
 	Effort            string `json:"effort,omitempty"`
-	Tier              string `json:"tier,omitempty"`
-	Permission        string `json:"permission,omitempty"`
+	// Speed: how fast the Agent runs (proto.AgentSpeeds): Codex's native tier or Claude Code's fast mode; "" the
+	// tier's, else the launcher's own (launcher_speed.go).
+	Speed      string `json:"speed,omitempty"`
+	Tier       string `json:"tier,omitempty"`
+	Permission string `json:"permission,omitempty"`
 	// Ultracode: the agent starts with Claude Code's ultracode on (#12). A pointer so that an edit from the card can
 	// turn it off, and one from a client that does not know it keeps the assistant's choice.
 	Ultracode *bool `json:"ultracode,omitempty"`

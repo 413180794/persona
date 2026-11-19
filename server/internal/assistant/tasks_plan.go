@@ -126,6 +126,9 @@ func (s *Service) taskPlanFrom(ctx context.Context, machine, sessionID string, a
 		if t.Model != "" && !proto.ValidModelID(t.Model) { // it goes to the agent as --model (#1644)
 			return "", fmt.Errorf("task %d: model %q is not a model id: %s", i+1, t.Model, proto.ModelIDRule)
 		}
+		if t.Speed = strings.TrimSpace(t.Speed); checkSpeedArg(t.Speed) != nil {
+			return "", fmt.Errorf("task %d: %w", i+1, checkSpeedArg(t.Speed))
+		}
 		if scope == nil { // a task leader has none to give and keeps its task's project
 			atts, err := cleanAttachments(t.Attachments)
 			if err == nil {
@@ -157,7 +160,7 @@ func (s *Service) taskPlanFrom(ctx context.Context, machine, sessionID string, a
 		// names the launcher that will run and its why says so; a launcher this plan names that it lacks is refused.
 		takesModes := true
 		if m, ok := s.machineByName(ctx, t.Machine); ok {
-			params := map[string]any{"launcher": t.Launcher, "model": t.Model, "effort": t.Effort, "tier": t.Tier}
+			params := map[string]any{"launcher": t.Launcher, "model": t.Model, "effort": t.Effort, "speed": t.Speed, "tier": t.Tier}
 			own, err := s.resolveStart(ctx, params)
 			if err != nil {
 				return "", fmt.Errorf("task %d: %w", i+1, err)
@@ -169,6 +172,12 @@ func (s *Service) taskPlanFrom(ctx context.Context, machine, sessionID string, a
 			}
 			if fit.allowAll() {
 				t.Permission = "bypassPermissions"
+			}
+			// A faster speed the Agent that runs cannot take: refused now, not once the task starts (launcher_speed.go).
+			launcher, _ := params["launcher"].(string)
+			speed, _ := params["speed"].(string)
+			if err := startSpeedRefused(launcher, fit.agent, speed); err != nil {
+				return "", fmt.Errorf("task %d: %w", i+1, err)
 			}
 			// traex, omp…: no mode, no effort (launcher_modes.go). One the call names is refused now, rather than by
 			// the computer once the task starts; one a tier filled in is dropped. pi, cursor, agy: dropped either way.
@@ -401,6 +410,9 @@ func applyPlanEdit(t *PlanTask, e PlanTask) {
 	}
 	if s := strings.TrimSpace(e.Effort); s != "" {
 		t.Effort = s
+	}
+	if s := strings.TrimSpace(e.Speed); s != "" { // checked at Start (startSpeedRefused)
+		t.Speed = s
 	}
 	if s := strings.TrimSpace(e.Permission); s != "" {
 		t.Permission = s

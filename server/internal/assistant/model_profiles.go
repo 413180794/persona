@@ -93,20 +93,21 @@ type launcherField struct {
 
 func profileValue(v string) *string { return &v }
 
-// ModelTier is what an Agent started on a tier runs on: a launcher, and its model and effort ("" for its defaults).
-// Description says when to use it (Paseo's "When to use"): the assistant reads it to pick a tier, the New Agent
-// form shows it.
+// ModelTier is what an Agent started on a tier runs on: a launcher, and its model, effort and speed ("" for its
+// defaults; speed is one of proto.AgentSpeeds). Description says when to use it (Paseo's "When to use"): the assistant
+// reads it to pick a tier, the New Agent form shows it.
 type ModelTier struct {
 	Launcher    string `json:"launcher"`
 	Model       string `json:"model,omitempty"`
 	Effort      string `json:"effort,omitempty"`
+	Speed       string `json:"speed,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
-// runs is what the tier runs on, in a line: its launcher, then the model and effort it sets.
+// runs is what the tier runs on, in a line: its launcher, then the model, effort and speed it sets.
 func (t ModelTier) runs() string {
 	parts := []string{t.Launcher}
-	for _, v := range []string{t.Model, t.Effort} {
+	for _, v := range []string{t.Model, t.Effort, t.Speed} {
 		if v != "" {
 			parts = append(parts, v)
 		}
@@ -333,9 +334,9 @@ func (s *Service) tierModel(ctx context.Context, tier string) (ModelTier, error)
 	return t, nil
 }
 
-// withTier fills a start's launcher, model and effort from tier: what the start names itself wins, and the tier's
-// model and effort go only with the tier's launcher.
-func withTier(t ModelTier, launcher, model, effort *string) {
+// withTier fills a start's launcher, model, effort and speed from tier: what the start names itself wins, and the
+// tier's model, effort and speed go only with the tier's launcher.
+func withTier(t ModelTier, launcher, model, effort, speed *string) {
 	if *launcher != "" && *launcher != t.Launcher {
 		return
 	}
@@ -345,5 +346,8 @@ func withTier(t ModelTier, launcher, model, effort *string) {
 	}
 	if *effort == "" {
 		*effort = t.Effort
+	}
+	if *speed == "" {
+		*speed = t.Speed
 	}
 }

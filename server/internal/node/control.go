@@ -110,6 +110,20 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 	argv, codex := n.codexLauncher(ctx, launcher)
+	if proto.FasterSpeed(execution.Speed) { // start_speed.go: session.start checked it; any other caller is held here
+		agent := kind
+		if work := workAgentKind(launcher, kind); work != "" {
+			agent = work
+		} else if codex && kind != traexAgent {
+			agent = "codex"
+		}
+		if resume != "" {
+			return nil, speedRefusal(ctx, "agent_speed_start_only", nil)
+		}
+		if err := n.speedAgentRefusal(ctx, launcher, agent, execution.Speed); err != nil {
+			return nil, err
+		}
+	}
 	if codex && execution.SecretTicket != "" { // Codex would start without the values (secretenv.go)
 		return nil, refusal(secretEnvAgentCode, secretEnvAgentText, nil)
 	}
@@ -179,6 +193,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 		// An inherited effort needs no override, which would leave the shared app-server; the record keeps it all the same.
 		runs := n.codexOwnEffort(ctx, argv, codexPaneEnv(launch), cwd, execution)
+		if _, err := n.codexSpeedTier(ctx, launcher, runs); err != nil { // a model that does not offer it starts nothing
+			return nil, err
+		}
 		s, err := n.startCodex(ctx, launch, cwd, launcher, codexExecutionArgs(argv, runs), execution, prompt, ws, tabName, mode)
 		if err == nil && strings.TrimSpace(prompt) != "" {
 			n.codexGoalAfterStart(s.SessionID, s.PaneID, execution.Goal) // its first message is in (codex_start_goal.go)
@@ -226,6 +243,11 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	planThen := planThenOf(mode, execution.PlanThen)
 	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
 	settings, hooks := n.claudeStartSettings(ctx, launcher, "claude", cwd)
+	if execution.Speed == proto.SpeedFast { // fast mode (start_speed.go)
+		if settings, err = n.claudeFastSettings(settings); err != nil {
+			return nil, fmt.Errorf("couldn't turn on Claude Code's fast mode: %w", err)
+		}
+	}
 	// No tier alias on the command line for a gateway provider (#10365): its model for that tier, else its default.
 	spec := claudeLaunch{Launcher: launcher, Settings: settings, Hooks: hooks, Display: n.liveRepliesPlugin(hooks), Model: n.claudeModelArg(launcher, execution.Model),
 		Plugins: n.claudeLoadsPlugins(ctx)}

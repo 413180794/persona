@@ -505,6 +505,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			Launcher string `json:"launcher"`
 			Model    string `json:"model"`
 			Effort   string `json:"effort"`
+			Speed    string `json:"speed"`
 			Tier     string `json:"tier"`
 			Worktree struct {
 				Branch string `json:"branch"`
@@ -535,8 +536,12 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if err != nil {
 			return "", fmt.Errorf("%w; no agent was started", err)
 		}
+		a.Speed = strings.TrimSpace(a.Speed)
+		if err := checkSpeedArg(a.Speed); err != nil {
+			return "", fmt.Errorf("%w; no agent was started", err)
+		}
 		a.Cwd = proto.ExpandHome(a.Cwd, am.Home)
-		own := startPick{launcher: strings.TrimSpace(a.Launcher), effort: strings.TrimSpace(a.Effort)} // before the tier
+		own := startPick{launcher: strings.TrimSpace(a.Launcher), effort: strings.TrimSpace(a.Effort), speed: a.Speed} // before the tier
 		// The tier is resolved first (an unknown one asks and starts nothing), then Model Settings' Agents laid over it as
 		// the start lays it: what runs is said on the card (a hand-off from the health space asks) and in the answer.
 		tier, runs := strings.TrimSpace(a.Tier), ""
@@ -545,7 +550,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			if err != nil {
 				return "", fmt.Errorf("%w; no agent was started", err)
 			}
-			if !layTier(t, &a.Launcher, &a.Model, &a.Effort) {
+			if !layTier(t, &a.Launcher, &a.Model, &a.Effort, &a.Speed) {
 				tier = "" // a launcher of its own: the tier gives it nothing
 			} else {
 				picks := map[string]any{"launcher": a.Launcher, "model": a.Model, "effort": a.Effort}
@@ -553,13 +558,13 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 					l, _ := picks["launcher"].(string)
 					m, _ := picks["model"].(string)
 					e, _ := picks["effort"].(string)
-					runs = ModelTier{Launcher: l, Model: m, Effort: e}.runs()
+					runs = ModelTier{Launcher: l, Model: m, Effort: e, Speed: a.Speed}.runs()
 				}
 			}
 		}
 		// What it runs on this computer, before the user is asked (#2640, launcher_fit.go): a launcher named here that
 		// the computer lacks starts nothing; a default it lacks gives way to one it has, and the card and answer say so.
-		run := map[string]any{"launcher": a.Launcher, "model": a.Model, "effort": a.Effort}
+		run := map[string]any{"launcher": a.Launcher, "model": a.Model, "effort": a.Effort, "speed": a.Speed}
 		if err := s.applyModel(ctx, "agent.new", run); err != nil {
 			return "", err
 		}
@@ -571,7 +576,13 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			a.Launcher, _ = run["launcher"].(string)
 			a.Model, _ = run["model"].(string)
 			a.Effort, _ = run["effort"].(string)
+			a.Speed, _ = run["speed"].(string)
 			tier, runs = "", "" // the tier's launcher is not what runs
+		}
+		// A faster speed the Agent that runs cannot take: refused before the user is asked (launcher_speed.go).
+		fitted, _ := run["launcher"].(string)
+		if err := startSpeedRefused(fitted, fit.agent, a.Speed); err != nil {
+			return "", fmt.Errorf("%w; no agent was started", err)
 		}
 		// traex, omp…: no effort (launcher_modes.go). One this call names is refused before the user is asked, rather
 		// than by the computer after they said yes; one a tier filled in is dropped. pi, cursor, agy: dropped either way.
@@ -600,6 +611,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		case a.Model != "":
 			where += i18n.T(s.lang(ctx), "assistant-tools.with_model", i18n.Args{"model": a.Model})
 		}
+		if proto.FasterSpeed(a.Speed) && runs == "" { // a tier's speed is in its runs
+			where += " · " + a.Speed
+		}
 		if a.Ultracode {
 			where += " · ultracode"
 		}
@@ -625,6 +639,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if a.Ultracode {
 			params["ultracode"] = true
 		}
+		if a.Speed != "" {
+			params["speed"] = a.Speed
+		}
 		if err := s.applyModel(sctx, "agent.new", params); err != nil {
 			return "", err
 		}
@@ -637,6 +654,10 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			params["cwd"], am = a.Cwd, alt
 			// The same launcher name may mean a different agent on the destination. Reuse its list before choosing permissions.
 			if _, fit, err = s.fitLauncher(ctx, am, own, params); err != nil {
+				return "", fmt.Errorf("%w; no agent was started", err)
+			}
+			speed, _ := params["speed"].(string)
+			if err := startSpeedRefused(picked, fit.agent, speed); err != nil {
 				return "", fmt.Errorf("%w; no agent was started", err)
 			}
 		}
@@ -676,6 +697,8 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		}
 		if runs != "" {
 			note = " Preset " + tier + ": runs on " + runs + "." + note
+		} else if speed, _ := params["speed"].(string); proto.FasterSpeed(speed) {
+			note = " Speed: " + speed + "." + note
 		}
 		if swapped != "" {
 			note = " Note: " + swapped + "." + note

@@ -104,8 +104,8 @@ func checkModelProfile(p *ModelProfile, stored []storedLauncher) error {
 	return nil
 }
 
-// checkModelTiers is what saving tiers needs (normalized in place): names, a launcher each, model ids, effort levels
-// and one-line descriptions. Whether a launcher exists is the editor's to check (settings_tiers.go): a ~/.zshrc one
+// checkModelTiers is what saving tiers needs (normalized in place): names, a launcher each, model ids, effort levels,
+// speeds and one-line descriptions. Whether a launcher exists is the editor's to check (settings_tiers.go): a ~/.zshrc one
 // is known only to its computers.
 func checkModelTiers(tiers map[string]ModelTier) error {
 	if len(tiers) > maxModelTiers {
@@ -128,6 +128,9 @@ func checkModelTiers(tiers map[string]ModelTier) error {
 		}
 		if t.Effort != "" && !slices.Contains(proto.EffortLevels, t.Effort) {
 			return profileEffortErr(name, t.Effort, proto.EffortLevels)
+		}
+		if t.Speed != "" && !proto.ValidAgentSpeed(t.Speed) {
+			return i18n.Err("assistant-model_profiles.err_speed", i18n.Args{"tier": name, "speed": t.Speed, "speeds": strings.Join(proto.AgentSpeeds, " / ")})
 		}
 		if t.Description = strings.TrimSpace(t.Description); utf8.RuneCountInString(t.Description) > modelTierAbout ||
 			strings.ContainsAny(t.Description, "\r\n\x00") {

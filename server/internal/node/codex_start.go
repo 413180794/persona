@@ -164,7 +164,7 @@ func insertBeforeDashDash(args, extra []string) []string {
 }
 
 // codexExecutionArgs is a Codex launcher's words argv running model execution e: its model in place of any the words
-// name, and its effort, which as the purpose's explicit choice takes precedence over the launcher's defaults.
+// name, and its effort and speed, which as explicit choices take precedence over the launcher's defaults.
 func codexExecutionArgs(argv []string, e modelExecution) []string {
 	var extra []string
 	if e.Model != "" {
@@ -173,6 +173,9 @@ func codexExecutionArgs(argv []string, e modelExecution) []string {
 	}
 	if e.Effort != "" {
 		extra = append(extra, "-c", "model_reasoning_effort="+e.Effort)
+	}
+	if tier := proto.CodexServiceTier(e.Speed); tier != "" { // a faster speed, its native tier (start_speed.go)
+		extra = append(extra, "-c", "service_tier="+tier)
 	}
 	return insertBeforeDashDash(argv, extra)
 }

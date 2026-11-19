@@ -23,12 +23,13 @@ import (
 // card was made from: profiles edited in the meantime are a conflict, never overwritten.
 
 // tierEdit is model_profiles.tiers' set value. A field left out keeps the tier's own; a different launcher drops the
-// old model and effort (they were the old launcher's), as a provider change does in Model Settings.
+// old model, effort and speed (they were the old launcher's), as a provider change does in Model Settings.
 type tierEdit struct {
 	Tier        string   `json:"tier"`
 	Launcher    *string  `json:"launcher"`
 	Model       *string  `json:"model"`
 	Effort      *string  `json:"effort"`
+	Speed       *string  `json:"speed"`
 	Description *string  `json:"description"`
 	Profiles    []string `json:"profiles"`
 	Remove      bool     `json:"remove"`
@@ -71,7 +72,7 @@ func editTiers(ps *modelProfiles, e tierEdit, now time.Time) ([]tierChange, erro
 			for _, f := range []struct {
 				set  *string
 				into *string
-			}{{e.Model, &t.Model}, {e.Effort, &t.Effort}, {e.Description, &t.Description}} {
+			}{{e.Model, &t.Model}, {e.Effort, &t.Effort}, {e.Speed, &t.Speed}, {e.Description, &t.Description}} {
 				if f.set != nil {
 					*f.into = strings.TrimSpace(*f.set)
 				}
@@ -178,12 +179,12 @@ func (s *Service) setModelTiers(ctx context.Context, v json.RawMessage) (*ownCha
 	if !modelTierName.MatchString(e.Tier) {
 		return nil, i18n.Err("assistant-model_profiles.err_tier_name", i18n.Args{"tier": e.Tier})
 	}
-	given := e.Launcher != nil || e.Model != nil || e.Effort != nil || e.Description != nil
+	given := e.Launcher != nil || e.Model != nil || e.Effort != nil || e.Speed != nil || e.Description != nil
 	switch {
 	case e.Remove && given:
 		return nil, errors.New("remove takes only tier and profiles")
 	case !e.Remove && !given:
-		return nil, errors.New("give what to set (launcher, model, effort, description), or remove: true")
+		return nil, errors.New("give what to set (launcher, model, effort, speed, description), or remove: true")
 	}
 	if e.Launcher != nil {
 		// before the card, and outside models.mu: a computer may be asked for its launchers
@@ -330,12 +331,14 @@ func (s *Service) getModelTiers(ctx context.Context) (string, error) {
 	if v.Active == "" {
 		b.WriteString("No profile is in use: tiers start nothing until one is switched to (model_profile_switch).\n")
 	}
-	b.WriteString("Effort levels: " + strings.Join(proto.EffortLevels, ", ") + ".")
+	b.WriteString("Effort levels: " + strings.Join(proto.EffortLevels, ", ") + ".\n")
+	b.WriteString("Speeds: " + strings.Join(proto.AgentSpeeds, ", ") + " (fast: Codex's Fast tier or Claude Code's fast mode; ultrafast: Codex models that offer it; both use more quota).")
 	return b.String(), nil
 }
 
 // modelTiersValue is the shape of model_profiles.tiers' set value, as the setting's list entry says it.
 const modelTiersValue = `{"tier": a name (lowercase letters, digits, _ -), "launcher": a launcher name, "model": a model id ("" the launcher's default), ` +
-	`"effort": a level ("" the launcher's), "description": when to use it (one line, at most 100 characters), ` +
+	`"effort": a level ("" the launcher's), "speed": standard, fast or ultrafast ("" the launcher's own; fast and ultrafast ` +
+	`use more quota, ultrafast is Codex-only), "description": when to use it (one line, at most 100 characters), ` +
 	`"profiles": [profile ids] (default: every profile), "remove": true to delete it}; a field left out keeps the tier's own ` +
-	`(a different launcher drops the old model and effort), a new tier needs its launcher`
+	`(a different launcher drops the old model, effort and speed), a new tier needs its launcher`

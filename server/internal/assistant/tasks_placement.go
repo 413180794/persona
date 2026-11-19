@@ -111,6 +111,7 @@ func (s *Service) fitTaskLauncher(ctx context.Context, t *PlanTask, m Device, ow
 	t.Launcher, _ = params["launcher"].(string)
 	t.Model, _ = params["model"].(string)
 	t.Effort, _ = params["effort"].(string)
+	t.Speed, _ = params["speed"].(string)
 	t.Tier = ""
 	t.noteWhy(note)
 	return agent, nil
@@ -195,12 +196,12 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask, retry bool) (
 	// rule fits now (start_defaults.go), so a rule that changed or no longer fits leaves nothing of the earlier one.
 	if t.startFilled.any() {
 		t.Launcher, t.Model, t.Effort, t.Tier = caller.launcher, caller.model, caller.effort, caller.tier
-		t.Permission, t.Ultracode = caller.permission, copyBool(caller.ultracode)
+		t.Permission, t.Ultracode, t.Speed = caller.permission, copyBool(caller.ultracode), caller.speed
 	}
 	t.startFilled = startFill{}
 	// A self-planning constraint applies only while a policy rule asks for it on this try.
 	t.planFirst = false
-	params := map[string]any{"launcher": t.Launcher, "model": t.Model, "effort": t.Effort, "tier": t.Tier}
+	params := map[string]any{"launcher": t.Launcher, "model": t.Model, "effort": t.Effort, "speed": t.Speed, "tier": t.Tier}
 	// The start-defaults policy: its preset goes in before the start is resolved, as if the task had named that tier;
 	// its effort and ultracode after the launcher fit, and the goal (a rule's or the Codex default) after that.
 	defaults, withDefaults := s.taskStartDefaults(ctx, t)
@@ -218,6 +219,7 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask, retry bool) (
 	t.Launcher, _ = params["launcher"].(string)
 	t.Model, _ = params["model"].(string)
 	t.Effort, _ = params["effort"].(string)
+	t.Speed, _ = params["speed"].(string)
 	s.healthyPlace(ctx, t)
 	m, ok := s.machineByName(ctx, t.Machine)
 	if !ok {
@@ -268,6 +270,10 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask, retry bool) (
 	}
 	if fit.allowAll() && !t.preservePermission {
 		t.Permission = "bypassPermissions"
+	}
+	// A faster speed the Agent that runs cannot take starts nothing (launcher_speed.go): the task fails with why.
+	if err := startSpeedRefused(t.Launcher, fit.agent, t.Speed); err != nil {
+		return "", "", err
 	}
 	modes := startTakesModes(fit.agent)
 	if !modes { // traex, omp…: no mode and no effort, whatever a default or a tier filled in (launcher_modes.go)
@@ -561,7 +567,7 @@ func (s *Service) updatePlanTask(ctx context.Context, planID string, i int, t Pl
 		pt.Workspace, pt.WorkspaceResolved, pt.MachinePolicy = t.Workspace, t.WorkspaceResolved, t.MachinePolicy
 		pt.WorkspaceInferred, pt.ReservedTodoID = t.WorkspaceInferred, t.ReservedTodoID
 		pt.Launcher, pt.Model, pt.Effort, pt.Tier = launch.launcher, launch.model, launch.effort, launch.tier
-		pt.Permission = launch.permission
+		pt.Permission, pt.Speed = launch.permission, launch.speed
 	}); err != nil {
 		s.logf("plan %s: %v", planID, err)
 	}

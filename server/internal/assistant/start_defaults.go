@@ -304,6 +304,7 @@ func (s *Service) applyStartPreset(ctx context.Context, t *PlanTask, caller star
 	// Start every try from what the task named, so a preset an earlier try picked cannot pin this one; only a new
 	// pick below changes it.
 	params["launcher"], params["model"], params["effort"], params["tier"] = "", "", caller.effort, ""
+	params["speed"] = caller.speed
 	t.Tier = ""
 	if len(d.Presets) == 0 {
 		return ""
