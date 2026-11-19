@@ -364,7 +364,7 @@ func (s *Service) saveModel(ctx context.Context, id string, r modelRecord) error
 }
 
 func (s *Service) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
-	if id == purposeLarkAgent {
+	if id == purposeLarkAgent || id == purposeLarkContextAgent {
 		if p, ok := s.extensionPurposeDef(ctx, larkContextModelPurposeID); ok {
 			return p, nil
 		}

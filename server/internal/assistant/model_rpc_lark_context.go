@@ -14,12 +14,10 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-const larkContextCompletePurpose = "extension.lark-context"
-
 // completeLarkContextModel uses a single binding chosen by the user, including when the request names candidates.
 func (s *Service) completeLarkContextModel(ctx context.Context, who string, c checkedCall) (any, error) {
 	ctx = withSettingsMemo(ctx)
-	b, err := s.resolveModel(ctx, larkContextCompletePurpose)
+	b, err := s.resolveModel(ctx, larkContextModelPurposeID)
 	if err != nil {
 		return nil, unavailableLarkContextModel("the model purpose could not be resolved")
 	}
@@ -47,7 +45,7 @@ func (s *Service) completeLarkContextModel(ctx context.Context, who string, c ch
 	if err != nil || config.RunLauncher != "" || !config.Configured() {
 		return nil, unavailableLarkContextModel("the configured direct API could not be used")
 	}
-	return s.runConfiguredModelCall(ctx, larkContextCompletePurpose, who, b.Provider, config, c, true)
+	return s.runConfiguredModelCall(ctx, larkContextModelPurposeID, who, b.Provider, config, c, true)
 }
 
 // A managed CLI's environment, arguments or transport can change the account or model that answers.
@@ -77,8 +75,20 @@ func (s *Service) larkContextLocalBinding(ctx context.Context, name string, b Mo
 	if len(found.Machines) == 0 || found.Source == "persona" || !slices.Contains([]string{"agy", "codex", "traex", "claude"}, runtime) {
 		return unavailableLarkContextModel("the configured local launcher is unavailable or unsupported")
 	}
+	if name != runtime || found.Source == "path" || (found.BaseURL != "" && found.Source != "agy") {
+		return unavailableLarkContextModel("the configured launcher cannot be reproduced by the isolated local runtime")
+	}
 	model := cmp.Or(b.Model, found.Model)
-	validModel := model == "" || proto.ValidModelID(model) && !strings.Contains(model, "://")
+	if model == "" {
+		machine := cmp.Or(s.settings(ctx).MachineID, found.Machines[0])
+		if slices.Contains(found.Machines, machine) {
+			_, model = s.launcherModelResolution(ctx, machine, name)
+		}
+	}
+	if model == "" {
+		return unavailableLarkContextModel("the configured launcher did not report its default model")
+	}
+	validModel := proto.ValidModelID(model) && !strings.Contains(model, "://")
 	validEffort := b.Effort == "" || b.Effort == "off" || slices.Contains(proto.EffortWords, b.Effort)
 	if !validModel || !validEffort {
 		return unavailableLarkContextModel("the configured launcher model or effort cannot be used locally")
@@ -102,6 +112,7 @@ func (s *Service) runConfiguredModelCall(ctx context.Context, purpose, who, prov
 	var err error
 	if singleRequest {
 		out, outcome, err = s.attemptLarkContextModel(ctx, client.WithSingleRequest(), c, &usage)
+		out.Provider, out.Effort = provider, config.ReasoningEffort
 	} else {
 		out, outcome, err = s.attemptModel(ctx, client, c, c.timeout, &usage)
 	}

@@ -54,18 +54,18 @@ func testLarkContextDirectBinding(t *testing.T, kind string) {
 	putLaunchers(t, s, storedLauncher{KeySealed: seal, ManagedLauncher: proto.ManagedLauncher{
 		Name: "selected-api", Kind: kind, BaseURL: gateway.URL, Auth: "bearer", Model: "fixture-default", OpusModel: "fixture-opus", Effort: "low",
 	}})
-	if err := s.writeModelRecord(t.Context(), larkContextCompletePurpose, 0,
+	if err := s.writeModelRecord(t.Context(), larkContextModelPurposeID, 0,
 		ModelBinding{Provider: "launcher.selected-api", Model: "Opus[1m]", Effort: "xhigh"},
 		&candidateSetting{Mode: "custom", Custom: []ModelBinding{{Provider: "launcher.selected-api", Model: "substitute"}}}, true); err != nil {
 		t.Fatal(err)
 	}
-	params := `{"messages":[{"role":"user","content":"Summarize this."}],"models":["another-model"],"json_schema":{"type":"object","required":["summary"]}}`
+	params := `{"messages":[{"role":"user","content":"Summarize this."}],"model_binding":"extension.lark-context","models":["another-model"],"json_schema":{"type":"object","required":["summary"]}}`
 	out, err := completeLarkContextAs(t, s, "current-context", "lark-context", params)
 	if err != nil {
 		t.Fatal(err)
 	}
 	res := out.(assistantwire.ModelCompleteResult)
-	if res.Model != "fixture-opus" || string(res.JSON) != `{"summary":"done"}` || res.Candidate != "" || len(res.Attempts) != 0 ||
+	if res.Model != "fixture-opus" || res.Provider != "launcher.selected-api" || res.Effort != "xhigh" || string(res.JSON) != `{"summary":"done"}` || res.Candidate != "" || len(res.Attempts) != 0 ||
 		res.Usage.Requests != 1 || res.Usage.InputTokens != 5 || requests.Load() != 1 || len(kbCalls()) != 0 {
 		t.Fatalf("reply %+v, requests %d, KB calls %d", res, requests.Load(), len(kbCalls()))
 	}
@@ -110,7 +110,7 @@ func TestLarkContextModelCompleteDirectFailureDoesNotReplayOrLeak(t *testing.T) 
 			putLaunchers(t, s, storedLauncher{KeySealed: key, ManagedLauncher: proto.ManagedLauncher{
 				Name: "selected-api", Kind: "api", API: tc.api, BaseURL: gateway.URL, Model: "fixture-model",
 			}})
-			setModel(t, s, larkContextCompletePurpose, ModelBinding{Provider: "launcher.selected-api"})
+			setModel(t, s, larkContextModelPurposeID, ModelBinding{Provider: "launcher.selected-api"})
 			_, err = completeLarkContextAs(t, s, "lark-context", "", `{"messages":[{"role":"user","content":"hi"}],"json_schema":{"type":"object","additionalProperties":false}}`)
 			var re *rpc.Error
 			if !errors.As(err, &re) || re.Code != tc.code || requests.Load() != 1 || len(kbCalls()) != 0 {
@@ -131,17 +131,16 @@ func TestLarkContextModelCompleteReturnsTheExactLocalBinding(t *testing.T) {
 		name, runtime, advertisedModel, model, effectiveModel, effort string
 	}{
 		{"agy", "agy", "gemini-pro", "", "gemini-pro", "high"},
-		{"work-codex", "codex", "default-model", "gpt-5.6-sol", "gpt-5.6-sol", "ultra"},
+		{"codex", "codex", "default-model", "gpt-5.6-sol", "gpt-5.6-sol", "ultra"},
 		{"traex", "traex", "default-model", "gpt-5.6-sol", "gpt-5.6-sol", "xhigh"},
 		{"claude", "claude", "", "Opus[1m]", "Opus[1m]", "max"},
-		{"codex", "codex", "", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, f, calls := extensionModelService(t, "unexpected KB reply")
 			f.modelExts = []assistantwire.ModelExtension{{ID: "lark-context", Name: "Context"}}
-			f.launcherList = []proto.Launcher{{Name: tc.name, Agent: tc.runtime, Model: tc.advertisedModel, BaseURL: "https://gateway.example.test/private"}}
+			f.launcherList = []proto.Launcher{{Name: tc.name, Agent: tc.runtime, Model: tc.advertisedModel}}
 			provider := "launcher." + tc.name
-			setModel(t, s, larkContextCompletePurpose, ModelBinding{Provider: provider, Model: tc.model, Effort: tc.effort})
+			setModel(t, s, larkContextModelPurposeID, ModelBinding{Provider: provider, Model: tc.model, Effort: tc.effort})
 			_, err := completeAs(s, "lark-context", `{"messages":[{"role":"user","content":"hi"}],"models":["unapproved-model"]}`)
 			var re *rpc.Error
 			want := fmt.Sprintf(`{"binding":{"provider":%q,"runtime":%q,"model":%q,"effort":%q}}`, provider, tc.runtime, tc.effectiveModel, tc.effort)
@@ -156,7 +155,11 @@ func TestLarkContextModelCompleteReturnsTheExactLocalBinding(t *testing.T) {
 func TestLarkContextModelCompleteUnavailableAndManagedBoundaries(t *testing.T) {
 	s, f, kbCalls := extensionModelService(t, "unexpected KB reply")
 	f.modelExts = []assistantwire.ModelExtension{{ID: "lark-context", Name: "Context"}}
-	f.launcherList = []proto.Launcher{{Name: "codex", Agent: "codex"}, {Name: "omp", Agent: "omp"}}
+	f.launcherList = []proto.Launcher{
+		{Name: "codex", Agent: "codex"}, {Name: "omp", Agent: "omp"},
+		{Name: "work-codex", Agent: "codex", BaseURL: "https://gateway.example.test/private"},
+		{Name: "traex", Agent: "traex"},
+	}
 	key, err := s.sealKey("fixture-key")
 	if err != nil {
 		t.Fatal(err)
@@ -172,10 +175,12 @@ func TestLarkContextModelCompleteUnavailableAndManagedBoundaries(t *testing.T) {
 		{"launcher.with-settings", "managed launcher"},
 		{"launcher.missing-key", "direct API could not be used"},
 		{"launcher.omp", "unavailable or unsupported"},
+		{"launcher.work-codex", "cannot be reproduced"},
+		{"launcher.traex", "did not report its default model"},
 		{"launcher.missing", "unavailable or unsupported"},
 		{"legacy.unknown", "provider is unavailable"},
 	} {
-		setModel(t, s, larkContextCompletePurpose, ModelBinding{Provider: tc.provider})
+		setModel(t, s, larkContextModelPurposeID, ModelBinding{Provider: tc.provider})
 		_, err := completeAs(s, "lark-context", larkContextCompleteParams)
 		var re *rpc.Error
 		if !errors.As(err, &re) || re.Code != assistantwire.CodeModelUnavailable || len(re.Data) != 0 || !strings.Contains(re.Message, tc.message) {
@@ -203,6 +208,10 @@ func TestLarkContextModelCompleteUsesCanonicalStorageScope(t *testing.T) {
 	_, err = completeLarkContextAs(t, s, "lark-context", "another-owner", `{"messages":[{"role":"user","content":"hi"}],"storage_id":"lark-context"}`)
 	if rpcCode(err) != bus.CodeInvalidParams {
 		t.Fatalf("program supplied a storage owner: %v", err)
+	}
+	_, err = completeLarkContextAs(t, s, "lark-context", "another-owner", `{"messages":[{"role":"user","content":"hi"}],"model_binding":"extension.lark-context"}`)
+	if rpcCode(err) != bus.CodeInvalidParams || len(asked()) != 1 || len(kbCalls()) != 0 {
+		t.Fatalf("another extension requested the binding: %v", err)
 	}
 }
 

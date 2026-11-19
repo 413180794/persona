@@ -5428,7 +5428,8 @@ export interface LeaderReportEvent {
 /**
  * error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params; assistant_offline
  * (the manager is away: try again); model_unavailable (nothing to call for this extension: the user picks a model for
- * it in Settings › Model configuration); model_paused (the connection is held for quota or load, nothing was sent;
+ * it in Settings › Model configuration); model_local_launcher_required (Lark Context: data.binding carries the local
+ * launcher selection and no credentials); model_paused (the connection is held for quota or load, nothing was sent;
  * data ModelPause: try again after until); model_failed (the upstream failed the request: an error status or a
  * dropped connection); model_refused (the model declined to answer this input, a refusal or a content filter: sending
  * it again unchanged gets the same answer, so split it, drop a part or report it; data ModelRefusal); timeout (past
@@ -5436,8 +5437,8 @@ export interface LeaderReportEvent {
  * data ModelInvalidOutput); model_candidates_failed (with two or more candidates, every one failed; data
  * ModelCandidatesFailed names how each did; a single candidate that fails answers with its own code and data).
  */
-export type ModelErrorCode = "invalid_params" | "assistant_offline" | "model_unavailable" | "model_paused" | "model_failed" | "model_refused" | "timeout" | "invalid_output" | "model_candidates_failed" | (string & {});
-export const MODEL_ERROR_CODES = ["invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"] as const;
+export type ModelErrorCode = "invalid_params" | "assistant_offline" | "model_unavailable" | "model_local_launcher_required" | "model_paused" | "model_failed" | "model_refused" | "timeout" | "invalid_output" | "model_candidates_failed" | (string & {});
+export const MODEL_ERROR_CODES = ["invalid_params", "assistant_offline", "model_unavailable", "model_local_launcher_required", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"] as const;
 
 /**
  * One turn of the conversation: the user's, or the model's earlier answer.
@@ -5470,6 +5471,11 @@ export interface ModelCompleteParams {
   timeout_seconds?: number;
   /** What the call is for (daily, weekly…): it goes in the hub's log line with the usage. */
   label?: string;
+  /**
+   * Lark Context opts into the shared binding before submitting a model call. Older hubs reject this field before
+   * inference.
+   */
+  model_binding?: "extension.lark-context";
   /**
    * Candidate model ids, tried in order (#10398): one that fails (model_failed, model_refused, model_paused), runs
    * past timeout_seconds, answers with no text (model_failed) or, with json_schema, still does not match it after its
@@ -5504,6 +5510,10 @@ export interface ModelCompleteResult {
   json?: unknown;
   /** The model that answered. */
   model: string;
+  /** The resolved provider on direct Lark Context calls. */
+  provider?: string;
+  /** The resolved effort on direct Lark Context calls, when set. */
+  effort?: string;
   /** end_turn, or max_tokens when the answer was cut off. */
   stop_reason: string;
   /** What the call spent; with models, every attempt's requests together. */

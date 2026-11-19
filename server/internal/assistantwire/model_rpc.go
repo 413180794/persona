@@ -126,6 +126,8 @@ type ModelCompleteParams struct {
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
 	// Label says what the call is for ("daily", "weekly"): it goes in the hub's log line with the usage.
 	Label string `json:"label,omitempty"`
+	// ModelBinding opts Lark Context into the shared model contract. Old hubs reject the field before inference.
+	ModelBinding string `json:"model_binding,omitempty"`
 	// Models are candidate model ids tried in order (#10398): an error, a timeout, an empty reply or one not matching
 	// json_schema moves to the next. Each runs on a provider the user configured that offers it; the user can switch
 	// the list off or replace it in Settings › Model configuration. Empty: the purpose's model, as before.
@@ -171,6 +173,9 @@ type ModelCompleteResult struct {
 	JSON json.RawMessage `json:"json,omitempty"`
 	// Model is the model that answered (as the upstream says).
 	Model string `json:"model"`
+	// Provider and Effort report the resolved Lark Context binding for direct calls.
+	Provider string `json:"provider,omitempty"`
+	Effort   string `json:"effort,omitempty"`
 	// StopReason is end_turn, or max_tokens when the answer was cut off.
 	StopReason string     `json:"stop_reason"`
 	Usage      ModelUsage `json:"usage"`

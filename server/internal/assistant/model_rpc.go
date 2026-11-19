@@ -92,6 +92,9 @@ func (s *Service) extensionComplete(ctx context.Context, raw json.RawMessage) (a
 		return nil, err
 	}
 	storageKey := call.StorageKey()
+	if p.ModelBinding != "" && (storageKey != "lark-context" || p.ModelBinding != larkContextModelPurposeID) {
+		return nil, invalidModelParams("model_binding is reserved for Lark Context")
+	}
 	if storageKey == "lark-context" {
 		return s.completeLarkContextModel(ctx, "extension "+call.Extension, c)
 	}
@@ -116,6 +119,9 @@ func (s *Service) purposeComplete(ctx context.Context, raw json.RawMessage) (any
 	}
 	if !managerPurposes[call.Purpose] {
 		return nil, invalidModelParams("purpose %q is not one the manager calls", call.Purpose)
+	}
+	if call.Params.ModelBinding != "" {
+		return nil, invalidModelParams("model_binding is reserved for Lark Context")
 	}
 	c, err := checkModelCall(call.Params)
 	if err != nil {

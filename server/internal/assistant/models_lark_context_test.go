@@ -145,6 +145,7 @@ func TestLarkContextModelSettingsAndLegacyRecords(t *testing.T) {
 	assertCanonical(chosen, 2, chosen)
 	assertLarkContextNativeStart(t, s, f, purposeLarkAgent, chosen)
 	assertLarkContextNativeStart(t, s, f, larkContextModelPurposeID, chosen)
+	assertLarkContextNativeStart(t, s, f, purposeLarkContextAgent, chosen)
 	if uses, err := s.providerModelUses(ctx, chosen.Provider); err != nil || !slices.Equal(uses, []string{"Lark Context"}) {
 		t.Fatalf("provider use must count the canonical assignment once: %v %v", uses, err)
 	}

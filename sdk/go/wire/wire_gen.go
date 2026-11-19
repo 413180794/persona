@@ -5072,7 +5072,8 @@ type LeaderReportEvent struct {
 
 // ModelErrorCode: error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params;
 // assistant_offline (the manager is away: try again); model_unavailable (nothing to call for this extension: the user
-// picks a model for it in Settings › Model configuration); model_paused (the connection is held for quota or load,
+// picks a model for it in Settings › Model configuration); model_local_launcher_required (Lark Context: data.binding
+// carries the local launcher selection and no credentials); model_paused (the connection is held for quota or load,
 // nothing was sent; data ModelPause: try again after until); model_failed (the upstream failed the request: an error
 // status or a dropped connection); model_refused (the model declined to answer this input, a refusal or a content
 // filter: sending it again unchanged gets the same answer, so split it, drop a part or report it; data ModelRefusal);
@@ -5080,19 +5081,20 @@ type LeaderReportEvent struct {
 // one more try; data ModelInvalidOutput); model_candidates_failed (with two or more candidates, every one failed;
 // data ModelCandidatesFailed names how each did; a single candidate that fails answers with its own code and data).
 const (
-	ModelErrorCodeInvalidParams         = "invalid_params"
-	ModelErrorCodeAssistantOffline      = "assistant_offline"
-	ModelErrorCodeModelUnavailable      = "model_unavailable"
-	ModelErrorCodeModelPaused           = "model_paused"
-	ModelErrorCodeModelFailed           = "model_failed"
-	ModelErrorCodeModelRefused          = "model_refused"
-	ModelErrorCodeTimeout               = "timeout"
-	ModelErrorCodeInvalidOutput         = "invalid_output"
-	ModelErrorCodeModelCandidatesFailed = "model_candidates_failed"
+	ModelErrorCodeInvalidParams              = "invalid_params"
+	ModelErrorCodeAssistantOffline           = "assistant_offline"
+	ModelErrorCodeModelUnavailable           = "model_unavailable"
+	ModelErrorCodeModelLocalLauncherRequired = "model_local_launcher_required"
+	ModelErrorCodeModelPaused                = "model_paused"
+	ModelErrorCodeModelFailed                = "model_failed"
+	ModelErrorCodeModelRefused               = "model_refused"
+	ModelErrorCodeTimeout                    = "timeout"
+	ModelErrorCodeInvalidOutput              = "invalid_output"
+	ModelErrorCodeModelCandidatesFailed      = "model_candidates_failed"
 )
 
 // ModelErrorCodes are the values of ModelErrorCode, in order.
-var ModelErrorCodes = []string{"invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"}
+var ModelErrorCodes = []string{"invalid_params", "assistant_offline", "model_unavailable", "model_local_launcher_required", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"}
 
 // ModelMessage: one turn of the conversation: the user's, or the model's earlier answer.
 type ModelMessage struct {
@@ -5125,6 +5127,9 @@ type ModelCompleteParams struct {
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
 	// What the call is for (daily, weekly…): it goes in the hub's log line with the usage.
 	Label string `json:"label,omitempty"`
+	// Lark Context opts into the shared binding before submitting a model call. Older hubs reject this field before
+	// inference.
+	ModelBinding string `json:"model_binding,omitempty"`
 	// Candidate model ids, tried in order (#10398): one that fails (model_failed, model_refused, model_paused), runs
 	// past timeout_seconds, answers with no text (model_failed) or, with json_schema, still does not match it after its
 	// second try (invalid_output) hands over to the next. Each runs on a provider the user configured in Settings ›
@@ -5155,6 +5160,10 @@ type ModelCompleteResult struct {
 	JSON json.RawMessage `json:"json,omitempty"`
 	// The model that answered.
 	Model string `json:"model"`
+	// The resolved provider on direct Lark Context calls.
+	Provider string `json:"provider,omitempty"`
+	// The resolved effort on direct Lark Context calls, when set.
+	Effort string `json:"effort,omitempty"`
 	// end_turn, or max_tokens when the answer was cut off.
 	StopReason string `json:"stop_reason"`
 	// What the call spent; with models, every attempt's requests together.

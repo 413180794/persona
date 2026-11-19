@@ -41,7 +41,11 @@ const (
 )
 
 // purposeLarkAgent is the model purpose the Feishu plugin's /agent conversations run under.
-const purposeLarkAgent = "lark.agent"
+const (
+	purposeLarkAgent = "lark.agent"
+	// The new extension uses an alias that an older Hub rejects before launching a session.
+	purposeLarkContextAgent = "lark.context.agent"
+)
 
 // Who noted an origin: the start itself, or the backfill (which a redo may judge again).
 const (
