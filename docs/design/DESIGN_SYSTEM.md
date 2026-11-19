@@ -1186,16 +1186,18 @@ chat (#5033), where the panel only offers models and says plainly which one the 
   Search is flat: matching launcher summaries, then matching model rows naming their launcher even on touch screens;
   typed-ID rows explicitly name the launcher they send. Why: identical letter tiles and a separate rail hid the account
   and model choices from people comparing several launchers. The single column exposes that information progressively.
-  Rows are two lines, with hover-revealed Favorite and Customize; the model that runs has a static selected fill, no check.
-  Customize opens a 264 px flyout to the panel's left: the effort slider, Fast, the engine, an exact catalog
-  reference-price line where known, and a footer that says whether the setup is the recommended one, customized or saved.
-  A launcher summary adds a weekly-remaining bar only when the existing launcher quota answer supplies a weekly ratio;
-  its tooltip names the window and reset time.
-- Provider identity on model rows (#7360): search results and saved setups name their owning launcher at the start of the
-  second line, on web, Android and Apple. The rest of that line keeps the model ID, resolved model, description or
-  typed-model explanation; an expanded launcher may keep its description alone. A sign-in, key or model-availability error
-  that offers a repair names the affected launcher in its title, and the repair opens that launcher's provider settings.
-  This is a content rule, not a new badge, token or visual style.
+  Rows have two lines with hover-revealed Favorite and Customize; the model that runs has a static selected fill, no
+  check. Customize opens a 264 px flyout to the panel's left: the effort slider, Fast, the engine, an exact catalog
+  reference-price line where known, and a footer that says whether the setup is the recommended one, customized or
+  saved. A launcher summary adds its weekly-remaining bar only when the existing launcher quota answer supplies a
+  weekly ratio; its tooltip names the window and reset time.
+- Provider identity on model rows (#7360): every row in New Agent and in saved setups and flat search results names
+  its owning launcher at the start of the second line, on web, Android and Apple. The rest of that line keeps the model
+  ID, resolved model, description or typed-model explanation; an expanded launcher's model rows may keep the description
+  alone. A sign-in, key or model-availability error that offers a repair names the affected launcher in its title, and
+  the repair opens that launcher's provider settings. This is a content rule, not a new badge, token or visual style.
+  Launcher summaries retain each provider's full name as their accessible name and tooltip; the former provider rail
+  and its shortened captions are replaced by the shared column (#10249).
 - Model families (`web/src/lib/model-families.ts`, `docs/web/web.md` "Model pill and model panel"): inside a provider
   group, each family's name is a 11.5 px `text-submeta` line in `ink-3` (12 px side padding, 6 px above, 2 px below)
   over its rows; its right end holds the fold, a text button in the same size and colour ("Earlier versions · N" with
