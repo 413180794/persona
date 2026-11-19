@@ -66,7 +66,7 @@ export interface TaskPlan {
   suggestion?: RuleSuggestion;
 }
 
-export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice" | "brief" | "inbox_suggestion" | "urgent_call";
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice" | "brief" | "inbox_suggestion" | "urgent_call" | "channel_notice";
 
 export interface FeedItem {
   id: string;

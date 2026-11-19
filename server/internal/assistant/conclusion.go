@@ -121,10 +121,11 @@ func (s *Service) conclusionCard(ctx context.Context, t Todo, a acceptAsk) *feis
 		return c.Note(acceptedNote(l, &a))
 	}
 	var bs []feishubot.Button
+	round := a.AskedAt.Format(timeKeyLayout)
 	hint := "assistant-reports.verdict_reply_hint"
 	switch {
 	case decideAsk(&a) && a.Recommend != "":
-		bs = append(bs, feishubot.Btn(i18n.T(l, "assistant-reports.verdict_take"), feishubot.Primary, map[string]any{"a": "accept", "id": t.ID}))
+		bs = append(bs, feishubot.Btn(i18n.T(l, "assistant-reports.verdict_take"), feishubot.Primary, map[string]any{"a": "accept", "id": t.ID, "asked_at": round, "opt": a.Recommend}))
 		hint = "assistant-reports.verdict_decide_hint"
 	case decideAsk(&a):
 		hint = "assistant-reports.verdict_decide_hint_none"
@@ -142,7 +143,7 @@ func (s *Service) conclusionCard(ctx context.Context, t Todo, a acceptAsk) *feis
 		var more []feishubot.Button
 		for i, o := range a.Options {
 			if i > 0 {
-				more = append(more, feishubot.Btn(clip(o.Label, 20), feishubot.Default, map[string]any{"a": "accept", "id": t.ID, "opt": o.Label}))
+				more = append(more, feishubot.Btn(clip(o.Label, 20), feishubot.Default, map[string]any{"a": "accept", "id": t.ID, "asked_at": round, "opt": o.Label}))
 			}
 		}
 		if len(more) > 0 {
@@ -151,7 +152,7 @@ func (s *Service) conclusionCard(ctx context.Context, t Todo, a acceptAsk) *feis
 		var cannot []feishubot.Button
 		for _, r := range ownerResponses {
 			cannot = append(cannot, feishubot.Btn(i18n.T(l, "assistant-reports.decision_response_"+r), feishubot.Default,
-				map[string]any{"a": "accept", "id": t.ID, "resp": r}))
+				map[string]any{"a": "accept", "id": t.ID, "asked_at": round, "resp": r}))
 		}
 		c.Buttons(cannot...)
 	}

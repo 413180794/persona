@@ -110,7 +110,7 @@ func (s *Service) retryAcceptance(now time.Time) {
 		}
 		cp := *a
 		b.mu.Unlock()
-		mid, err := s.botPostKeyed(ctx, "", s.acceptCard(ctx, t, cp, false), askSummary(s.botLang(ctx), &cp), acceptCardKey(id, cp.AskedAt))
+		mid, err := s.postAcceptCard(ctx, t, cp)
 		if err != nil {
 			s.logf("task %s: acceptance: %v (tried again on the next tick)", id, err)
 			continue

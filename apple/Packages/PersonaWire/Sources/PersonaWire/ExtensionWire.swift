@@ -2067,11 +2067,14 @@ public nonisolated struct ExtensionChannelCapabilities: Codable, Hashable, Senda
     public var maxText: Int?
     public var asks: String?
     public var push: Bool?
+    /// Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit
+    /// transport selection by the operator.
+    public var feishuOwnerCards: Bool?
     public var typing: Bool?
     public var progress: Bool?
     public var threads: Bool?
 
-    public init(imagesIn: Bool? = nil, filesIn: Bool? = nil, voiceIn: Bool? = nil, format: String? = nil, maxText: Int? = nil, asks: String? = nil, push: Bool? = nil, typing: Bool? = nil, progress: Bool? = nil, threads: Bool? = nil) {
+    public init(imagesIn: Bool? = nil, filesIn: Bool? = nil, voiceIn: Bool? = nil, format: String? = nil, maxText: Int? = nil, asks: String? = nil, push: Bool? = nil, feishuOwnerCards: Bool? = nil, typing: Bool? = nil, progress: Bool? = nil, threads: Bool? = nil) {
         self.imagesIn = imagesIn
         self.filesIn = filesIn
         self.voiceIn = voiceIn
@@ -2079,6 +2082,7 @@ public nonisolated struct ExtensionChannelCapabilities: Codable, Hashable, Senda
         self.maxText = maxText
         self.asks = asks
         self.push = push
+        self.feishuOwnerCards = feishuOwnerCards
         self.typing = typing
         self.progress = progress
         self.threads = threads
@@ -2092,6 +2096,7 @@ public nonisolated struct ExtensionChannelCapabilities: Codable, Hashable, Senda
         case maxText = "max_text"
         case asks
         case push
+        case feishuOwnerCards = "feishu_owner_cards"
         case typing
         case progress
         case threads
@@ -2106,6 +2111,7 @@ public nonisolated struct ExtensionChannelCapabilities: Codable, Hashable, Senda
         self.maxText = try? c.decodeIfPresent(Int.self, forKey: .maxText)
         self.asks = try? c.decodeIfPresent(String.self, forKey: .asks)
         self.push = try? c.decodeIfPresent(Bool.self, forKey: .push)
+        self.feishuOwnerCards = try? c.decodeIfPresent(Bool.self, forKey: .feishuOwnerCards)
         self.typing = try? c.decodeIfPresent(Bool.self, forKey: .typing)
         self.progress = try? c.decodeIfPresent(Bool.self, forKey: .progress)
         self.threads = try? c.decodeIfPresent(Bool.self, forKey: .threads)

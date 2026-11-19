@@ -760,6 +760,11 @@ export interface ChannelCapabilities {
   max_text?: number;
   asks?: string;
   push?: boolean;
+  /**
+   * Can deliver the paired Feishu bot's native cards to the owner's private chat. Requires push and explicit
+   * transport selection by the operator.
+   */
+  feishu_owner_cards?: boolean;
   typing?: boolean;
   progress?: boolean;
   threads?: boolean;
@@ -4663,6 +4668,51 @@ export type ChannelSendKind = "answer" | "note" | "ask" | "push" | (string & {})
 export const CHANNEL_SEND_KINDS = ["answer", "note", "ask", "push"] as const;
 
 /**
+ * A full Persona client confirmed the stored grounded draft. The program resolves the original notice id locally; it
+ * gets no new recipient, text or tool arguments.
+ */
+export interface ChannelNoticeConfirmParams {
+  contribution: string;
+  id: string;
+}
+
+/**
+ * An untrusted display-only item. Requires the explicit channel.notice grant and an existing main conversation. The
+ * hub derives the attribution from the calling extension.
+ */
+export interface ChannelNoticeParams {
+  contribution: string;
+  notice: ChannelNotice;
+}
+
+export interface ChannelNotice {
+  id: string;
+  kind: ChannelNoticeKind;
+  source_url: string;
+  text: string;
+  forward: string;
+}
+
+export type ChannelNoticeKind = "grounded_reply" | "task_signal" | "agent_suggestion" | (string & {});
+export const CHANNEL_NOTICE_KINDS = ["grounded_reply", "task_signal", "agent_suggestion"] as const;
+
+export interface ChannelNoticeResult {
+  id: string;
+  status: ChannelNoticeReceipt;
+}
+
+export type ChannelNoticeReceipt = "stored" | "duplicate" | (string & {});
+export const CHANNEL_NOTICE_RECEIPTS = ["stored", "duplicate"] as const;
+
+export interface ChannelNoticeStatusParams {
+  contribution: string;
+}
+
+export interface ChannelNoticeStatusResult {
+  ready: boolean;
+}
+
+/**
  * channel.receive: one of the owner's messages (only the owner's). Answered once the hub has it, deduplicated by id
  * and queued, not after the turn.
  */
@@ -4735,6 +4785,21 @@ export interface ChannelSendParams {
   kind: ChannelSendKind;
   /** The owner's message it answers (ChannelMessage.id). */
   reply_to?: string;
+  feishu_card?: ChannelFeishuOwnerCard;
+}
+
+/**
+ * A native interactive card for the paired owner's DM. Register the ref and pairing in the selected channel's outbox
+ * before the hub sends with its paired bot. A second call with the verified message_id confirms the same delivery.
+ */
+export interface ChannelFeishuOwnerCard {
+  purpose: string;
+  app_id: string;
+  owner_open_id: string;
+  /** The complete Feishu JSON 2.0 card serialized as message content. */
+  card: string;
+  /** The hub read this interactive message back in the paired owner's DM. Finalize the matching outbox entry. */
+  message_id?: string;
 }
 
 /**
@@ -4742,6 +4807,10 @@ export interface ChannelSendParams {
  */
 export interface ChannelSendResult {
   message_id?: string;
+  /**
+   * Only for feishu_card. The matching paired delivery is durably prepared; the hub may send with its stable ref.
+   */
+  prepared?: boolean;
 }
 
 /**
@@ -6233,6 +6302,9 @@ export const CALLS: Record<string, Call> = {
   "sent.record": { from: "program", params: "ConnectorSentRecordParams", result: "Empty" },
   "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
   "channel.receive": { from: "program", params: "ChannelReceiveParams", result: "Empty" },
+  "channel.receive_notice": { from: "program", params: "ChannelNoticeParams", result: "ChannelNoticeResult" },
+  "channel.notice_status": { from: "program", params: "ChannelNoticeStatusParams", result: "ChannelNoticeStatusResult" },
+  "channel.confirm_notice": { from: "hub", params: "ChannelNoticeConfirmParams", result: "Empty" },
   "channel.status": { from: "program", params: "ChannelStatusParams", result: "Empty" },
   "channel.send": { from: "hub", params: "ChannelSendParams", result: "ChannelSendResult" },
   "channel.typing": { from: "hub", params: "ChannelTypingParams", result: "Empty" },

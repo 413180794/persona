@@ -98,6 +98,7 @@ type fakeOpenAPI struct {
 	read  map[string]any // message id -> what GET /messages/:id answers (its items)
 	// rejectInteractive, when set, is the business code returned for interactive message sends (card rejection).
 	rejectInteractive int
+	echoSentCards     bool             // make successful interactive sends visible to GET /messages/:id
 	rejectReply       int              // business code for /reply, e.g. 230011 parent withdrawn
 	readCode          map[string]int   // message id -> business code GET /messages/:id answers instead of its items
 	readFail          map[string]int   // message id -> how many more GETs answer HTTP 500 (the client reads again)
@@ -170,6 +171,7 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 			code := 0
 			f.mu.Lock()
 			reject := f.rejectInteractive
+			echo := f.echoSentCards
 			replyGone := f.rejectReply
 			f.mu.Unlock()
 			switch {
@@ -178,7 +180,19 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 			case reject != 0 && strings.Contains(string(body), `"msg_type":"interactive"`):
 				code = reject
 			}
-			reply(map[string]any{"code": code, "data": map[string]any{"message_id": fmt.Sprintf("om_bot%d", n), "chat_id": "oc_p2p"}})
+			id := fmt.Sprintf("om_bot%d", n)
+			if code == 0 && echo {
+				var msg struct {
+					Chat string `json:"receive_id"`
+					Kind string `json:"msg_type"`
+				}
+				_ = json.Unmarshal(body, &msg)
+				f.sentBy(id, msg.Chat, "cli_test")
+				f.mu.Lock()
+				f.read[id].([]map[string]any)[0]["msg_type"] = msg.Kind
+				f.mu.Unlock()
+			}
+			reply(map[string]any{"code": code, "data": map[string]any{"message_id": id, "chat_id": "oc_p2p"}})
 		default:
 			reply(map[string]any{"code": 404, "msg": "not faked: " + p})
 		}

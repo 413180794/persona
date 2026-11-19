@@ -19,7 +19,9 @@ import (
 // its own.
 const (
 	// MethodChannelReceive: ChannelReceive → {}: the owner's message from a plugin's channel, taken (not its turn).
-	MethodChannelReceive = "channels.receive"
+	MethodChannelReceive      = "channels.receive"
+	MethodChannelNotice       = "channels.notice"
+	MethodChannelNoticeStatus = "channels.notice_status"
 	// MethodChannelUnbound: ChannelUnbound → {}: clear the channel's pending turns and text questions before
 	// signing out finishes, including a connector that revoked its own authorization.
 	MethodChannelUnbound = "channels.unbound"
@@ -71,6 +73,7 @@ const (
 	// chat_id? names another chat to send into (and to fall back to when the parent was withdrawn) and in_thread? puts
 	// a reply in the parent's thread; the hub refuses any chat but the owner's private chat and the group chats the
 	// owner opted in, and with neither field the call is what it always was.
+	// kind "conclusion" or "push" selects the owner's configured channel transport for a private proactive card.
 	FeishuPost = "feishu.post"
 	// FeishuText: {reply_to?, text, chat_id?, in_thread?, uuid?, no_detour?, full_answer?} → {message_id}: plain text as a reply,
 	// else into the owner's chat; chat_id, in_thread, uuid (cut to 50 characters here) and no_detour are FeishuPost's.
@@ -243,6 +246,8 @@ type FeishuFeatures struct {
 
 // FeishuStatus is feishu.status's answer.
 type FeishuStatus struct {
+	// OwnerCardChannel is the selected extension/channel transport for owner-only native cards.
+	OwnerCardChannel string `json:"owner_card_channel,omitempty"`
 	// Ready: switched on, connected and paired: the bot can post now.
 	Ready    bool           `json:"ready"`
 	Enabled  bool           `json:"enabled"`

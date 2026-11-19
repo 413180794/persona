@@ -719,6 +719,12 @@ func (s *Service) channelPushTold(parent context.Context, machine, session, titl
 	var copies []pushCopy
 	for _, v := range s.textChannels(ctx) {
 		if v.Capabilities.Push && featureOn(v, channel.FeaturePushes) && (took == nil || !took(v.ID)) {
+			if v.Capabilities.FeishuOwnerCards {
+				st, err := s.feishuStatusKept(ctx)
+				if err == nil && st.Ready && st.Features.Pushes && st.OwnerCardChannel == v.Plugin+"/"+v.ID {
+					continue // the native copy already targets this extension and the same private chat
+				}
+			}
 			to = append(to, v.ID)
 			copies = append(copies, pushCopy{channel: v.ID, name: cmp.Or(v.Name, v.ID)})
 		}

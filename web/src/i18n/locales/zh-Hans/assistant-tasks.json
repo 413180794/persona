@@ -1,4 +1,11 @@
 {
+  "channel_notice_send": "确认并发送",
+  "channel_notice_confirm": "将上面的建议回复发送到原飞书会话？",
+  "channel_notice_sent": "已发送",
+  "channel_notice_unconfirmed": "发信结果未确认，请核对原飞书会话。",
+  "channel_notice_source": "扩展通知 · {extension}",
+  "channel_notice_original": "打开飞书原文",
+  "channel_notice_context": "源对话摘录",
   "workspace": "工作区",
   "workspace_new": "新建",
   "workspace_existing": "使用已有",

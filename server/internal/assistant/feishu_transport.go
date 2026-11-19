@@ -53,6 +53,9 @@ func (s *Service) botPostTo(ctx context.Context, to feishuTarget, replyTo string
 		MessageID string `json:"message_id"`
 	}
 	p := map[string]any{"reply_to": replyTo, "card": s.workbenchStamp(ctx, card).JSON(), "fallback": fallback}
+	if label, ok := ctx.Value(feishuSendKey{}).(feishuSend); ok && (label.kind == "conclusion" || label.kind == "push") {
+		p["kind"] = label.kind
+	}
 	if key != "" {
 		p["uuid"] = key
 	}
