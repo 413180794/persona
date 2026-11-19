@@ -3600,6 +3600,10 @@ The manager ↔ node protocol (the `node.*`, `sessions.*`, `session.*`… RPC ov
   published reply wins over a later connection closure. `node-update-check` adds optional `resident_handover: true`; resident uploads and ordinary reloads
   require it before installing or draining a replacement. Startup rollback to a legacy image releases, rather than inherits, the listener/run lock.
   This resident reload path retains the existing five-second reconnect grace; it is separate from slot blue-green promotion.
+- **Node update preflight failures (#10919).** The optional node-to-manager `node.update.preflight_failed` event
+  carries `{id, error}` after a committed upload fails the installed executable's resident reload check. The manager
+  fails the deploy waiting on that transaction ID with the supplied error. Older managers ignore the event, while
+  older nodes omit it and keep the existing confirmation flow. Local rollback and the protocol floor are unchanged.
 - **Builds.** The build string (`version`, `node_version` in the machine list) no longer decides compatibility. It is still the upgrade policy: another build sets `node_mismatch` (the **Redeploy** offer), the hub's automatic redeploy after it updates itself (`devices.update_nodes`) and a deploy's wait for the node to come back on the hub's build. `node_protocol` in the machine list is the protocol the node announced (absent: from before the handshake).
 
 ## Engines
