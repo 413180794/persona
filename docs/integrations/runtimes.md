@@ -501,7 +501,10 @@ node's shell check. Shell and managed launchers keep their own execution context
 A chat gets Persona's MCP server once, named `persona`, through ACP `mcpServers`. `agy` defers the tools over its
 declaration budget, largest first, and has no `call_mcp_tool` for servers passed through ACP, so an assistant chat's
 server runs behind `integrations/antigravity/mcp-proxy.mjs`, which adds a small `persona_call` tool that calls any
-Persona tool by name (#7333).
+Persona tool by name (#7333). The proxy declares only the tools larger than `persona_call`, so it is always the smallest
+declared and never the one deferred, however many small tools connectors add (sizes are what agy declares of a tool: its
+name, description and input schema). The others stay callable through it: `persona_call` with no name lists every tool,
+and those left out with their description and arguments (#10756).
 
 Implementation: `integrations/antigravity/lib/runtime.js` and `integrations/antigravity/lib/acp.js`.
 
