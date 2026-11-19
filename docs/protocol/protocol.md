@@ -4271,6 +4271,13 @@ Types are in the channel section of `assistantwire`; the hub side is `hub/assist
 
 `Dial`, `Conn` (the adapter between WebSocket and rpc lines), `Keepalive`, and `Client`: dial, handshake (`HelloMethod`, `HelloParams`, `OnHello`), answer the hub's calls and events, and reconnect when dropped:
 starting at 1 second and doubling up to 1 minute; if a connection lasted over 1 minute before dropping, counting restarts at 1 second. When the token is rejected (401, close code 4002 / 4003, handshake returns `wrong_identity`), it waits the full 1 minute every time.
+
+- **A wait ends early when the hub comes back** (#10743). A laptop that slept failed a try at each dark wake, so its wait is usually at the full minute when it wakes. A wait longer than 3 seconds therefore asks the hub's `GET /api/v1/health` every 2 seconds, giving each request up after 2 seconds. Only a 2xx whose body says `"ok": true` counts as the hub answering.
+  - The probe uses the client's own HTTP client, or the default one as the bus dial does, so it goes the bus's own way to the hub: pinned to its key, through a proxy, over an SSH local forward. Something that accepts connections for a hub it cannot reach does not pass for the hub: a forward whose tunnel stalled gives no answer in time, and a proxy whose upstream is gone answers 502.
+  - If the hub did not answer when the wait began and answers now, the client tries again at once.
+  - If the hub answered when the wait began, the try failed past its health (a reset during the handshake, a bus that refuses for now), and that wait runs to its end. A hub whose health answers but whose bus does not is still tried only as often as the backoff allows, and it gets one probe per wait.
+  - A rejected token's wait is never cut short.
+
 While not connected (or the handshake isn't done), `Call` and `Notify` return `ErrOffline`.
 The assistant uses `assistant.BusHub` (`server/internal/assistant/bus.go`), a wrapper around it: it keeps the handshake answer, maps the hub's error codes back, handles the hub's events in order, and reports a full snapshot on every connect.
 
