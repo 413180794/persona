@@ -3044,6 +3044,7 @@ Typing into someone else's terminal is the riskiest thing this App does. Before 
 | `codex_first_unconfirmed` | The first message to a Codex waiting for one was typed, but its thread didn't appear within 45 seconds: it may still come, don't send it again | `delivered: "unknown"` |
 | `codex_waiting` | Modes, the queue or forking on a Codex still waiting for its first message: they need its thread | `delivered: "none"` |
 | `codex_compact_busy` | `/compact` to a Codex on its app-server while a turn runs there: Codex's compaction would replace the turn ([codex.md](../integrations/codex.md) "Sessions on the daemon (app-server route)") | `delivered: "none"` |
+| `codex_writer_busy` | The selected Codex app-server reports that another process already holds this thread's writer during resume or a turn; no other app-server is tried | `delivered: "none"`, `detail` (the app-server's diagnostic, including its thread ID) |
 | `launcher_other_kind` | One of the assistant's conversations, and the message picks a `launcher` of the other agent kind (Claude Code vs Codex). The manager refuses it before the node is asked: a conversation keeps the agent it started on ([assistant.md](../assistant/assistant.md), #4662) | `delivered: "none"`, `conversation_agent`, `launcher`, `launcher_agent` |
 
 - Gray suggested input (Claude's predicted next line, a new session's `Try "…"`) doesn't count as a draft: telling them apart needs a colored screen read (`pane.read` with `format: ansi`) to see SGR 2 (dim);
