@@ -47,6 +47,16 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	}
 	admit := h.opts.Admission.AdmitPayload
 	kind := "feishu-event"
+	if env.Header.EventType == feishubot.EventRecalled {
+		kind, admit = "feishu-recall", h.opts.Admission.AdmitExclusivePayload
+		if eventID == "" {
+			var recall feishubot.Recalled
+			if err := json.Unmarshal(env.Event, &recall); err != nil {
+				return nil, err
+			}
+			eventID = recall.MessageID
+		}
+	}
 	if env.Header.EventType == feishubot.EventCardAction {
 		// After an ambiguous callback, do not accept a redelivery or a
 		// later card press until the original action is reconciled.
@@ -98,7 +108,10 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	case feishubot.EventRecalled:
 		var ev feishubot.Recalled
 		if json.Unmarshal(env.Event, &ev) == nil {
-			h.botRecalled(ev)
+			if err := h.botRecalled(ctx, eventID, ev); err != nil {
+				delegated = true // the original recall is still needed for reconciliation
+				return nil, err
+			}
 		}
 	case feishubot.EventP2PEntered:
 		var ev feishubot.P2PEntered
@@ -117,20 +130,35 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 // topic group the owner opted in): one not in its conversation yet is not sent. Recalls elsewhere (another group,
 // someone else's chat) and by an admin are not the owner's. In a group the event does not say whose message it was, so
 // only a recall of a message the hub handed to the assistant is passed on (the owner's alone).
-func (h *Manager) botRecalled(ev feishubot.Recalled) {
+func (h *Manager) botRecalled(ctx context.Context, eventID string, ev feishubot.Recalled) error {
 	_, set := h.botAPI()
 	if set.Owner == nil || ev.MessageID == "" || !botChatAllowed(set, ev.ChatID) {
-		return
+		return nil
 	}
 	if ev.ChatID != set.Owner.ChatID && !h.handedGroupMessage(ev.MessageID) {
-		return // in a group only the owner's messages that were handed over matter; the event does not say whose it was
+		return nil // in a group only the owner's messages that were handed over matter; the event does not say whose it was
 	}
 	if ev.RecallType != "" && ev.RecallType != "message_owner" {
-		return
+		return nil
 	}
-	if err := h.notifyAssistant(assistantwire.EventFeishuRecalled, assistantwire.FeishuRecalled{MessageID: ev.MessageID}); err != nil {
+	req := assistantwire.FeishuRecalled{MessageID: ev.MessageID, AdmissionEventID: eventID}
+	if h.opts.Admission != nil {
+		if eventID == "" {
+			return errors.New("owner recall lacks a stable event ID")
+		}
+		var receipt struct{ Stored bool }
+		if err := h.callAssistant(ctx, assistantwire.MethodFeishuRecall, req, &receipt); err != nil {
+			return err
+		}
+		if !receipt.Stored {
+			return errors.New("owner recall lacks a durable acknowledgement")
+		}
+		return nil
+	}
+	if err := h.notifyAssistant(assistantwire.EventFeishuRecalled, req); err != nil {
 		h.logf("bots: tell the assistant of a recall: %v", err)
 	}
+	return nil
 }
 
 // botSeenKeep is how many message ids the hub remembers: Feishu delivers again what it thinks was missed. The

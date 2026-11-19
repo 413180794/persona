@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -56,8 +57,9 @@ type botState struct {
 	Current botTarget             `json:"current"`
 	Threads map[string]*botThread `json:"threads,omitempty"`
 	// Runs are an older hub's turns being answered: moved to the channels' runs (takeLegacyBotRuns).
-	Runs []*botRun `json:"runs,omitempty"`
-	Seen []string  `json:"seen,omitempty"`
+	Runs     []*botRun            `json:"runs,omitempty"`
+	Seen     []string             `json:"seen,omitempty"`
+	Recalled map[string]time.Time `json:"recalled,omitempty"`
 	// Cards are the cards asking what is asked that are still open in the chat, by interaction id: only where each
 	// is and what it answers (never what it says), so a card answered elsewhere after a restart is still closed.
 	Cards map[string]*botCardRef `json:"cards,omitempty"`
@@ -164,6 +166,50 @@ func (s *Service) FeishuRecalled(p FeishuRecalled) {
 	go s.recallChannelRun(channel.Feishu, p.MessageID, channel.ClientMsgID(channel.Feishu, p.MessageID))
 }
 
+// An action that can have changed a running turn remains pending even if
+// its recall marker was stored. A remote card update/interrupt has its own outcome.
+func (s *Service) acceptFeishuRecall(ctx context.Context, p FeishuRecalled) error {
+	if s.maintenanceGate == nil || s.store() == nil || p.MessageID == "" || p.AdmissionEventID == "" {
+		return errors.New("durable Feishu recall is unavailable")
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	done, err := s.maintenanceGate.ContinueExclusivePayload("feishu-recall", "feishu-recall-apply", p.AdmissionEventID, data)
+	if err != nil {
+		return err
+	}
+	s.noteRecalled(p.MessageID)
+	b := &s.fbot
+	b.mu.Lock()
+	s.loadBotLocked(ctx)
+	if !b.loaded {
+		b.mu.Unlock()
+		return errors.New("Feishu recall state could not be read")
+	}
+	now := b.clock()
+	if b.st.Recalled == nil {
+		b.st.Recalled = map[string]time.Time{}
+	}
+	for id, at := range b.st.Recalled {
+		if now.Sub(at) > feishuRecalledKeep {
+			delete(b.st.Recalled, id)
+		}
+	}
+	b.st.Recalled[p.MessageID] = now
+	err = s.saveBotStateLocked()
+	b.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if s.recallChannelRun(channel.Feishu, p.MessageID, channel.ClientMsgID(channel.Feishu, p.MessageID)) {
+		return errors.New("Feishu recall external effects need reconciliation")
+	}
+	done()
+	return nil
+}
+
 // noteRecalled remembers that the owner recalled message id, for feishuRecalledKeep.
 func (s *Service) noteRecalled(id string) {
 	b := &s.fbot
@@ -186,8 +232,15 @@ func (s *Service) botRecalled(id string) bool {
 	b := &s.fbot
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	_, ok := b.recalled[id]
-	return ok
+	if _, ok := b.recalled[id]; ok {
+		return true
+	}
+	if s.maintenanceGate != nil {
+		s.loadBotLocked(context.Background())
+		at := b.st.Recalled[id]
+		return !at.IsZero() && b.clock().Sub(at) <= feishuRecalledKeep
+	}
+	return false
 }
 
 // feishuTurnWait is how long a message waits for the one before it to go into its conversation. Most get there in a

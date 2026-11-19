@@ -1122,6 +1122,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		return nil
 	}
 	byID := map[string]*proc.Conn{}
+	admission := larkAdmissionRPC(p, ps.h)
+	if admission != nil {
+		s.Env = append(s.Env, "PERSONA_LARK_ADMISSION_RPC=1")
+	}
 	s.Handle = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		if current := ps.reg.SnapshotExact(id); current == nil || current.Record.Version != p.Record.Version || !current.Record.UpdatedAt.Equal(p.Record.UpdatedAt) {
 			return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: "retired extension runtime"}
@@ -1132,6 +1136,8 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			return ps.storageCall(ctx, p, method, params)
 		}
 		switch method {
+		case "maintenance.lark.begin", "maintenance.lark.end":
+			return admission.call(host.InvocationRun(ctx), method, params)
 		case "kb.list", "kb.get", "kb.day", "kb.search", "kb.update", "kb.owner", "kb.recent":
 			return ps.extensionKBCall(ctx, id, method, params)
 		case "assistant.conversations", "assistant.messages", "assistant.memory": // assistant.read, assistant.memory.read (extension_assistant_read.go)

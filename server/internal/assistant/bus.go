@@ -641,6 +641,12 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		return map[string]any{}, s.FeishuMessage(ctx, p)
+	case assistantwire.MethodFeishuRecall:
+		var p FeishuRecalled
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"stored": true}, s.acceptFeishuRecall(ctx, p)
 	case assistantwire.MethodFeishuAction:
 		var p FeishuAction
 		if err := decode(&p); err != nil {

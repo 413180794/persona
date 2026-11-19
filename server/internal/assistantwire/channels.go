@@ -27,6 +27,8 @@ const (
 	MethodChannelUnbound = "channels.unbound"
 	// MethodFeishuMessage: FeishuMessage → {}: the owner's message in the Feishu bot's private chat, taken.
 	MethodFeishuMessage = "feishu.message"
+	// MethodFeishuRecall records the owner recall before acknowledging it.
+	MethodFeishuRecall = "feishu.recall_guarded"
 	// MethodFeishuAction: FeishuAction → the card callback's answer (feishubot.CardResponse): the owner pressed one
 	// of the bot's cards. Feishu waits 3 seconds for it.
 	MethodFeishuAction = "feishu.card_action"
@@ -217,7 +219,8 @@ type FeishuOwner struct {
 
 // FeishuRecalled is feishu.recalled's params: the message the owner recalled.
 type FeishuRecalled struct {
-	MessageID string `json:"message_id"`
+	AdmissionEventID string `json:"admission_event_id,omitempty"`
+	MessageID        string `json:"message_id"`
 }
 
 // FeishuFeatures are the Feishu bot's switches (settings bots.feishu, the hub's with its credentials).

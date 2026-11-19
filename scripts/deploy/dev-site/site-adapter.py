@@ -47,6 +47,10 @@ class Adapter:
         self.target = self.spec["target_database"]
         require(identity(self.original, request["databases"]) and identity(self.target, request["databases"])
                 and self.original["cluster"] != self.target["cluster"], "candidate needs a separate PostgreSQL instance")
+        self.rollback = self.spec.get("rollback_artifacts", {})
+        require(set(self.rollback) == {"edge", "slot", "node", "web"} and
+                all(isinstance(v, str) and re.fullmatch(SHA, v) for v in self.rollback.values()),
+                "exact rollback artifacts are not pinned")
         self.driver = Path(self.spec["driver"])
         self.state = self.root / "adapter-state.json"
         self.profile_sha = hashlib.sha256(raw).hexdigest()
@@ -58,7 +62,7 @@ class Adapter:
                 and st.st_mode & 0o022 == 0 and os.access(self.driver, os.X_OK)
                 and hashlib.sha256(self.driver.read_bytes()).hexdigest() == self.spec["driver_sha256"],
                 "site driver changed or is not trusted")
-        payload = dict(self.request, operation=name, context=context)
+        payload = dict(self.request, operation=name, context=dict(context, rollback_artifacts=self.rollback))
         # The rollout entry owns the timeout and kills this process group before
         # attempting recovery. A driver must keep mutating helpers in that group.
         result = subprocess.run([self.driver, name], input=json.dumps(payload), text=True,
@@ -88,7 +92,7 @@ class Adapter:
             require(phase == "idle", "site already has a release attempt")
             live = self.execute("inspect")
             exact(live, ready=True, ingress_proven=True, rollback_proven=True, writers_enumerated=True,
-                  original_database=self.original, target_database=self.target)
+                  original_database=self.original, target_database=self.target, rollback_artifacts=self.rollback)
             return dict(result, ready=True, ingress_proven=True, rollback_proven=True, writers_enumerated=True)
         if action == "fence":
             require(phase == "idle", "fence needs an unused attempt")
@@ -106,8 +110,8 @@ class Adapter:
             restored = self.execute("restore", prior_phase=phase)
             exact(restored, candidate_stopped=True, candidate_writes_admitted=0, original_database=self.original,
                   original_health_commit=self.request["baseline"], original_route=True, originals_untouched=True,
-                  original_linux_ready=True)
-            require(re.fullmatch(SHA, restored["original_web_sha256"]) is not None, "original Web checks missing")
+                  original_linux_ready=True, rollback_artifacts=self.rollback,
+                  original_web_sha256=self.rollback["web"])
             self.write(record, "restored")
             return dict(result, original_route=True, originals_untouched=True, candidate_writes_admitted=0,
                         original_health_commit=restored["original_health_commit"],

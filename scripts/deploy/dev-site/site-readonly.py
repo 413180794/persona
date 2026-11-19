@@ -3,6 +3,7 @@
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,26 @@ def health(port, tls):
     data = json.loads(call(["curl", "-fsS", "--noproxy", "*", "--max-time", "5", *params, url]))
     return {name: data[name] for name in ("ok", "version", "commit")}
 
+
+def rollback_runtime(edge, slot, linux):
+    """Pin the running ELF generations and public Web before staging any candidate."""
+    pids = {"edge": edge["MainPID"], "slot": int(slot), "node": linux["MainPID"]}
+    def start_ticks(pid):
+        return (Path("/proc") / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()[19]
+    def pin(pid):
+        base = Path("/proc") / str(pid)
+        with (base / "exe").open("rb") as elf:
+            return hashlib.file_digest(elf, "sha256").hexdigest()
+    before = {name: start_ticks(pid) for name, pid in pids.items()}
+    digests = {name: pin(pid) for name, pid in pids.items()}
+    index = subprocess.run(["curl", "-fsS", "--noproxy", "*", "--max-time", "5",
+                            "--cacert", RUNTIME / "home/tls/persona-ca.crt",
+                            "https://10.37.119.214:18662/"], check=True, capture_output=True,
+                           timeout=6)
+    digests["web"] = hashlib.sha256(index.stdout).hexdigest()
+    if before != {name: start_ticks(pid) for name, pid in pids.items()}:
+        raise RuntimeError("running generations changed during rollback pinning")
+    return {"pids": pids, "start_ticks": before, "rollback_artifacts": digests}
 
 def service(name):
     flags = ["MainPID", "ActiveState", "ControlGroup", "KillMode", "TimeoutStopUSec"]
@@ -141,6 +162,12 @@ def collect(attempt):
                                   env=dict(os.environ,PERSONA_HOME=str(RUNTIME/"home"))))
     sample("hub_service",lambda:service("persona-dev-hub.service"))
     sample("linux_service",lambda:service("personad-node.service"))
+    def runtime():
+        active = re.search(r"slot [ab] serving [^,]+, build [^,]+, pid ([0-9]+) ", evidence["edge_slot"])
+        if not active:
+            raise RuntimeError("active Hub slot could not be identified")
+        return rollback_runtime(evidence["hub_service"], active[1], evidence["linux_service"])
+    sample("rollback_runtime", runtime)
     if node:=evidence.get("linux_service"):
         sample("linux_cgroup_other_processes",lambda:descendants(node["ControlGroup"],node["MainPID"]))
     def related():

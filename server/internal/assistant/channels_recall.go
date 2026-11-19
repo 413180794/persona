@@ -17,9 +17,9 @@ func recalledResult() *channel.Result { return &channel.Result{Quiet: true, End:
 // the conversation its turn is interrupted, as /stop does (one still queued behind another turn is not: that would
 // stop the other). A run that answers others too goes on without it. A run whose answer is going out, or that was
 // answered already (held), is left alone; a message not taken yet is held back by the caller.
-func (s *Service) recallChannelRun(ch, ref, msgID string) {
+func (s *Service) recallChannelRun(ch, ref, msgID string) (effectsUnverified bool) {
 	if ref == "" {
-		return
+		return false
 	}
 	c := &s.chans
 	c.mu.Lock()
@@ -32,8 +32,9 @@ func (s *Service) recallChannelRun(ch, ref, msgID string) {
 		}
 	}
 	if r == nil || r.Held || r.Recalled || c.answering[r.ID] {
+		unknown := !c.stLoaded || r != nil && !r.Held
 		c.mu.Unlock()
-		return
+		return unknown
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -47,7 +48,7 @@ func (s *Service) recallChannelRun(ch, ref, msgID string) {
 			}
 		}
 		s.channelsChanged()
-		return
+		return true
 	}
 	r.Recalled = true
 	s.saveChannelStateLocked()
@@ -60,11 +61,12 @@ func (s *Service) recallChannelRun(ch, ref, msgID string) {
 	s.logf("channels: %s: its message recalled; the turn is stopped (in the conversation: %v)", r.ID, in)
 	s.finishChannelRun(r, recalledResult()) // not watched yet: its first check ends it
 	if !in {
-		return
+		return true
 	}
 	if err := s.call(ctx, r.MachineID, "session.interrupt", map[string]any{"session_id": r.SessionID}, nil); err != nil {
 		s.logf("channels: %s: interrupt after the recall: %v", r.ID, err)
 	}
+	return true
 }
 
 // runMessageIn: the run's message is in its conversation now (false when that can't be read).

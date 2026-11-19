@@ -7,10 +7,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/egress"
 	"github.com/nwverse/persona/server/internal/extension/host"
@@ -35,10 +38,26 @@ func serveBoxedExtensionForTest() {
 	}
 	var mu sync.Mutex
 	var init extension.HubInfo
+	var hostRPC *pserve.Hub
 	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		hub := init
+		hub, rpc := init, hostRPC
 		mu.Unlock()
+		if r.URL.Path == "/test-admission" && os.Getenv("PERSONA_EXTENSION_ID") == "lark-context" {
+			out := map[string]any{"broker": os.Getenv("PERSONA_LARK_ADMISSION_RPC") == "1",
+				"has_gate_env": os.Getenv(admission.Env) != ""}
+			_, err := os.Stat(r.URL.Query().Get("gate"))
+			out["gate_hidden"] = errors.Is(err, os.ErrNotExist)
+			var receipt struct{ Lease string }
+			if rpc == nil || rpc.Call(r.Context(), "maintenance.lark.begin", struct{}{}, &receipt) != nil {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			} else {
+				out["begin"] = receipt.Lease != ""
+				out["end"] = rpc.Call(r.Context(), "maintenance.lark.end", receipt.Lease, nil) == nil
+			}
+			_ = json.NewEncoder(w).Encode(out)
+			return
+		}
 		out := map[string]any{"home": os.Getenv("HOME"), "proxy": os.Getenv("HTTPS_PROXY"), "hub_url": os.Getenv("PERSONA_HUB_URL"),
 			"init_url": hub.URL}
 		get := func(u, token string) string {
@@ -70,10 +89,10 @@ func serveBoxedExtensionForTest() {
 		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
-	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "boxed", Version: "1.0.0",
-		Init: func(_ context.Context, ip extension.InitializeParams, _ *pserve.Hub) (map[string]any, error) {
+	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: os.Getenv("PERSONA_EXTENSION_ID"), Version: "1.0.0",
+		Init: func(_ context.Context, ip extension.InitializeParams, rpc *pserve.Hub) (map[string]any, error) {
 			mu.Lock()
-			init = ip.Hub
+			init, hostRPC = ip.Hub, rpc
 			mu.Unlock()
 			return nil, nil
 		}})
@@ -119,6 +138,64 @@ func boxedPackageWith(t *testing.T, permissions string) string {
 		"permissions": {%s}}`, runtime.GOOS+"-"+runtime.GOARCH, permissions)
 	_ = os.WriteFile(filepath.Join(dir, extension.ManifestFile), []byte(manifest), 0o644)
 	return dir
+}
+
+func TestLarkAdmissionThroughActualLinuxSandbox(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("needs the Linux sandbox")
+	}
+	if sup := sandbox.Probe(); !sup.Available() {
+		t.Skip("no sandbox here: " + sup.Why)
+	}
+	h, _ := extensionTestHub(t)
+	h.extensions.sandboxes.noDefault = false
+	dir := filepath.Join(t.TempDir(), "private-gate")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g, err := admission.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Control("init", ""); err != nil {
+		t.Fatal(err)
+	}
+	h.opts.Admission = g
+	mux := h.routes()
+	pkg := boxedPackage(t)
+	manifest := filepath.Join(pkg, extension.ManifestFile)
+	raw, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, []byte(strings.Replace(string(raw), `"id": "boxed"`, `"id": "lark-context"`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, preview := call(t, mux, "POST", "/api/v1/extensions/-/preview", h.cfg.Token, fmt.Sprintf(`{"source":%q}`, "dir:"+pkg))
+	if status != 200 {
+		t.Fatalf("preview: %d %v", status, preview)
+	}
+	status, installed := call(t, mux, "POST", "/api/v1/extensions/-/install", h.cfg.Token,
+		fmt.Sprintf(`{"preview_id":%q,"permissions_digest":%q}`, preview["preview_id"], preview["permissions_digest"]))
+	sandboxState, _ := installed["sandbox"].(map[string]any)
+	if status != 200 || sandboxState["active"] != true {
+		t.Fatalf("install: %d %v", status, installed)
+	}
+	path := "/api/v1/extensions/lark-context/test-admission?gate=" + url.QueryEscape(dir)
+	var got map[string]any
+	waitLong(t, "Lark lease RPC from the sandbox", func() bool {
+		status, got = call(t, mux, "GET", path, h.cfg.Token, "")
+		return status == http.StatusOK
+	})
+	if got["begin"] != true || got["end"] != true || got["gate_hidden"] != true || got["has_gate_env"] != false || got["broker"] != true {
+		t.Fatalf("Lark admission capability/filesystem: %v", got)
+	}
+	if _, err := g.Control("close", "sandbox-attempt"); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := call(t, mux, "GET", path, h.cfg.Token, ""); status != http.StatusServiceUnavailable {
+		t.Fatalf("closed gate accepted sandboxed work: %d", status)
+	}
 }
 
 // An extension installed from a directory runs in a sandbox by default: the hub's API through the proxy under

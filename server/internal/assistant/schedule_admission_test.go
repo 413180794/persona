@@ -135,3 +135,32 @@ func TestAdmissionOutboxLostReplyDoesNotReplay(t *testing.T) {
 		t.Fatal("unknown outbox was incorrectly drained")
 	}
 }
+
+func TestNativeFeishuRecallAdmissionKeepsMarkerOnRestart(t *testing.T) {
+	g, control := receiptGate(t)
+	s, _ := stopCardHub(t, FeishuFeatures{Main: true})
+	s.maintenanceGate = g
+	const attempt = "recall-attempt"
+	p := FeishuRecalled{MessageID: "om_fixture_original", AdmissionEventID: "ev_fixture_recall"}
+	parent, err := g.AdmitExclusivePayload("feishu-recall", p.AdmissionEventID, []byte("fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	control("close", attempt)
+	if err := s.acceptFeishuRecall(t.Context(), p); err != nil {
+		t.Fatal(err)
+	}
+	parent()
+	if got := control("check", attempt); got.Phase != "drained" {
+		t.Fatalf("recall did not settle: %+v", got)
+	}
+	// Simulate loss of the in-memory marker while retaining only the stored bot state.
+	s.fbot.mu.Lock()
+	s.fbot.loaded = false
+	s.fbot.recalled = nil
+	s.fbot.st = botState{}
+	s.fbot.mu.Unlock()
+	if !s.botRecalled(p.MessageID) {
+		t.Fatal("original recalled message could dispatch after restart")
+	}
+}
