@@ -1119,6 +1119,18 @@ describe("a message the assistant keeps after it could not go in", () => {
     expect(host.querySelector("[data-outbox] [data-in-doubt]")?.getAttribute("data-in-doubt")).toBe("unknown");
     expect(host.textContent).toContain("Synthetic replayed message");
   });
+  it.each([true, false])("shows a signed-out device's reason and only Delete (assistant: %s)", async (assistant) => {
+    const error = "Not sent: the device that sent it was signed out";
+    captured.session = {
+      machine_id: "hub", session_id: "c1", title: "Conversation", cwd: "/code", status: "idle", assistant,
+      undelivered: [{ ...kept, state: "failed", delete_only: true, error, computer: assistant ? undefined : "Synthetic laptop" }],
+    } as Session;
+    await letKeptChunkIn();
+    act(() => root.render(<ChatView mid="hub" sid="c1" assistant={assistant} />)); await flush();
+    const line = host.querySelector('[data-undelivered="k1"] [role="alert"]');
+    expect(line?.querySelector("span")?.textContent).toBe(error);
+    expect([...line!.querySelectorAll("button")].map((b) => b.textContent)).toEqual([t("chat-outboxbubbles.delete")]);
+  });
 });
 
 // An Agent whose computer is away, on a hub that holds what is sent meanwhile (#10661): the box stays open and says the

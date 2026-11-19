@@ -4042,6 +4042,10 @@ When a manager comes online or goes offline, the hub sends the other online mana
 - Service → hub: the hub registers handler functions by method name (`handleBus` in `server/internal/hub/bus.go`; one-way events use `handleBusEvent`). Each handler's file registers it in `init`; the hub has no other method list.
   Besides the handshake, the only built-in is `ping {}` → `{}`. An unregistered method returns `unknown_method`; params that can't be parsed return `invalid_params`; an `rpc.Error` returned by a handler reaches the service with its `code` intact.
 - hub → service: `callBus(identity, method, params)` calls this identity's current connection (if the caller gives no deadline it gives up after two minutes), and `notifyBus` sends a one-way event. If not online it returns a "not online" error; error codes the service returns are passed back as is.
+- hub → managers: `credential.revoked {credential_id}` tells connected managers that a device was signed out (#10708).
+  Both held Agent messages and kept Assistant messages from that credential become failed with `delete_only: true`.
+  A manager checks `credential.is_revoked {credential_id}` → `{revoked}` before delivering a queued message with its
+  sender's ID, so it can catch a revocation it missed while offline. If the check cannot run, the send waits.
 
 ### Methods the assistant uses
 
