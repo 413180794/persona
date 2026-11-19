@@ -66,7 +66,8 @@ def features():
                 ["preview"] if os.environ.get("MOCK_PREVIEW") else []) + (
                 ["task_cron"] if os.environ.get("MOCK_CRON") == "1" else []) + (
                 [] if os.environ.get("MOCK_TODO_SEEN") == "off" else ["todo_seen"]) + (
-                [] if os.environ.get("MOCK_LOOK_UPLOADS") == "off" else ["look_uploads"])
+                [] if os.environ.get("MOCK_LOOK_UPLOADS") == "off" else ["look_uploads"]) + (
+                [] if os.environ.get("MOCK_TODO_IMAGES") == "off" else ["todo_images"])
 
 
 def identity():
@@ -3345,6 +3346,10 @@ def decorated_session(s):
     else:
         s_copy.pop("todo", None)
     return s_copy
+
+
+# Uploaded to-do images (#11084): bytes by (to-do id, image id), kept only by this synthetic hub.
+TODO_IMAGE_DATA = {}
 
 
 def format_todo(t):
@@ -26644,6 +26649,20 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/todos": return self.send_json({"todos": sorted_todos()})
         if p.startswith("/api/v1/todos/") and p.endswith("/decisions") and p.count("/") == 5:
             return self.send_json(*todo_decisions_route("GET", unquote(p.split("/")[4]), None, q, {}))
+        m = re.fullmatch(r"/api/v1/todos/([^/]+)/images/([^/]+)", p)
+        if m:
+            tid, image_id = m.groups()
+            raw = TODO_IMAGE_DATA.get((tid, image_id))
+            if raw is None: return self.send_json({"error": "image not found"}, 404)
+            todo = next((x for x in TODOS if x["id"] == tid), {})
+            meta = next((x for x in todo.get("images", []) if x["id"] == image_id), {})
+            self.send_response(200)
+            self.send_header("Content-Type", meta.get("mime") or "application/octet-stream")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "private, no-store")
+            self.end_headers(); self.wfile.write(raw)
+            return True
         if p.startswith("/api/v1/todos/") and p.count("/") == 4:
             tid = p.split("/")[4]
             t = next((x for x in TODOS if x["id"] == tid), None)
@@ -27829,6 +27848,20 @@ class H(BaseHTTPRequestHandler):
             }
             err = apply_todo_plan(new_todo, body)
             if err: return self.send_json({"error": err}, 400)
+            images = []
+            for position, image in enumerate(body.get("images") or []):
+                image_id = image.get("id") or str(uuid.uuid4())
+                try:
+                    raw = base64.b64decode(image.get("data") or "", validate=True)
+                except (ValueError, TypeError):
+                    return self.send_json({"error": "image data must be base64"}, 400)
+                if not raw or image.get("mime") not in ("image/png", "image/jpeg"):
+                    return self.send_json({"error": "image must be PNG or JPEG"}, 400)
+                TODO_IMAGE_DATA[(new_todo["id"], image_id)] = raw
+                images.append({"id": image_id, "mime": image["mime"], "width": 1, "height": 1,
+                               "name": image.get("name") or "", "size": len(raw),
+                               "url": f"/api/v1/todos/{new_todo['id']}/images/{image_id}"})
+            if images: new_todo["images"] = images
             TODOS.insert(0, new_todo)
             push_todos()
             return self.send_json({"todo": new_todo})
