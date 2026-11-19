@@ -1,21 +1,24 @@
-// Auto flow (#2648): the board's optional second view. The manual columns stay what they are; these lanes are
-// computed from the agents a card has, so a card moves as its agents change, and nothing is persisted for them.
-// Needs you → Working → To review → Idle; reviewing and clearing a card is the existing Archive action.
+// Auto flow (#2648): the board's optional second view, derived from live agent and to-do state.
 import { stateOf } from "./format";
+import { decisionDismissed, reviewState } from "./supervision";
+import { todoWorkStatus } from "./todo-work-status";
 import { sameDirectory } from "./workspace-board";
-import { todoStatus, type SessionLookup, type Todo } from "./todos";
+import { acceptedAtRest, askTake, openAsk, type SessionLookup, type Todo } from "./todos";
 import type { BoardCard } from "./workspace-board";
 import type { Session } from "./types";
 
-export type AutoLane = "needs_you" | "working" | "review" | "idle";
-export const AUTO_LANES: readonly AutoLane[] = ["needs_you", "working", "review", "idle"];
+export type AutoLane = "needs_you" | "working" | "unread" | "idle";
+export const AUTO_LANES: readonly AutoLane[] = ["needs_you", "working", "unread", "idle"];
 
-/** A card's lane: the most urgent thing any of its agents says. No agents, or only offline ones: idle. */
+function sessionLane(s: Session): AutoLane {
+  const state = stateOf(s);
+  return state === "needs_you" || state === "working" || state === "unread" ? state : "idle";
+}
+
+/** A workspace follows its most urgent session. */
 export function autoLaneOf(sessions: readonly Session[]): AutoLane {
-  if (sessions.some((s) => stateOf(s) === "needs_you")) return "needs_you";
-  if (sessions.some((s) => stateOf(s) === "working")) return "working";
-  if (sessions.some((s) => stateOf(s) !== "offline")) return "review";
-  return "idle";
+  const lanes = new Set(sessions.map(sessionLane));
+  return AUTO_LANES.find((lane) => lanes.has(lane)) ?? "idle";
 }
 
 /** Latest agent activity, for ordering; cards without any go last. */
@@ -28,11 +31,10 @@ export function autoActivity(sessions: readonly Session[]): number {
   return latest;
 }
 
-/** The session to open from a card: the one needing you, else a working one, else the most recently active. */
+/** The most recently active session in the state that placed the workspace in its lane. */
 export function autoFocusSession(sessions: readonly Session[]): Session | undefined {
-  const needy = sessions.filter((s) => stateOf(s) === "needs_you");
-  const working = sessions.filter((s) => stateOf(s) === "working");
-  const pool = needy.length ? needy : working.length ? working : sessions;
+  const lane = autoLaneOf(sessions);
+  const pool = sessions.filter((s) => sessionLane(s) === lane);
   return [...pool].sort((a, b) => autoActivity([b]) - autoActivity([a]))[0];
 }
 
@@ -60,8 +62,8 @@ export function autoLanes(
 // ---- All work in one panel (#2648): not only bound workspaces. Unbound agent sessions and to-dos enter the same
 // lanes, so the auto view is "everything in flight", not only what the user bound by hand.
 
-export type WorkLane = AutoLane | "planned";
-export const WORK_LANES: readonly WorkLane[] = ["needs_you", "working", "review", "planned", "idle"];
+export type WorkLane = AutoLane | "review" | "planned" | "done";
+export const WORK_LANES: readonly WorkLane[] = ["needs_you", "working", "review", "unread", "planned", "idle", "done"];
 
 export interface WorkItem {
   kind: "workspace" | "session" | "todo";
@@ -80,19 +82,26 @@ export function workspaceItem(card: BoardCard, sessions: readonly Session[]): Wo
 }
 
 export function sessionItem(s: Session): WorkItem {
-  const st = stateOf(s);
-  const lane: WorkLane = st === "needs_you" ? "needs_you" : st === "working" ? "working" : st === "offline" ? "idle" : "review";
-  return { kind: "session", id: `session:${s.machine_id}/${s.session_id}`, lane, title: s.title || s.session_id, activity: autoActivity([s]), pinned: false, session: s };
+  return { kind: "session", id: `session:${s.machine_id}/${s.session_id}`, lane: sessionLane(s), title: s.title || s.session_id, activity: autoActivity([s]), pinned: false, session: s };
 }
 
-/** A to-do follows todoStatus: what needs an answer is Needs you, finished work is To review, the rest is Planned. */
+function todoLane(todo: Todo, lookup?: SessionLookup): WorkLane {
+  const status = todoWorkStatus(todo, lookup);
+  const ask = openAsk(todo);
+  const action = ask && askTake(ask);
+  // An auto-closed task can still carry a live verification request.
+  if (action === "accept") return "review";
+  if (status === "needs_you" || status === "interrupted" || status === "usage_limit" || status === "failed") return "needs_you";
+  if (!todo.done_at && !decisionDismissed(todo) && (ask?.outcome === "decide" || reviewState(todo) === "needs_user")) return "needs_you";
+  if (status === "working") return "working";
+  if (action === "ack") return "unread";
+  if (status === "done" || acceptedAtRest(todo, status)) return "done";
+  if (status === "unread") return "unread";
+  return "planned";
+}
+
 export function todoItem(t: Todo, lookup?: SessionLookup): WorkItem {
-  const st = todoStatus(t, lookup);
-  const lane: WorkLane =
-    st === "needs_you" || st === "interrupted" || st === "usage_limit" || st === "failed" ? "needs_you"
-    : st === "working" ? "working"
-    : st === "done" || st === "unread" ? "review"
-    : "planned";
+  const lane = todoLane(t, lookup);
   return { kind: "todo", id: `todo:${t.id}`, lane, title: t.title, activity: Date.parse(t.updated_at ?? "") || 0, pinned: false, todo: t };
 }
 

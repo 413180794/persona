@@ -120,26 +120,30 @@ describe("the workflow board with many cards and Agents", () => {
     act(() => root.render(<WorkspaceBoard />));
     await flush();
     const lane = (name: string) => host.querySelector(`section[aria-label="${name}"]`);
-    const inLane = (name: string, id: string) => lane(name)?.querySelector(`article[data-card-id="${id}"]`) !== null;
-    // every session idle: every card waits for review, nothing needs you
-    expect(lane("待验收")?.querySelectorAll("article[data-card-id]").length).toBe(CARDS);
+    const inLane = (name: string, id: string) => Boolean(lane(name)?.querySelector(`article[data-card-id="${id}"]`));
+    expect(lane("空闲")?.querySelectorAll("article[data-card-id]").length).toBe(CARDS);
+    expect(lane("待验收")?.querySelectorAll("article[data-card-id]").length).toBe(0);
     expect(lane("需要你")?.querySelectorAll("article[data-card-id]").length ?? 0).toBe(0);
 
     const rows = agents();
     rows[0] = { ...rows[0], state: "needs_you" }; // c0's agent
     rows[1] = { ...rows[1], state: "working" }; // c1's agent
+    rows[2] = { ...rows[2], state: "unread" }; // c2's agent
     setAgents(rows);
     expect(inLane("需要你", "c0")).toBe(true);
     expect(inLane("待验收", "c0")).toBe(false);
     expect(inLane("工作中", "c1")).toBe(true);
-    expect(lane("待验收")?.querySelectorAll("article[data-card-id]").length).toBe(CARDS - 2);
+    expect(inLane("完成未看", "c2")).toBe(true);
+    expect(lane("空闲")?.querySelectorAll("article[data-card-id]").length).toBe(CARDS - 3);
+    expect(lane("待验收")?.querySelectorAll("article[data-card-id]").length).toBe(0);
     expect(host.textContent).toContain("打开会话");
 
-    // the agent is answered and stops: the card flows back to review without any dragging
+    // The sessions return to rest and their cards follow.
     rows[0] = { ...rows[0], state: "idle" };
     rows[1] = { ...rows[1], state: "idle" };
+    rows[2] = { ...rows[2], state: "idle" };
     setAgents(rows);
-    expect(inLane("待验收", "c0")).toBe(true);
-    expect(inLane("待验收", "c1")).toBe(true);
+    expect(lane("空闲")?.querySelectorAll("article[data-card-id]").length).toBe(CARDS);
+    expect(lane("待验收")?.querySelectorAll("article[data-card-id]").length).toBe(0);
   });
 });

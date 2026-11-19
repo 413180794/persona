@@ -111,6 +111,7 @@ import { TodoStageBar } from "./TodoStageBar";
 import { TodoAskLine, TodoAskPanel } from "./TodoAsk";
 import { TaskCompletionCheck } from "./TaskCompletionCheck";
 import { useTodoField } from "./use-todo-field";
+import { todoWorkStatus } from "../lib/todo-work-status";
 import { todoUltracode } from "../lib/ultracode";
 import { UltraMark } from "./chat/Ultracode";
 import { boundThread, threadLine, threadName, todoThreadsOn, unbindTodoThread } from "../lib/todo-thread";
@@ -2124,7 +2125,7 @@ function TodoDetail({
   const retrying = useFeed((s) => Boolean(s.busy[retryKey(todo.id)]));
   const retry = (launcher?: string) =>
     (launcher ? retryOnLauncher(todo, launcher) : retryTask(todo)).catch((e) => toast(t("todos.action_failed", { error: errorText(e) }), "error"));
-  const status = todoStatus(todo, lookup);
+  const status = todoWorkStatus(todo, lookup);
   const statusInfo = TODO_STATUS_INFO[shownStatus(todo, status)];
   // The to-do's own PR, parsed once here (the list row and the repository section's fallback share it).
   const legacyPR = prLink(todo.pr_url);
@@ -2191,7 +2192,7 @@ function TodoDetail({
 
       {/* Meta Line */}
       <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[12.5px] text-ink-2">
-        <span className={cx("inline-flex h-5.5 items-center gap-1.5 rounded-md px-2 text-[12px] font-semibold", toneClass)}>
+        <span data-testid="todo-detail-status" className={cx("inline-flex h-5.5 items-center gap-1.5 rounded-md px-2 text-[12px] font-semibold", toneClass)}>
           <StatusMark state={dotState} size="sm" />
           {todoStatusLabel(todo, status)}
         </span>
@@ -2333,6 +2334,7 @@ function TodoDetail({
               return (
                 <div
                   key={`${agent.machine_id}/${agent.session_id}`}
+                  data-testid="todo-detail-agent"
                   onClick={() => {
                     if (session) {
                       navigate({ name: "session", mid: agent.machine_id, sid: agent.session_id });
