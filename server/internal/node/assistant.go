@@ -711,11 +711,38 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 				n.logf("assistant %s: started with a supervision round's tools: restarted with every tool for this message", short(id)) // settled, or a recovery's restart
 			}
 			n.stopAssistantProcess(id) // model switch, dead process, bypassPermissions (start-only), new instructions or tools: resume in a fresh one
+			if agent == "codex" && alive {
+				// stop signals the old app-server. Wait for it to leave before resuming its thread.
+				timer := time.NewTimer(keeperStopGrace + keeperKillWait)
+				defer timer.Stop()
+				select {
+				case <-p.exited:
+				case <-timer.C:
+					return "", codexWriterConflict()
+				case <-ctx.Done():
+					return "", ctx.Err()
+				}
+			}
 			n.rememberTasks(id, nil)
 			p = nil
 			if proto.IsExternalLauncher(launcher) {
 				execution = currentExecution
 			}
+		}
+	}
+	if p == nil && resume && agent == "codex" {
+		// A native desktop chat can have the assistant's cwd without belonging to the assistant. A verified owner's
+		// follow-up can go to its registered app-server, but a Persona role must keep its own tools and policy.
+		if hasInput && !prepareOnly && ownerDeliveryOf(ctx) != nil && recovery == nil &&
+			!isMain && !st.IsMain && guest == nil && origin == "" && policy == "" && st.SupervisionInstructions == "" &&
+			n.codexDesktopWriterRoutable(id) {
+			if err := n.sendCodex(ctx, id, text, images); err != nil {
+				return "", err
+			}
+			return id, nil
+		}
+		if n.assistantCodexWriterHeld(id) {
+			return "", codexWriterConflict()
 		}
 	}
 	if startTier == "" {

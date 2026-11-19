@@ -18,7 +18,7 @@ vi.mock("./store", () => {
 vi.mock("./router", () => ({ navigate: vi.fn() }));
 vi.mock("../ui/atoms", async (actual) => ({ ...(await actual<typeof import("../ui/atoms")>()), toast: vi.fn() }));
 
-import { acceptOutgoing, arrived, checkOutbox, forgetOutgoing, askPersona, discardOutbox, inSendOrder, keepFailed, keepOutgoing, noteSent, noteWritten, outboxMessage, placeFailed, queueToSession, registerOutboxRecheck, resetOutboxClaimsForTests, resetRestoredForTests, restoreOutbox, retryOutbox, sendToSession, settle, settleOutbox, SENT_GRACE_MS, type OutboxEntry } from "./outbox";
+import { acceptOutgoing, arrived, checkOutbox, entryReason, forgetOutgoing, askPersona, discardOutbox, inSendOrder, keepFailed, keepOutgoing, noteSent, noteWritten, outboxMessage, placeFailed, queueToSession, registerOutboxRecheck, resetOutboxClaimsForTests, resetRestoredForTests, restoreOutbox, retryOutbox, sendToSession, settle, settleOutbox, SENT_GRACE_MS, type OutboxEntry } from "./outbox";
 import { messageFeedback, resetMessageFeedback } from "./message-send";
 import type { ChatLine } from "./turns";
 import { ApiError } from "./api";
@@ -204,6 +204,29 @@ describe("sending from another page", () => {
     expect(again.clear_draft).toBe("old");
     discardOutbox("m", "s", again.client_msg_id);
     expect(outbox()["m/s"]).toBeUndefined();
+  });
+
+  it("keeps the follow-up and displays the recovery instructions for an active Codex writer", async () => {
+    const error = "Continue in the original Codex session or close it there and retry here.";
+    const text = "Scratch follow-up";
+    const images = [{ mime: "image/png", data: "image" }];
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ code: "codex_active_writer", error, delivered: "none", retryable: false }, 409))
+      .mockResolvedValueOnce(response({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+    expect(await sendToSession("m", "s", { text, images })).toBe(false);
+    const failed = outbox()["m/s"][0];
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(failed).toMatchObject({ code: "codex_active_writer", state: "failed", inDoubt: false, text, images });
+    expect(entryReason(failed)).toBe(error);
+    expect(failed.clearable).toBeUndefined();
+
+    expect(await retryOutbox("m", "s", failed.id)).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const sent = JSON.parse(fetcher.mock.calls[1][1].body);
+    expect(sent).toMatchObject({ text, images });
+    expect(sent.clear_draft).toBeUndefined();
+    expect(sent.client_msg_id).not.toBe(failed.id);
   });
 
   it("checks an uncertain send under its original id instead of posting another message", async () => {

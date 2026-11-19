@@ -63,6 +63,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	}
 	if n.externalCodex(id) {
 		if n.codexResumable(ctx, id) { // nothing runs it: a stopped agent takes no messages (stopped.go, #4754)
+			if src, ok := n.codexSource(id); ok && codexWriterHeld(src.home, src.thread) {
+				return codexWriterConflict()
+			}
 			return n.stoppedRefusal(id)
 		}
 		return n.sendCodex(ctx, id, text, images)

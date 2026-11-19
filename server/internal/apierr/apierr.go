@@ -241,6 +241,7 @@ var rpcFailureKeys = map[string]string{
 	"dialog_open":        "rpc-errors.dialog_open",
 	// the first message to a Codex opened with no first message (node/codex_waiting.go, #4961)
 	"codex_not_ready":          "rpc-errors.codex_not_ready",
+	"codex_active_writer":      "rpc-errors.codex_active_writer",
 	"codex_first_text":         "rpc-errors.codex_first_text",
 	"codex_first_unconfirmed":  "rpc-errors.codex_first_unconfirmed",
 	"codex_waiting":            "rpc-errors.codex_waiting",

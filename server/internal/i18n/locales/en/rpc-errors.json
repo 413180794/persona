@@ -51,6 +51,7 @@
   "start_line_rejected": "The new terminal tab didn't take the start command, twice. Nothing ran; check what that shell does when it starts, then try again.",
   "directory_untypable": "This directory’s name contains a control character, such as a tab or a line break, so the agent can’t be started in it from here. Rename the directory or choose another one.",
   "codex_not_ready": "Codex on the computer isn’t at its input box yet (still loading, or another screen is open). Nothing was sent; try again in a moment.",
+  "codex_active_writer": "This conversation is still open in Codex on the computer. You can continue in the original Codex session. To send from Persona, save your work there and close the session, then retry here once Codex releases it.",
   "codex_first_text": "Codex’s first message can only be text. Remove the photos or files, then send it again.",
   "codex_first_unconfirmed": "The message went into Codex, but its session didn’t appear in time. Check the computer before sending it again.",
   "codex_waiting": "Codex hasn’t had its first message yet. This works once it has its session.",

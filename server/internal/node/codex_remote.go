@@ -531,6 +531,9 @@ func (c *codexRemote) join(ctx context.Context, id string, remember bool) error 
 			}
 		}
 		c.mu.Unlock()
+		if codexResumeWriterConflict(err, t.id) {
+			return codexWriterConflict()
+		}
 		return err
 	}
 	if reply.Thread.ID != t.id {
@@ -585,14 +588,22 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 	}
 	c, t, err := n.codexOwner(id)
 	if errors.Is(err, errCodexNoOwner) {
-		if src, ok := n.codexSource(id); ok && codexDesktopChat(src) {
-			return n.sendCodexDesktop(ctx, src, text, images)
+		if src, ok := n.codexSource(id); ok {
+			if codexDesktopChat(src) {
+				return n.sendCodexDesktop(ctx, src, text, images)
+			}
+			if codexWriterHeld(src.home, src.thread) {
+				return codexWriterConflict()
+			}
 		}
 	}
 	if err != nil {
 		return refusal("codex_read_only", firstNonEmpty(err.Error(), "仅查看"), nil)
 	}
 	if err = c.join(ctx, id, true); err != nil {
+		if rpcCode(err) == codexWriterConflictCode {
+			return err
+		}
 		return refusal("codex_read_only", err.Error(), nil)
 	}
 	if len(selected) > 0 {
