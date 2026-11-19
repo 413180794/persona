@@ -41,7 +41,18 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 			return nil, err
 		}
 	}
-	done, err := h.opts.Admission.AdmitPayload("feishu-event", ev.Message.MessageID, payload)
+	eventID := ev.Message.MessageID
+	if eventID == "" {
+		eventID = env.Header.EventID
+	}
+	admit := h.opts.Admission.AdmitPayload
+	kind := "feishu-event"
+	if env.Header.EventType == feishubot.EventCardAction {
+		// After an ambiguous callback, do not accept a redelivery or a
+		// later card press until the original action is reconciled.
+		kind, admit = "feishu-card", h.opts.Admission.AdmitExclusivePayload
+	}
+	done, err := admit(kind, eventID, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +94,7 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		if err := json.Unmarshal(env.Event, &a); err != nil {
 			return nil, err
 		}
-		return h.botCardAction(ctx, &a, env.Event), nil
+		return h.botCardAction(ctx, &a, env.Event, func() { delegated = true }), nil
 	case feishubot.EventRecalled:
 		var ev feishubot.Recalled
 		if json.Unmarshal(env.Event, &ev) == nil {
@@ -335,7 +346,7 @@ func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEve
 }
 
 // botCardAction answers a press on one of the bot's cards: only the owner's count, and the assistant answers them.
-func (h *Manager) botCardAction(ctx context.Context, a *feishubot.CardAction, raw json.RawMessage) any {
+func (h *Manager) botCardAction(ctx context.Context, a *feishubot.CardAction, raw json.RawMessage, retain func()) any {
 	api, set := h.botAPI()
 	if set.Owner == nil || a.Operator.OpenID != set.Owner.OpenID {
 		return toast("error", i18n.T(h.userLang(), "hub-bots_chat.owner_only_action"))
@@ -362,8 +373,24 @@ func (h *Manager) botCardAction(ctx context.Context, a *feishubot.CardAction, ra
 	}
 	var out json.RawMessage
 	// Feishu waits 3 s: a moment for an assistant that is reconnecting, then the call itself.
-	err := h.callAssistantWaiting(assistantwire.MethodFeishuAction, assistantwire.FeishuAction{Event: raw, Action: action}, &out,
-		time.Now().Add(2500*time.Millisecond), 2*time.Second)
+	params := assistantwire.FeishuAction{Event: raw, Action: action}
+	var err error
+	if h.opts.Admission == nil {
+		err = h.callAssistantWaiting(assistantwire.MethodFeishuAction, params, &out,
+			time.Now().Add(2500*time.Millisecond), 2*time.Second)
+	} else if !h.assistantUp() {
+		err = errAssistantOffline
+	} else {
+		// The waiting form retries cut-off calls and collapses an uncertain
+		// result into "offline". Under a maintenance barrier retain the
+		// original event after the first ambiguous handoff.
+		call, cancel := context.WithTimeout(ctx, 2*time.Second)
+		err = h.callAssistant(call, assistantwire.MethodFeishuAction, params, &out)
+		cancel()
+		if err != nil {
+			retain()
+		}
+	}
 	switch {
 	case errors.Is(err, errAssistantOffline):
 		return toast("error", errAssistantOffline.Error())

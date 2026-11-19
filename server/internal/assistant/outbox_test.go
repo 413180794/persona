@@ -193,10 +193,16 @@ func (h *outboxHub) waitFor(t *testing.T, want []string) {
 
 func startOutboxManager(t *testing.T, h *outboxHub, out OutboxStore, ext ...Extensions) *BusHub {
 	t.Helper()
-	o := BusOptions{Hub: h.srv.URL, Token: "jb_x", Logf: testLogf(t), Backoff: 20 * time.Millisecond, Outbox: out}
+	o := BusOptions{Outbox: out}
 	if len(ext) > 0 {
 		o.Extensions = ext[0]
 	}
+	return startOutboxManagerWithOptions(t, h, o)
+}
+
+func startOutboxManagerWithOptions(t *testing.T, h *outboxHub, o BusOptions) *BusHub {
+	t.Helper()
+	o.Hub, o.Token, o.Logf, o.Backoff = h.srv.URL, "jb_x", testLogf(t), 20*time.Millisecond
 	b := NewBusHub(o)
 	b.client.MaxBackoff = 100 * time.Millisecond
 	svc := New(Options{Hub: b, Store: func() Store { return &memStore{} }, Logf: testLogf(t)})

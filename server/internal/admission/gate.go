@@ -20,6 +20,7 @@ const Env = "PERSONA_ADMISSION_DIR"
 
 var (
 	ErrClosed   = errors.New("admission is closed")
+	ErrPending  = errors.New("admission operation is pending reconciliation")
 	idPattern   = regexp.MustCompile(`^[a-zA-Z0-9_-]{8,80}$`)
 	kindPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 )
@@ -150,35 +151,62 @@ func (g *Gate) publish(s State) error {
 // An unclean process exit leaves its record behind, so wait cannot mistake
 // process disappearance for successful completion.
 func (g *Gate) Admit(kind string) (func(), error) {
-	return g.record(kind, "", "", nil)
+	return g.record(kind, "", "", nil, false)
 }
 
 // AdmitPayload retains enough input to reconcile work after process loss.
 func (g *Gate) AdmitPayload(kind, id string, payload []byte) (func(), error) {
-	return g.record(kind, "", id, payload)
+	return g.record(kind, "", id, payload, false)
+}
+
+// AdmitExclusivePayload starts a background batch only when no earlier
+// batch of this kind is active or needs reconciliation.
+func (g *Gate) AdmitExclusivePayload(kind, id string, payload []byte) (func(), error) {
+	return g.record(kind, "", id, payload, true)
 }
 
 // ContinuePayload records a handoff even after admission closes, but only while
 // the same input still has its parent operation. It cannot reopen a fence.
 func (g *Gate) ContinuePayload(parent, kind, id string, payload []byte) (func(), error) {
-	return g.record(kind, parent, id, payload)
+	return g.record(kind, parent, id, payload, false)
 }
 
-func (g *Gate) record(kind, parent, id string, payload []byte) (func(), error) {
-	if g == nil {
+// ContinueExclusivePayload allows the same closed-gate handoff as
+// ContinuePayload and keeps any unsettled receiver from taking another batch.
+func (g *Gate) ContinueExclusivePayload(parent, kind, id string, payload []byte) (func(), error) {
+	return g.record(kind, parent, id, payload, true)
+}
+
+func (g *Gate) record(kind, parent, id string, payload []byte, exclusive bool) (func(), error) {
+	path, err := g.begin(kind, parent, id, payload, exclusive)
+	if err != nil {
+		return nil, err
+	}
+	if path == "" {
 		return func() {}, nil
 	}
+	return func() {
+		if err := g.finish(path); err != nil {
+			log.Printf("admission left an unsettled %s operation: %v", kind, err)
+		}
+	}, nil
+}
+
+func (g *Gate) begin(kind, parent, id string, payload []byte, exclusive bool) (string, error) {
+	if g == nil {
+		return "", nil
+	}
 	if !kindPattern.MatchString(kind) {
-		return nil, errors.New("invalid operation kind")
+		return "", errors.New("invalid operation kind")
 	}
 	lock, err := g.lock()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer lock.close()
 	s, err := g.state()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	prefix := "work-" + kind + "."
 	if id != "" {
@@ -186,12 +214,12 @@ func (g *Gate) record(kind, parent, id string, payload []byte) (func(), error) {
 	}
 	if s.Phase != "open" {
 		if s.Phase != "draining" || parent == "" || id == "" || !kindPattern.MatchString(parent) {
-			return nil, ErrClosed
+			return "", ErrClosed
 		}
 		parentPrefix := fmt.Sprintf("work-%s.%x.", parent, sha256.Sum256([]byte(id)))
 		files, err := os.ReadDir(g.dir)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		found := false
 		for _, file := range files {
@@ -201,27 +229,34 @@ func (g *Gate) record(kind, parent, id string, payload []byte) (func(), error) {
 			}
 		}
 		if !found {
-			return nil, ErrClosed
+			return "", ErrClosed
+		}
+	}
+	if exclusive {
+		// A crashed sender may have crossed the external write boundary.
+		// Neither a fresh process nor a different batch may overtake it.
+		active, err := g.active()
+		if err != nil {
+			return "", err
+		}
+		if active[kind] > 0 {
+			return "", ErrPending
 		}
 	}
 	op, err := os.CreateTemp(g.dir, prefix)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	_, writeErr := op.Write(payload)
 	syncErr := op.Sync()
 	closeErr := op.Close()
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-		return nil, err
+		return "", err
 	}
 	if err := g.sync(); err != nil {
-		return nil, err
+		return "", err
 	}
-	return func() {
-		if err := g.finish(op.Name()); err != nil {
-			log.Printf("admission left an unsettled %s operation: %v", kind, err)
-		}
-	}, nil
+	return op.Name(), nil
 }
 
 func (g *Gate) finish(path string) error {

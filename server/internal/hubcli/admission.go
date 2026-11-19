@@ -14,9 +14,9 @@ import (
 
 func runAdmission(ctx context.Context, args []string, out io.Writer) error {
 	if !(len(args) == 1 && (args[0] == "status" || args[0] == "init")) &&
-		!(len(args) == 2 && (args[0] == "close" || args[0] == "check" || args[0] == "open" || args[0] == "ledger-pending")) &&
+		!(len(args) == 2 && (args[0] == "close" || args[0] == "check" || args[0] == "open" || args[0] == "ledger-pending" || args[0] == "pending" || args[0] == "lark-begin" || args[0] == "lark-end")) &&
 		!(len(args) == 3 && args[0] == "reconcile-ledger") {
-		return errors.New("usage: personad hub admission init | status | (close|check|open|ledger-pending) <attempt> | reconcile-ledger <attempt> <operation-id>")
+		return errors.New("usage: personad hub admission init | status | (close|check|open|pending|ledger-pending) <attempt> | lark-begin <operation-id> | lark-end <ticket> | reconcile-ledger <attempt> <operation-id>")
 	}
 	gate, err := admission.FromEnv()
 	if err != nil {
@@ -26,6 +26,20 @@ func runAdmission(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("%s is not set", admission.Env)
 	}
 	switch args[0] {
+	case "pending":
+		pending, err := gate.Pending(args[1])
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(pending)
+	case "lark-begin":
+		ticket, err := gate.BeginLark(args[1])
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(map[string]string{"ticket": ticket})
+	case "lark-end":
+		return gate.EndLark(args[1])
 	case "ledger-pending":
 		pending, err := gate.LedgerPending(args[1])
 		if err != nil {

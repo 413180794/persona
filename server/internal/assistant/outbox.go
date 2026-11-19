@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
@@ -210,7 +211,9 @@ func (b *BusHub) runOutbox(ctx context.Context) {
 		case <-b.reportedNow():
 		}
 		if err := b.handOver(ctx); err != nil && ctx.Err() == nil {
-			b.opts.Logf("outbox: %v", err)
+			if !errors.Is(err, admission.ErrClosed) && !errors.Is(err, admission.ErrPending) {
+				b.opts.Logf("outbox: %v", err)
+			}
 			select {
 			case <-ctx.Done():
 				return
@@ -285,6 +288,11 @@ func (b *BusHub) handOver(ctx context.Context) error {
 			}
 			send = append(send, w)
 		}
+		key, ids := assistantwire.OutboxBatchKey(send)
+		finish, err := b.opts.Admission.AdmitExclusivePayload("manager-outbox", key, ids)
+		if err != nil {
+			return err
+		}
 		done, err := b.deliverOutbox(ctx, send)
 		if err := o.store.OutboxDone(ctx, append(stale, done...)); err != nil {
 			return err
@@ -296,6 +304,7 @@ func (b *BusHub) handOver(ctx context.Context) error {
 		if len(done) < len(send) {
 			return errors.New("the hub took part of the outbox")
 		}
+		finish()
 	}
 }
 
@@ -336,6 +345,10 @@ func (b *BusHub) deliverOutbox(ctx context.Context, items []assistantwire.Outbox
 		err := peer.Call(ctx, assistantwire.MethodOutbox, assistantwire.Outbox{Items: items}, &res)
 		var re *rpc.Error
 		if !errors.As(err, &re) || re.Code != bus.CodeUnknownMethod {
+			return res.Done, err
+		}
+		if b.opts.Admission != nil {
+			// A legacy callback cannot attest the batch receipt.
 			return res.Done, err
 		}
 		o.legacy.Store(peer) // a hub from before manager.outbox: one by one on this connection

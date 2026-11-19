@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -25,13 +26,31 @@ func init() {
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: assistantwire.MethodOutbox + ": " + err.Error()}
 		}
+		key, ids := assistantwire.OutboxBatchKey(p.Items)
+		finish, err := h.admission.ContinueExclusivePayload("manager-outbox", "hub-outbox", key, ids)
+		if err != nil {
+			return nil, &rpc.Error{Code: "maintenance", Message: "outbox admission is paused"}
+		}
+		if h.admission == nil {
+			defer finish()
+		}
 		from := c.managerID()
 		out := assistantwire.OutboxResult{Done: []string{}}
 		for _, it := range p.Items {
 			if ctx.Err() != nil {
+				if h.admission != nil {
+					return nil, ctx.Err()
+				}
 				break // the rest come again
 			}
-			if it.ID != "" && h.firstHandOver(ctx, from, it.ID) {
+			first := false
+			if it.ID != "" {
+				first, err = h.recordHandOver(ctx, from, it.ID, h.admission != nil)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if first {
 				var err error
 				switch {
 				case it.Notification != nil:
@@ -40,11 +59,17 @@ func init() {
 					err = h.relayBroadcastFrom(from, it.Message)
 				}
 				if err != nil {
+					if h.admission != nil {
+						return nil, err
+					}
 					h.forgetHandOver(from, it.ID)
 					h.logf("outbox: [%s] %s: %v (not delivered)", from, it.ID, err)
 				}
 			}
 			out.Done = append(out.Done, it.ID) // delivered now or before, or not deliverable: not to come again
+		}
+		if h.admission != nil {
+			finish()
 		}
 		return out, nil
 	})
@@ -67,21 +92,33 @@ type handOverStore interface {
 // firstHandOver records manager's item id and reports whether it is new. A store that does not answer: memory
 // decides (the item is delivered rather than lost).
 func (h *Hub) firstHandOver(ctx context.Context, manager, id string) bool {
+	first, err := h.recordHandOver(ctx, manager, id, false)
+	return err == nil && first
+}
+
+func (h *Hub) recordHandOver(ctx context.Context, manager, id string, durable bool) (bool, error) {
 	// Memory first: an item this process took (also while the store did not answer) is not taken again, and of two
 	// sends of one id at once exactly one goes on to the store.
 	if !h.handedOver.first(manager+"\x00"+id, time.Now()) {
-		return false
+		return false, nil
 	}
-	if s, ok := h.store.(handOverStore); ok {
+	s, hasStore := h.store.(handOverStore)
+	if durable && !hasStore {
+		return false, errors.New("outbox handoff has no durable store")
+	}
+	if hasStore {
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		first, err := s.HandOverFirst(sctx, manager, id, handedOverFor)
 		cancel()
 		if err == nil {
-			return first // an earlier hub process may have taken it
+			return first, nil // an earlier hub process may have taken it
+		}
+		if durable {
+			return false, err
 		}
 		h.logf("outbox: [%s] %s: %v", manager, id, err)
 	}
-	return true
+	return true, nil
 }
 
 // forgetHandOver: manager's item id was not delivered after all (refused): one that comes again is tried again.
