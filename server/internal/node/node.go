@@ -739,6 +739,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		ctx, _ = withOwnerDelivery(ctx)
 	}
 	switch method {
+	case "workspace.naming.resolve":
+		return n.resolveWorkspaceNaming(ctx, params)
 	case "session.share_projection":
 		return n.shareProjection(ctx, params)
 	case devicewire.MethodCloseTaskTerminal:
