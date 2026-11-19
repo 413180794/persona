@@ -190,6 +190,10 @@ export function ownRecord(p: ModelPurpose): boolean {
   return ownFields(p) && !!p.category_id && p.category_id !== p.id;
 }
 
+export function isLarkContext(p: ModelPurpose): boolean {
+  return p.id === "extension.lark-context" && p.kind === "api" && p.parent === "assistant" && p.category_id === "assistant" && ownRecord(p);
+}
+
 /** The category such a use follows (`ownRecord`), as the catalog has it: its `parent` when that is a category there.
  *  Its binding is what the use runs on once its record is empty again. */
 export function parentCategory(p: ModelPurpose, purposes: ModelPurpose[]): ModelPurpose | undefined {
@@ -208,6 +212,7 @@ function takesEffortProvider(v?: ModelProvider): boolean {
  *  offers it (#7980, Meeting minutes on a Chat Completions connection). Otherwise the hub's `fields`, and on a direct
  *  API connection only one that takes it. The uses of Agents take it on whatever they run on (`followsAgents`). */
 export function effortOffered(p: ModelPurpose, chosen: ModelProvider | undefined, effective: ModelProvider | undefined, followsAgents = false): boolean {
+  if (isLarkContext(p)) return supportsField(p, "effort");
   const field = supportsField(p, "effort")
     || (p.kind === "api" && !!p.fields?.includes("provider") && !!effective && !takesEffortProvider(effective));
   return field && (followsAgents || takesEffortProvider(chosen));

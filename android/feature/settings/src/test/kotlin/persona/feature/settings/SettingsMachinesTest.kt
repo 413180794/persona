@@ -303,17 +303,36 @@ class ModelConfigurationStateTest {
     @Test fun agentsOverrideModeIncludesPartialOverrides() {
         for (id in agentsOverrides) {
             val child = agent.copy(id = id, parent = "agent.new", inheritedFrom = "Agents")
-            assertEquals("跟随 Agents", agentsOverrideMode(res, child))
+            assertEquals("跟随 Agents", modelOverrideMode(res, child))
             assertTrue(purposeSubtitle(res, child.copy(status = "offline"), catalog).contains("跟随 Agents"))
             for (override in listOf(ModelBinding("launcher.old"), ModelBinding(model = "custom"), ModelBinding(effort = "high"))) {
-                assertEquals("单独设置", agentsOverrideMode(res, child.copy(override = override)))
+                assertEquals("单独设置", modelOverrideMode(res, child.copy(override = override)))
             }
             assertTrue(showsEffort(child, providers[2]))
             // An older hub leaves it without fields: read-only, following Agents as any other use.
-            assertNull(agentsOverrideMode(res, child.copy(fields = emptyList())))
+            assertNull(modelOverrideMode(res, child.copy(fields = emptyList())))
         }
-        assertNull(agentsOverrideMode(res, agent))
-        assertNull(agentsOverrideMode(res, triage.copy(id = "inbox.judge", parent = "inbox.triage", fields = listOf("provider", "model"))))
+        assertNull(modelOverrideMode(res, agent))
+        assertNull(modelOverrideMode(res, triage.copy(id = "inbox.judge", parent = "inbox.triage", fields = listOf("provider", "model"))))
+    }
+
+    @Test fun larkContextShowsMainChatAndUsesTheAdvertisedProvidersAndEffort() {
+        val lark = ModelPurpose("extension.lark-context", "Lark Context", "Extensions", kind = "api", parent = "assistant",
+            inheritedFrom = chat.name, effective = chat.effective, revision = 7,
+            fields = listOf("provider", "model", "effort"), providerIds = listOf("launcher.claude", "api.fast"))
+        val unified = catalog.copy(purposes = catalog.purposes + lark)
+        assertEquals(listOf(lark), modelPurposeGroups(res, unified.purposes, providers, "Lark").single().second)
+        assertTrue(purposeSubtitle(res, lark, unified).contains("model-chat"))
+        assertEquals("跟随主对话", purposeSubtitle(res, lark, unified).lines().last())
+        assertEquals("单独设置", modelOverrideMode(res, lark.copy(override = ModelBinding(effort = "low"))))
+        val options = providerOptions(res, lark, providers, "")
+        assertEquals(listOf("", "launcher.claude", "api.fast"), options.map { it.id })
+        assertEquals("跟随主对话", options.first().label)
+        assertTrue(showsEffort(lark, providers.last()))
+        assertFalse(showsEffort(lark.copy(fields = listOf("model", "provider")), providers.last()))
+        assertNull(modelOverrideMode(res, lark.copy(parent = "kb")))
+        assertEquals("""{"revision":7,"provider":null,"model":null,"effort":null}""",
+            ModelConfigurationDraft.Restore.patch(lark).toString())
     }
 
     @Test fun agentsOverrideEditorSavesOwnRevisionAndRestoresFollowing() = runBlocking {
@@ -340,9 +359,9 @@ class ModelConfigurationStateTest {
             model.load()
             model.edit(ModelConfigurationDraft(provider = "launcher.old", model = "custom", effort = "high"))
             assertNotNull(model.save())
-            assertEquals("单独设置", agentsOverrideMode(res, requireNotNull(model.state.value.purpose)))
+            assertEquals("单独设置", modelOverrideMode(res, requireNotNull(model.state.value.purpose)))
             assertNotNull(model.save(restore = true))
-            assertEquals("跟随 Agents", agentsOverrideMode(res, requireNotNull(model.state.value.purpose)))
+            assertEquals("跟随 Agents", modelOverrideMode(res, requireNotNull(model.state.value.purpose)))
             assertEquals(listOf(purposeId), ids)
             assertEquals(listOf(0L, 1L), revisions)
         }

@@ -31,12 +31,18 @@ const providers: ModelProvider[] = [
   { id: "launcher.responses", name: "Responses provider", kind: "api", api: "responses" },
 ];
 const main: ModelPurpose = {
-  ...agents, id: "assistant", name: "主对话", launch: "headless", runtimes: ["cli", "agentsdk"],
+  ...agents, id: "assistant", category_id: "assistant", name: "主对话", launch: "headless", runtimes: ["cli", "agentsdk"],
   provider_ids: providers.map((p) => p.id),
 };
 // The uses of Agents the hub lets the user set apart; each runs the same editor tests.
 const LARK = { id: "lark.agent", name: "Lark /agent" };
 const TWIN = { id: "inbox.agent", name: "AI twin runs" };
+const LARK_CONTEXT = "extension.lark-context";
+const larkContext = (override: ModelBinding = {}, revision = 7): ModelPurpose => ({
+  id: LARK_CONTEXT, name: "Lark Context", group: "Extensions", kind: "api", parent: "assistant", category_id: "assistant",
+  override, revision, effective: { ...main.effective, ...override }, fields: ["provider", "model", "effort"],
+  provider_ids: ["launcher.default", "launcher.messages"],
+});
 let use = LARK;
 const child = (override: ModelBinding = {}, revision = 7): ModelPurpose => ({
   id: use.id, name: use.name, group: "Agents", kind: "launcher", launch: "headless", parent: "agent.new", category_id: "agent.new",
@@ -66,7 +72,8 @@ const hub = async (input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     for (const field of ["provider", "model", "effort"] as const) {
       if (typeof body[field] === "string") override[field] = body[field];
     }
-    if (current.id === use.id) current = child(override, current.revision + 1);
+    if (current.id === LARK_CONTEXT) current = larkContext(override, current.revision + 1);
+    else if (current.id === use.id) current = child(override, current.revision + 1);
     else current = { ...current, override, effective: { ...current.effective, ...override }, revision: current.revision + 1 };
     return json({ purpose: current, providers });
   }
@@ -329,6 +336,68 @@ describe.each([
     expect(button(t("common.save"), dialog()).disabled).toBe(true);
     expect(button(t("settings-modelconfiguration.restore"), dialog()).disabled).toBe(true);
     expect(writes).toEqual([]);
+  });
+});
+
+describe("Lark Context model configuration", () => {
+  beforeEach(() => {
+    use = LARK;
+    current = larkContext();
+    readonly = { ...child(), ...TWIN, fields: [] };
+  });
+
+  it.each([
+    ["en", "Follow Main chat"],
+    ["zh-Hans", "跟随 主对话"],
+    ["ja", "メインチャットに従う"],
+  ])("shows one extension row with the effective Main chat model and localized default in %s", async (lang, follow) => {
+    await initI18n(lang);
+    await render();
+    expect(host.querySelectorAll(`[data-model-purpose="${LARK_CONTEXT}"]`)).toHaveLength(1);
+    expect(host.querySelector('[data-model-purpose="lark.agent"]')).toBeNull();
+    expect(host.querySelector('[data-model-purpose="inbox.agent"]')).not.toBeNull();
+    expect(row().closest("section")?.querySelector("h2")?.textContent).toBe(t("settings-nav.tab_extensions"));
+    expect(row().textContent).toContain("default-model");
+    expect(row().textContent).toContain(follow);
+    await open();
+    const options = [...dialog().querySelectorAll("select option")];
+    expect(options.map((o) => o.getAttribute("value"))).toEqual(["", "launcher.default", "launcher.messages"]);
+    expect(options[0].textContent).toBe(follow);
+    expect(dialog().textContent).toContain("default-model");
+    expect(button(follow, dialog())).toBeDefined();
+  });
+
+  it("saves provider, model and effort on Lark Context and restores all three to Main chat", async () => {
+    await initI18n("en");
+    await render();
+    await open();
+    await choose("launcher.messages");
+    type(dialog().querySelector<HTMLInputElement>(`input[aria-label="${t("settings-modelconfiguration.specific_model")}"]`)!, "lark-model");
+    type(effort(), "high");
+    await act(async () => button(t("common.save"), dialog()).click());
+    await flush();
+    expect(row().textContent).toContain("Separately configured");
+    expect(row().textContent).toContain("lark-model");
+    expect(host.querySelector('[data-model-purpose="assistant"]')?.textContent).toContain("default-model");
+    await open();
+    await act(async () => button("Follow Main chat", dialog()).click());
+    await flush();
+    expect(writes).toEqual([
+      { path: `/api/v1/model-config/purposes/${LARK_CONTEXT}`, method: "PATCH", body: { revision: 7, provider: "launcher.messages", model: "lark-model", effort: "high" } },
+      { path: `/api/v1/model-config/purposes/${LARK_CONTEXT}`, method: "PATCH", body: { revision: 8, provider: null, model: null, effort: null } },
+    ]);
+    expect(row().textContent).toContain("Follow Main chat");
+    expect(row().textContent).toContain("default-model");
+  });
+
+  it("keeps the old Lark /agent row and extension behavior when the extension follows processing", async () => {
+    current = { ...larkContext(), parent: "kb", category_id: "kb", inherited_from: "kb" };
+    readonly = child();
+    await render();
+    expect(host.querySelector('[data-model-purpose="lark.agent"]')?.textContent).toContain(t("settings-modelconfiguration.lark_headless_inheritance"));
+    expect(row().textContent).toContain(t("settings-modelconfiguration.follows", { name: "信息处理" }));
+    await open();
+    expect(button(t("settings-modelconfiguration.restore"), dialog())).toBeDefined();
   });
 });
 

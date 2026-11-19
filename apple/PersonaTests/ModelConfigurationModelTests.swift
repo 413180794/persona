@@ -62,6 +62,57 @@ struct ModelConfigurationModelTests {
         #expect(hub.sent("GET", "/api/v1/model-config/purposes/lark.agent").count == 2)
     }
 
+    @Test func larkContextFollowsMainChatAndKeepsItsOwnEditableBinding() async throws {
+        let hub = FakeHub()
+        let context = #"{"id":"extension.lark-context","category_id":"assistant","parent":"assistant","name":"Lark Context","group":"Extensions","kind":"api","override":{},"effective":{"provider":"launcher.strong","model":"model-a","effort":"medium"},"revision":7,"fields":["provider","model","effort"],"provider_ids":["launcher.strong","legacy.ai"]}"#
+        let providers = #"[{"id":"launcher.strong","name":"strong","kind":"launcher"},{"id":"legacy.ai","name":"Messages API","kind":"api","api":"messages"},{"id":"api.other","name":"Other API","kind":"api","api":"responses"}]"#
+        let detail = #"{"purpose":\#(context),"providers":\#(providers)}"#
+        let main = Self.purpose.replacingOccurrences(of: "agent.new", with: "assistant")
+        hub.on("GET", "/api/v1/model-config", json: #"{"purposes":[\#(main),\#(Self.purpose),\#(context)],"providers":\#(providers)}"#)
+        let path = "/api/v1/model-config/purposes/extension.lark-context"
+        hub.on("GET", path, json: detail)
+        var saved = try JSON.decoder.decode(ModelPurposeDetail.self, from: Data(detail.utf8)).purpose
+        let inherited = saved.effective
+        hub.on("PATCH", path) { req in
+            let body = try JSONSerialization.jsonObject(with: req.body ?? Data()) as! [String: Any]
+            #expect(body["revision"] as? Int == saved.revision)
+            if saved.revision == 7 {
+                #expect(body["provider"] as? String == "legacy.ai")
+                #expect(body["model"] as? String == "lark-model")
+                #expect(body["effort"] as? String == "high")
+                saved.override = .init(provider: "legacy.ai", model: "lark-model", effort: "high")
+            } else {
+                #expect(body["provider"] is NSNull && body["model"] is NSNull && body["effort"] is NSNull)
+                saved.override = .init()
+            }
+            saved.effective = saved.override.isEmpty ? inherited : saved.override
+            saved.revision += 1
+            let purpose = String(decoding: try JSON.encoder.encode(saved), as: UTF8.self)
+            return Data(#"{"purpose":\#(purpose),"providers":\#(providers)}"#.utf8)
+        }
+        let page = make(hub)
+        await page.load()
+        let row = try #require(page.independentPurposes.first)
+        #expect(page.independentPurposes.map(\.id) == ["extension.lark-context"])
+        #expect(ModelConfigurationModel.followsCategory(row))
+        #expect(!ModelConfigurationModel.followsMainChat(row)) // Supervisor-specific UI stays separate.
+        #expect(page.inheritanceStatus(row) == String(localized: "Follow Main Chat"))
+        #expect(page.modelSummary(row).contains("model-a"))
+        await page.load(purposeID: row.id)
+        #expect(page.followLabel == String(localized: "Follow Main Chat"))
+        #expect(page.candidates.map(\.id) == ["launcher.strong", "legacy.ai"])
+        page.chooseProvider("legacy.ai")
+        #expect(page.allowsEffort)
+        page.draft.model = "lark-model"
+        page.draft.effort = "high"
+        #expect(await page.save())
+        #expect(page.inheritanceStatus(try #require(page.purpose)) == String(localized: "Separately configured"))
+        page.restoreInheritance()
+        #expect(await page.save())
+        #expect(page.purpose?.effective == inherited)
+        #expect(hub.sent("PATCH", path).count == 2)
+    }
+
     @Test func aLegacyRedirectIsAlsoLoadedOnlyOnceWhenReturningFromItsPicker() async {
         let hub = FakeHub()
         let legacy = Self.lark.replacingOccurrences(of: #"["provider","model","effort"]"#, with: "[]")

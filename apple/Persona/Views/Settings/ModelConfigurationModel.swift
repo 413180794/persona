@@ -58,6 +58,12 @@ nonisolated enum ModelSettingsOwner: Equatable, Sendable {
 
     var isLarkAgent: Bool { purpose?.id == "lark.agent" }
 
+    static func isLarkContext(_ p: ModelPurpose) -> Bool {
+        p.id == "extension.lark-context" && p.kind == "api" && p.parent == "assistant" && p.categoryID == "assistant" && p.hasWritableFields
+    }
+
+    var isLarkContext: Bool { purpose.map(Self.isLarkContext) ?? false }
+
     /// A use of Agents the hub lets the user set apart (Lark /agent, the Inbox's AI twin): fields of its own, following
     /// Agents while they are empty. An older hub sends no fields for it, and it stays a read-only use of Agents.
     static func followsAgents(_ p: ModelPurpose) -> Bool { p.parent == "agent.new" && p.hasWritableFields }
@@ -78,22 +84,23 @@ nonisolated enum ModelSettingsOwner: Equatable, Sendable {
     var isMainChatOverride: Bool { purpose.map(Self.followsMainChat) ?? false }
 
     /// A use set apart from its category (Agents or Main Chat), which it follows while its own fields are empty.
-    static func followsCategory(_ p: ModelPurpose) -> Bool { followsAgents(p) || followsMainChat(p) }
+    static func followsCategory(_ p: ModelPurpose) -> Bool { followsAgents(p) || followsMainChat(p) || isLarkContext(p) }
 
     /// 「Follow Agents」 or 「Follow Main Chat」: what the shown use follows while its fields are empty; nil for a category.
     var followLabel: String? {
-        if isMainChatOverride { return String(localized: "Follow Main Chat") }
+        if isMainChatOverride || isLarkContext { return String(localized: "Follow Main Chat") }
         return isAgentsOverride ? String(localized: "Follow Agents") : nil
     }
 
     func inheritanceStatus(_ p: ModelPurpose) -> String {
         guard p.override.isEmpty else { return String(localized: "Separately configured") }
-        return Self.followsMainChat(p) ? String(localized: "Follow Main Chat") : String(localized: "Follow Agents")
+        return Self.followsMainChat(p) || Self.isLarkContext(p) ? String(localized: "Follow Main Chat") : String(localized: "Follow Agents")
     }
 
-    /// Launchers translate effort to their runtime; direct API calls still require Responses.
+    /// Lark Context advertises effort in its fields. Legacy uses keep their launcher and Responses API rules.
     var allowsEffort: Bool {
         guard let purpose, purpose.supports("effort") else { return false }
+        if isLarkContext { return true }
         let id = draft.provider ?? purpose.effective.provider
         guard let provider = providers.first(where: { $0.id == id }) else { return true }
         return purpose.kind == "launcher" || provider.kind != "api" || provider.api == "responses"
