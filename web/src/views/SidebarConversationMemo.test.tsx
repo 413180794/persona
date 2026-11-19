@@ -188,6 +188,7 @@ describe("the Persona conversation rows", () => {
 
     // the main row's ⋯: the main conversation's menu (no pin, rename or archive), with End while it is live
     act(() => more().click());
+    await act(async () => vi.dynamicImportSettled());
     await flush();
     expect(menu()?.textContent).toContain(t("conversation-menu.copy_id"));
     expect(menu()?.textContent).not.toContain(t("conversation-menu.make_leader"));

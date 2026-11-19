@@ -303,6 +303,7 @@ describe("the leader conversations in the sidebar", () => {
   it("are made and ended from the menu through the hub: 取消常驻 asks again, never 置顶 (#6214)", async () => {
     await renderSidebar();
     act(() => row("lead-a").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 })));
+    await act(async () => vi.dynamicImportSettled());
     await flush();
     const unpin = () => [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')]
       .find((el) => el.textContent?.includes("取消常驻"));

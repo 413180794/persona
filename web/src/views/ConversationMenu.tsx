@@ -5,52 +5,16 @@ import { useCanDeleteConversation } from "../lib/conversation-delete";
 // archived; the background supervisor (#5082, lib/background-supervisor.ts) is built in and only has "Copy session ID".
 // All of it is the hub's (the same calls as "All chats"): 设为常驻 makes the chat a leader (#4331,
 // POST …/directions/{id}/make), 取消常驻 ends it (…/end; the tasks it handed out keep their supervisor).
-import { api, enc, errorText, sessionPath } from "../lib/api";
+import { errorText } from "../lib/api";
 import { sessionTitle } from "../lib/format";
-import { refreshAssistant } from "../lib/store";
+import { conversationArchiveItem, conversationMenuDeps, reread, type ConversationMenuDeps } from "./conversation-actions";
 import type { Session } from "../lib/types";
-import { copyText, Dialog, Loading, Menu, toast, type MenuItem, type ToastAction } from "../ui/atoms";
+import { Dialog, Loading, Menu, type MenuItem } from "../ui/atoms";
 import type { MenuAt } from "../ui/menu-model";
 import { t } from "../i18n";
 
-/** What the hub does for the menu; tests swap it. */
-export interface ConversationMenuDeps {
-  rename: (s: Session, title: string) => Promise<unknown>;
-  archive: (s: Session) => Promise<unknown>;
-  unarchive: (s: Session) => Promise<unknown>;
-  end: (s: Session) => Promise<unknown>;
-  refresh: () => Promise<unknown>;
-  /** Makes the conversation a leader (常驻) or ends it, on the hub for every device. */
-  lead: (s: Session, on: boolean) => Promise<unknown>;
-  copy: (text: string) => unknown;
-  notify: (text: string, tone: "ok" | "error", action?: ToastAction) => void;
-}
-
-export const conversationMenuDeps: ConversationMenuDeps = {
-  rename: (s, title) => api(`${sessionPath(s.machine_id, s.session_id)}/rename`, { method: "POST", json: { title } }),
-  archive: (s) => api(`/assistant/conversations/${enc(s.session_id)}/archive`, { method: "POST", json: {} }),
-  unarchive: (s) => api(`/assistant/conversations/${enc(s.session_id)}/unarchive`, { method: "POST", json: {} }),
-  end: (s) => api(`${sessionPath(s.machine_id, s.session_id)}/close`, { method: "POST" }),
-  refresh: () => refreshAssistant(),
-  lead: (s, on) => api(`/assistant/directions/${enc(s.session_id)}/${on ? "make" : "end"}`, { method: "POST", json: {} }),
-  copy: copyText,
-  notify: (text, tone, action) => toast(text, tone, action),
-};
-
 /** A running conversation can be ended (iOS `status.isLive`). */
 export const conversationLive = (s: Session) => s.status !== "offline";
-
-const reread = (deps: ConversationMenuDeps) => void deps.refresh().catch(() => {});
-
-async function undoArchive(s: Session, title: string, deps: ConversationMenuDeps) {
-  try {
-    await deps.unarchive(s);
-    deps.notify(t("conversation-menu.unarchived", { title }), "ok");
-  } catch (e) {
-    deps.notify(t("conversation-menu.undo_failed", { error: errorText(e) }), "error");
-  }
-  reread(deps);
-}
 
 /** 设为常驻 / 取消常驻 for a conversation that is not the main one (`leader`: it is one now). Both ask a second time
  * before the hub call (#6214): the first choice only arms the row, the second runs it, and the detail says what moves —
@@ -74,26 +38,6 @@ export function leaderItem(s: Session, leader: boolean, deps: ConversationMenuDe
         deps.notify(leader ? t("conversation-menu.leader_ended", { title }) : t("conversation-menu.leader_made", { title }), "ok");
       } catch (e) {
         deps.notify(t("conversation-menu.leader_failed", { error: errorText(e) }), "error");
-      }
-      reread(deps);
-    },
-  };
-}
-
-/** Archive is the same reversible action in a sidebar row and the open conversation's title menu (#6565). */
-export function conversationArchiveItem(s: Session, deps: ConversationMenuDeps = conversationMenuDeps): MenuItem {
-  const title = sessionTitle(s);
-  return {
-    key: "archive",
-    label: t("conversation-menu.archive"),
-    icon: "archive",
-    onSelect: async () => {
-      try {
-        await deps.archive(s);
-        // Undo puts it back as it was (an open conversation stays open: its page reads the machine's sessions)
-        deps.notify(t("conversation-menu.archived", { title }), "ok", { label: t("conversation-menu.undo"), run: () => void undoArchive(s, title, deps) });
-      } catch (e) {
-        deps.notify(errorText(e), "error");
       }
       reread(deps);
     },

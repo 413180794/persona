@@ -65,6 +65,7 @@ const press = async (el: Element) => {
   act(() => void el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerType: "mouse" })));
   await flush();
   act(() => (el as HTMLElement).click());
+  await act(async () => vi.dynamicImportSettled());
   await flush();
 };
 
@@ -139,6 +140,7 @@ describe("a sidebar row's ⋯", () => {
     await renderSidebar();
     const row = link("Release notes")!;
     act(() => void row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })));
+    await act(async () => vi.dynamicImportSettled());
     await flush();
     expect(menus()).toHaveLength(1);
 

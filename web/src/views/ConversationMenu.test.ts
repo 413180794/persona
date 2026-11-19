@@ -10,7 +10,8 @@ vi.hoisted(() => {
 import type { Session } from "../lib/types";
 import type { ToastAction } from "../ui/atoms";
 import { activation, rowLabel } from "../ui/menu-model";
-import { conversationMenuItems, leaderItem, type ConversationMenuDeps } from "./ConversationMenu";
+import { conversationMenuItems, leaderItem } from "./ConversationMenu";
+import type { ConversationMenuDeps } from "./conversation-actions";
 
 const conv = (o: Partial<Session> = {}) => ({ machine_id: "hub", session_id: "c1", title: "周报", status: "idle", assistant: true, ...o }) as Session;
 

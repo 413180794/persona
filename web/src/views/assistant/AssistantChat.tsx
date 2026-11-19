@@ -18,7 +18,7 @@ import { hubHas, useStore } from "../../lib/store";
 import type { Item, Session } from "../../lib/types";
 import { copyText, IconButton, Spinner, toast, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { conversationArchiveItem } from "../ConversationMenu";
+import { conversationArchiveItem } from "../conversation-actions";
 import { lazyDialog } from "../LazyOverlay";
 import { PersonaDot, usePersona } from "./Persona";
 import { t } from "../../i18n";
