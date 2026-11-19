@@ -23,6 +23,7 @@ spec/
     sync/             chat sync scenarios: hub state, frames with faults, what each device shows
     fold-changes/     the files a run of work changed, counted by the hub and the web alike
     fold-sources/     the web pages a run of work used, read by the hub and the web alike
+    graph-layout/     an extension graph's layout, reading order and folds, checked by the web, iOS, Android and the hub
     input-clip/       the whole-input bound after the hub and runtime SDK's two string passes
     attention/        Persona Link's "Needs you" summary against the web badge
     entries/          the Assistant's two composer entries, Needs you and In progress
@@ -91,6 +92,7 @@ spec/
 | minutes-overview | [README](fixtures/minutes-overview/README.md): the minutes' summary card (#6563), which places of a text are bold (each `strong` entry's first occurrence after the one before), how a client cleans a malformed overview and when it falls back to the minutes as before, and the hub's Markdown of the same minutes, checked by the hub, the mock hub, the iPhone and the web |
 | screen-link | [README](fixtures/screen-link/README.md): the live screen's session wire (#6398), every message framed byte for byte alike by the node and the iPhone's client |
 | file-types | [README](fixtures/file-types/README.md): a `.ts` / `.mts` / `.cts` file typed by its first bytes (#7974), a real TypeScript module and a real MPEG-TS segment, checked by the node and the hub (Go) |
+| graph-layout | [README](fixtures/graph-layout/README.md): an extension view's `graph` (UI version 10, #9727), each node's place in slots, the edges drawn, the reading order with depths, fold counts and group frames, written by the reference `scripts/gen/graph_layout.py` and checked by the web, iOS, Android and the hub |
 | tokens | 见各自 [README](tokens/README.md)；校验夹具如放在 `fixtures/tokens/`，结构由该领域 README 说明 |
 
 ## 夹具约定
