@@ -367,6 +367,10 @@ func mapRelay(a relayAccount, e relayEntry, now time.Time) (acct proto.UsageAcco
 		}
 		model = clip(model, 40) // the same bound the generic source puts on a model
 		out := proto.UsageWindow{Label: proto.WindowLabel(minutes), WindowMinutes: minutes, UsedPercent: used, ResetsAt: utc(w.ResetsAt), Model: model}
+		if !w.CheckedAt.IsZero() {
+			at := notAfter(w.CheckedAt.UTC(), now)
+			out.SampledAt = &at
+		}
 		list = addWindow(list, checkedAt, out, w.CheckedAt)
 		if w.CheckedAt.After(newest) {
 			newest = w.CheckedAt

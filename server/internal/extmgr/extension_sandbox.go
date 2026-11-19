@@ -385,6 +385,14 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 	}
 	if runtime.GOOS != "darwin" { // Linux's way out of the sandbox; macOS's is loopback TCP
 		proxySock = filepath.Join(run, "proxy.sock")
+		if runtime.GOOS == "linux" && len(proxySock) > maxSocketPath && !s.HTTP && !g.AgentRuntimes {
+			rule := ruleNow()
+			// A stdio-only extension with no egress can start in the same
+			// isolated network namespace without binding an unusable socket.
+			if !rule.Hub && len(rule.Hosts) == 0 && len(rule.Targets) == 0 && len(rule.Owner) == 0 {
+				proxySock = ""
+			}
+		}
 	}
 	// The manager binds these as the program starts, which cannot go on without them.
 	for _, sock := range []string{runtimeSock, proxySock} {
@@ -425,7 +433,10 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 		tools = ps.reg.ToolsDir(id)
 	}
 	s.Wrap = func(command string, args []string) (string, []string, []string, error) {
-		proxyURL := px.Register(id, ruleNow())
+		proxyURL := ""
+		if proxySock != "" || runtime.GOOS == "darwin" {
+			proxyURL = px.Register(id, ruleNow())
+		}
 		if runtimeSock != "" {
 			if err := px.RelayUnix(id, runtimeSock, nodeRuntimeSocket()); err != nil {
 				return "", nil, nil, err
@@ -439,8 +450,10 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 			return name, a, env, nil
 		}
 		plan.ProxySocket, plan.Self = proxySock, selfExecutable()
-		if err := px.ListenUnix(id, plan.ProxySocket); err != nil {
-			return "", nil, nil, err
+		if proxySock != "" {
+			if err := px.ListenUnix(id, proxySock); err != nil {
+				return "", nil, nil, err
+			}
 		}
 		name, a, env := sandbox.Linux(sup.Bwrap, plan)
 		return name, a, env, nil

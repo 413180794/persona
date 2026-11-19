@@ -18,6 +18,11 @@ type UsageWindow struct {
 	UsedPercent   float64 `json:"used_percent"`
 	// ResetsAt is when the window starts over; nil when the source did not say.
 	ResetsAt *time.Time `json:"resets_at,omitempty"`
+	// SampledAt belongs to this window, even when other windows were sampled later.
+	SampledAt *time.Time `json:"sampled_at,omitempty"`
+	StaleAt   *time.Time `json:"stale_at,omitempty"`
+	Stale     bool       `json:"stale,omitempty"`
+	Problem   string     `json:"problem,omitempty"`
 	// Model names the one model this window measures, for an allowance a provider keeps per model next to the plan's
 	// own (#2595); empty for the plan's window. Such a window never identifies an account.
 	Model string `json:"model,omitempty"`
@@ -34,6 +39,8 @@ type UsageAccount struct {
 	Windows []UsageWindow `json:"windows"`
 	// SampledAt is when the source wrote the newest of these numbers (not when we read them).
 	SampledAt time.Time `json:"sampled_at"`
+	// SampleTimeEstimated means the adapter had only its own read time for the account.
+	SampleTimeEstimated bool `json:"sample_time_estimated,omitempty"`
 	// Stale: the sample is older than the collector's schedule allows (its source has not been written to for a
 	// while, or the machine that had it is offline).
 	Stale bool `json:"stale,omitempty"`

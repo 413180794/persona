@@ -172,6 +172,39 @@ func TestUsagePollForgetsAMachineThatTurnedItOff(t *testing.T) {
 	}
 }
 
+func TestUsagePollPreservesLegacyCodexEventTime(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	event, explicit := now.Add(-2*time.Hour), now.Add(-time.Hour)
+	five, week := uw("5h", 300, 0, now.Add(time.Hour)), uw("7d", 10080, 30, now.Add(48*time.Hour))
+	week.SampledAt = &explicit
+	source := usageSource{id: "legacy", online: true, ask: func(context.Context) (proto.UsageSnapshot, error) {
+		return proto.UsageSnapshot{Enabled: true, Accounts: []proto.UsageAccount{
+			{Provider: "codex", SampledAt: event, Windows: []proto.UsageWindow{five, week}},
+			{Provider: "claude", SampledAt: event, Windows: []proto.UsageWindow{five}},
+		}}, nil
+	}}
+	var cache usageWindowsHub
+	result := cache.poll(context.Background(), []usageSource{source}, now)
+	if len(result) != 2 {
+		t.Fatalf("accounts: %+v", result)
+	}
+	for _, account := range result {
+		first := account.Windows[0]
+		if account.Provider == "claude" {
+			if first.SampledAt != nil {
+				t.Fatalf("inferred a Claude window time: %+v", first)
+			}
+			continue
+		}
+		if first.SampledAt == nil || !first.SampledAt.Equal(event) || first.StaleAt == nil || !first.StaleAt.Before(now) {
+			t.Fatalf("lost the old Codex event time: %+v", first)
+		}
+		if got := account.Windows[1].SampledAt; got == nil || !got.Equal(explicit) {
+			t.Fatalf("overwrote an explicit window time: %v", got)
+		}
+	}
+}
+
 func TestMachineUsageWindowsSwitch(t *testing.T) {
 	off := false
 	if !(&Machine{}).usageWindows() || (&Machine{cfg: MachineConfig{UsageWindows: &off}}).usageWindows() {

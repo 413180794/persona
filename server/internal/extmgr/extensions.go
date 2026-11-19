@@ -1176,6 +1176,9 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		if (method == "gateway.launchers" || method == "gateway.open") && ps.h != nil {
 			return ps.h.gatewayCall(ctx, id, method, params)
 		}
+		if method == "usage.windows" && ps.h != nil {
+			return ps.h.usageWindows(ctx, id)
+		}
 		if method == "usage.gateway_accounts" && ps.h != nil { // the gateways' account lists (extension_usage.go)
 			return ps.h.usageGatewayAccounts(ctx, id)
 		}

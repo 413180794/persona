@@ -235,6 +235,8 @@ type Permissions struct {
 	// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector),
 	// held in its memory only.
 	GhLogin bool `json:"gh_login,omitempty"`
+	// Read merged subscription usage windows from machines and gateways (usage.windows), without credentials.
+	UsageWindows bool `json:"usage_windows,omitempty"`
 	// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
 	// accounts, status and quota windows, never a key.
 	UsageGateways bool `json:"usage_gateways,omitempty"`

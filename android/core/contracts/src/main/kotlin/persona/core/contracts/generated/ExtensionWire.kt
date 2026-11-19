@@ -347,6 +347,10 @@ data class ExtensionPermissions(
      */
     @SerialName("gh_login") val ghLogin: Boolean? = null,
     /**
+     * Read merged subscription usage windows from machines and gateways (usage.windows), without credentials.
+     */
+    @SerialName("usage_windows") val usageWindows: Boolean? = null,
+    /**
      * It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
      * accounts, status and quota windows, never a key.
      */

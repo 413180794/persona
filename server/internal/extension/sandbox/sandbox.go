@@ -272,15 +272,19 @@ var systemDirs = []string{"/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "
 // Linux is the command line that runs plan in bubblewrap (in a systemd scope with plan.Scope), and the environment it
 // adds. The program sees HTTP(S)_PROXY on its loopback (RunCommand carries it to plan.ProxySocket), HOME its data.
 func Linux(bwrap string, plan Plan) (string, []string, []string) {
-	launch := []string{SelfPath, RunCommand, "--proxy-socket", plan.ProxySocket, "--listen", "127.0.0.1:" + strconv.Itoa(ProxyPort)}
-	if plan.Development != nil {
-		launch = append(launch, "--development-limits")
-		launch = append(launch, plan.Development.args()...)
+	launch := []string{plan.Command}
+	proxy := ""
+	if plan.ProxySocket != "" || plan.Strict || plan.Development != nil {
+		launch = []string{SelfPath, RunCommand, "--proxy-socket", plan.ProxySocket, "--listen", "127.0.0.1:" + strconv.Itoa(ProxyPort)}
+		if plan.Development != nil {
+			launch = append(launch, "--development-limits")
+			launch = append(launch, plan.Development.args()...)
+		}
+		launch = append(launch, "--", plan.Command)
+		proxy = "http://127.0.0.1:" + strconv.Itoa(ProxyPort)
 	}
-	launch = append(launch, "--", plan.Command)
 	args := append(linuxSetup(plan), append([]string{"--"}, launch...)...)
 	args = append(args, plan.Args...)
-	proxy := "http://127.0.0.1:" + strconv.Itoa(ProxyPort)
 	env := ProxyEnv(proxy)
 	if plan.Strict {
 		env = ProxyEnv("")

@@ -36,6 +36,8 @@ type Permissions struct {
 	// (usage.gateway_accounts: accounts, their status and quota windows, from the hub's last read), never a key
 	// (docs/extensions/extensions.md "Quota", docs/server/usage-windows.md "The gateway's account list").
 	UsageGateways bool `json:"usage_gateways,omitempty"`
+	// UsageWindows grants access to merged machine and gateway subscription windows.
+	UsageWindows bool `json:"usage_windows,omitempty"`
 	// AgentRuntimes: its program is an agent runtime that connects to this machine's node (docs/integrations/runtimes.md); in a
 	// sandbox it gets a socket in its run directory that leads to the node's runtime.sock and nowhere else (#5413).
 	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
@@ -89,7 +91,7 @@ func (p Permissions) FullHub() bool { return p.HubAPI && len(p.Hub) == 0 }
 // covers every scope but agents.permission_mode, which only a grant naming it covers; scopes never cover the full token.
 func (p Permissions) Covers(q Permissions) bool {
 	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys || q.GhLogin && !p.GhLogin ||
-		q.UsageGateways && !p.UsageGateways || q.AgentRuntimes && !p.AgentRuntimes || q.ErrorReports && !p.ErrorReports ||
+		q.UsageGateways && !p.UsageGateways || q.UsageWindows && !p.UsageWindows || q.AgentRuntimes && !p.AgentRuntimes || q.ErrorReports && !p.ErrorReports ||
 		q.AuthRelay && !p.AuthRelay || !p.Storage.covers(q.Storage) {
 		return false
 	}
@@ -390,6 +392,9 @@ func ExplainWith(l i18n.Lang, m *Manifest, config json.RawMessage) []PermissionL
 	if m.Permissions.GhLogin {
 		out = append(out, permissionLine(l, "gh_login"))
 	}
+	if m.Permissions.UsageWindows {
+		out = append(out, permissionLine(l, "usage_windows"))
+	}
 	if m.Permissions.UsageGateways {
 		out = append(out, permissionLine(l, "usage_gateways"))
 	}
@@ -539,6 +544,9 @@ func AddedWith(l i18n.Lang, old, m *Manifest, config json.RawMessage) []Permissi
 	}
 	if m.Permissions.GhLogin && !old.Permissions.GhLogin {
 		out = append(out, permissionLine(l, "gh_login"))
+	}
+	if m.Permissions.UsageWindows && !old.Permissions.UsageWindows {
+		out = append(out, permissionLine(l, "usage_windows"))
 	}
 	if m.Permissions.UsageGateways && !old.Permissions.UsageGateways {
 		out = append(out, permissionLine(l, "usage_gateways"))
