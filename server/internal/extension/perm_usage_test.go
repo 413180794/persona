@@ -39,3 +39,22 @@ func TestUsageGatewaysPermission(t *testing.T) {
 		t.Error("the digest does not see it")
 	}
 }
+
+func TestUsageWindowsPermissionIsSeparate(t *testing.T) {
+	old, err := Parse(with(t, func(m map[string]any) { m["permissions"] = map[string]any{"usage_gateways": true, "hub_api": true} }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := Parse(with(t, func(m map[string]any) {
+		m["permissions"] = map[string]any{"usage_gateways": true, "hub_api": true, "usage_windows": true}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.Permissions.Covers(next.Permissions) || Digest(old) == Digest(next) {
+		t.Fatal("new access must require consent")
+	}
+	if !slices.ContainsFunc(Added(old, next), func(l PermissionLine) bool { return l.Key == "usage_windows" && l.Title != "" }) {
+		t.Fatal("missing install permission explanation")
+	}
+}

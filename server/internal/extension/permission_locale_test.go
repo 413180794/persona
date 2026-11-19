@@ -18,7 +18,7 @@ func TestPermissionLanguagePreservesConsentAndAuthoredData(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.Permissions = Permissions{Network: []string{"api.example.com"}, Hub: append(HubScopes, ScopeCallPrefix+"example"),
-		LauncherKeys: true, GhLogin: true, UsageGateways: true, AgentRuntimes: true}
+		LauncherKeys: true, GhLogin: true, UsageGateways: true, UsageWindows: true, AgentRuntimes: true}
 	m.Secrets[0].Title = "草稿" // Authored data can equal a hub-owned label.
 	m.Contributes["ui"] = json.RawMessage(`[{"id":"nav","title":"草稿","placement":"nav_page"},{"id":"card","title":"草稿","placement":"capsule_card"}]`)
 	m.Contributes["events"] = json.RawMessage(`[{"id":"events","subscribe":["kb.changed","kb.forgotten","inbox.changed","agent.needs_you","agent.finished","todo.changed","todo.decision"]}]`)

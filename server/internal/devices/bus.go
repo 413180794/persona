@@ -86,6 +86,8 @@ func (d *Devices) Request(ctx context.Context, method string, params json.RawMes
 	case devicewire.MethodUpdateNodes:
 		go d.updateNodes(context.WithoutCancel(ctx))
 		return map[string]any{}, true, nil
+	case devicewire.MethodUsageWindows:
+		return d.UsageWindows(ctx), true, nil
 	case devicewire.MethodUsageGatewayAccounts:
 		return d.UsageGatewayAccounts(), true, nil
 	case devicewire.MethodPairConnector:

@@ -40,3 +40,23 @@ func (h *Manager) usageGatewayAccounts(ctx context.Context, id string) (any, err
 	}
 	return out, nil
 }
+
+// usageWindows exposes the sidebar's merged subscription data only after an explicit grant.
+func (h *Manager) usageWindows(ctx context.Context, id string) (any, error) {
+	p := h.extensions.reg.Get(id)
+	if p == nil || !p.Record.Granted.UsageWindows {
+		return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: "usage.windows needs the permission usage_windows"}
+	}
+	d, ok := h.opts.Devices.(gatewayInventory)
+	if !ok {
+		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "usage.windows unavailable"}
+	}
+	out, handled, err := d.Request(ctx, devicewire.MethodUsageWindows, json.RawMessage(`{}`))
+	if err != nil {
+		return nil, err
+	}
+	if !handled || out == nil {
+		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "usage.windows unavailable"}
+	}
+	return out, nil
+}

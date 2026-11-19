@@ -24,13 +24,14 @@ import (
 // It is the body of Persona's own GET /api/v1/usage/windows: a hub can feed another. window_minutes may be left out when
 // the label ("5h", "7d", "45m") says it.
 type genericAccount struct {
-	ID        string          `json:"id"`
-	Provider  string          `json:"provider"`
-	Name      string          `json:"name"`
-	Plan      string          `json:"plan"`
-	SampledAt *time.Time      `json:"sampled_at"`
-	Stale     bool            `json:"stale"`
-	Windows   []genericWindow `json:"windows"`
+	ID                  string          `json:"id"`
+	Provider            string          `json:"provider"`
+	Name                string          `json:"name"`
+	Plan                string          `json:"plan"`
+	SampledAt           *time.Time      `json:"sampled_at"`
+	SampleTimeEstimated bool            `json:"sample_time_estimated"`
+	Stale               bool            `json:"stale"`
+	Windows             []genericWindow `json:"windows"`
 }
 
 type genericWindow struct {
@@ -38,6 +39,9 @@ type genericWindow struct {
 	WindowMinutes int        `json:"window_minutes"`
 	UsedPercent   *float64   `json:"used_percent"`
 	ResetsAt      *time.Time `json:"resets_at"`
+	SampledAt     *time.Time `json:"sampled_at"`
+	StaleAt       *time.Time `json:"stale_at"`
+	Stale         bool       `json:"stale"`
 	Model         string     `json:"model"`
 }
 
@@ -78,8 +82,14 @@ func fetchGeneric(ctx context.Context, c *client, now time.Time) (Result, error)
 			if minutes <= 0 {
 				continue
 			}
-			list = addWindow(list, checked, proto.UsageWindow{Label: proto.WindowLabel(minutes), WindowMinutes: minutes, UsedPercent: used,
-				ResetsAt: utc(w.ResetsAt), Model: clip(strings.TrimSpace(w.Model), 40)}, time.Time{})
+			out := proto.UsageWindow{Label: proto.WindowLabel(minutes), WindowMinutes: minutes, UsedPercent: used,
+				ResetsAt: utc(w.ResetsAt), Model: clip(strings.TrimSpace(w.Model), 40), Stale: w.Stale, StaleAt: utc(w.StaleAt)}
+			var at time.Time
+			if w.SampledAt != nil && !w.SampledAt.IsZero() && !w.SampledAt.After(now) {
+				at = w.SampledAt.UTC()
+				out.SampledAt = &at
+			}
+			list = addWindow(list, checked, out, at)
 		}
 		provider := clip(strings.ToLower(strings.TrimSpace(a.Provider)), 32)
 		if len(list) == 0 || provider == "" {
@@ -92,6 +102,7 @@ func fetchGeneric(ctx context.Context, c *client, now time.Time) (Result, error)
 			return list[i].Model < list[j].Model
 		})
 		sampled := now
+		estimated := a.SampleTimeEstimated || a.SampledAt == nil || a.SampledAt.IsZero() || a.SampledAt.After(now)
 		if a.SampledAt != nil && !a.SampledAt.IsZero() {
 			sampled = notAfter(a.SampledAt.UTC(), now)
 		}
@@ -100,7 +111,7 @@ func fetchGeneric(ctx context.Context, c *client, now time.Time) (Result, error)
 			name = provider
 		}
 		acct := proto.UsageAccount{Provider: provider, Name: name, Plan: clip(strings.TrimSpace(a.Plan), 40), Windows: list,
-			SampledAt: sampled, Stale: a.Stale, Ref: a.ID}
+			SampledAt: sampled, SampleTimeEstimated: estimated, Stale: a.Stale, Ref: a.ID}
 		res.Accounts = append(res.Accounts, acct)
 		res.Seen.Accounts++
 		res.Seen.Windows += len(list)

@@ -18,6 +18,50 @@ type inventoryDevices struct {
 	list  proto.GatewayAccounts
 }
 
+func TestUsageWindowsRequiresExplicitPermission(t *testing.T) {
+	h := newTestManager(t)
+	devs := &windowDevices{}
+	h.opts.Devices = devs
+	granted := kbExtensionSpec(t, h, "windows-reader", extension.Permissions{UsageWindows: true})
+	gateway := kbExtensionSpec(t, h, "gateway-reader", extension.Permissions{UsageGateways: true})
+	full := kbExtensionSpec(t, h, "full-reader", extension.Permissions{HubAPI: true})
+	for _, denied := range []struct {
+		name string
+		call func(context.Context, string, json.RawMessage) (any, error)
+	}{{"gateway", gateway.Handle}, {"full", full.Handle}} {
+		_, err := denied.call(context.Background(), "usage.windows", json.RawMessage(`{}`))
+		var re *rpc.Error
+		if !errors.As(err, &re) || re.Code != extension.CodePermissionDenied || len(devs.asked) != 0 {
+			t.Fatalf("%s: %v, asked %v", denied.name, err, devs.asked)
+		}
+	}
+	out, err := granted.Handle(context.Background(), "usage.windows", json.RawMessage(`{}`))
+	if err != nil || len(devs.asked) != 1 || devs.asked[0] != devicewire.MethodUsageWindows {
+		t.Fatalf("%v %+v", err, devs.asked)
+	}
+	b, _ := json.Marshal(out)
+	if string(b) != `{"accounts":[{"provider":"agy"},{"provider":"codex"}]}` {
+		t.Fatalf("%s", b)
+	}
+	h.opts.Devices = nil
+	_, err = granted.Handle(context.Background(), "usage.windows", json.RawMessage(`{}`))
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != extension.CodeUnknownMethod {
+		t.Fatalf("missing device method: %v", err)
+	}
+}
+
+type windowDevices struct{ asked []string }
+
+func (d *windowDevices) Has(string) bool { return false }
+func (d *windowDevices) CallNode(context.Context, string, string, json.RawMessage) (json.RawMessage, error) {
+	return nil, errOffline
+}
+func (d *windowDevices) Request(_ context.Context, method string, _ json.RawMessage) (any, bool, error) {
+	d.asked = append(d.asked, method)
+	return map[string]any{"accounts": []map[string]string{{"provider": "agy"}, {"provider": "codex"}}}, true, nil
+}
+
 func (d *inventoryDevices) Has(string) bool { return false }
 func (d *inventoryDevices) CallNode(context.Context, string, string, json.RawMessage) (json.RawMessage, error) {
 	return nil, errOffline

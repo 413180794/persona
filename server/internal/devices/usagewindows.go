@@ -123,6 +123,20 @@ func (u *usageWindowsHub) poll(ctx context.Context, sources []usageSource, now t
 				answers[i] = &usageAnswer{} // the node is off: forget what it said
 				return
 			}
+			for i := range snap.Accounts {
+				a := &snap.Accounts[i]
+				if a.Provider != "codex" || a.SampledAt.IsZero() || a.SampledAt.After(now) {
+					continue
+				}
+				// An older node emits one Codex token_count observation per account.
+				// Its windows share that event's time. Claude windows can come from
+				// separate events, so missing Claude window times stay unknown.
+				for j := range a.Windows {
+					if a.Windows[j].SampledAt == nil {
+						a.Windows[j].SampledAt = &a.SampledAt
+					}
+				}
+			}
 			answers[i] = &usageAnswer{accounts: snap.Accounts, at: now}
 		}()
 	}
@@ -284,6 +298,7 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 		sort.SliceStable(members, func(i, j int) bool { return members[i].SampledAt.After(members[j].SampledAt) })
 		newest := members[0]
 		acct := proto.UsageAccount{Provider: newest.Provider, Name: newest.Name, Plan: newest.Plan, SampledAt: newest.SampledAt, Problem: newest.Problem}
+		acct.SampleTimeEstimated = newest.SampleTimeEstimated
 		// A gateway's name is one somebody gave the account; the machines only know "Codex Pro".
 		naming := -1
 		for i, m := range members {
@@ -313,10 +328,28 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 			machines = append(machines, m.Machines...)
 			for _, w := range m.Windows {
 				k := slot{w.WindowMinutes, w.Model}
+				prior, exists := bySlot[k]
 				// A local idle row is a fallback. Another source may have observed the live period.
-				if prior, ok := bySlot[k]; !ok || (m.Provider == "claude" && undatedIdleFiveHour(prior) && w.ResetsAt != nil) {
-					bySlot[k] = w
+				if exists {
+					measuredPeriod := m.Provider == "claude" && undatedIdleFiveHour(prior) && w.ResetsAt != nil
+					newerSample := w.SampledAt != nil && prior.SampledAt != nil && w.SampledAt.After(*prior.SampledAt)
+					if !measuredPeriod && !newerSample {
+						continue
+					}
 				}
+				after := usageHubStaleAfter
+				if len(m.Sources) > 0 && !m.Local {
+					after = usageGatewayStaleAfter
+					w.Stale = w.Stale || m.Stale
+					w.Problem = m.Problem
+				}
+				if w.SampledAt != nil {
+					staleAt := w.SampledAt.Add(after)
+					if w.StaleAt == nil || staleAt.Before(*w.StaleAt) {
+						w.StaleAt = &staleAt
+					}
+				}
+				bySlot[k] = w
 			}
 		}
 		for _, w := range bySlot {
@@ -444,16 +477,21 @@ func usageAccountID(a proto.UsageAccount) string {
 	return a.Provider + "-" + hex.EncodeToString(sum[:4])
 }
 
+// UsageWindows returns the same merged subscription data to the sidebar and authorized extensions.
+func (d *Devices) UsageWindows(ctx context.Context) map[string]any {
+	now := time.Now()
+	accounts := d.usageWin.poll(ctx, d.usageSources(), now)
+	if accounts == nil {
+		accounts = []proto.UsageAccount{}
+	}
+	return map[string]any{"accounts": accounts, "checked_at": now.UTC()}
+}
+
 // usageWindowRoutes: GET /api/v1/usage/windows, the accounts' windows for the sidebar's usage bars. Read-only, from
 // local files on the machines (docs/server/usage-windows.md); an empty list when no machine has any.
 // (#2432: its own block so that merges with the other route blocks stay additive.)
 func (d *Devices) usageWindowRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/usage/windows", func(w http.ResponseWriter, r *http.Request) {
-		now := time.Now()
-		accounts := d.usageWin.poll(r.Context(), d.usageSources(), now)
-		if accounts == nil {
-			accounts = []proto.UsageAccount{}
-		}
-		writeJSON(w, map[string]any{"accounts": accounts, "checked_at": now.UTC()})
+		writeJSON(w, d.UsageWindows(r.Context()))
 	})
 }

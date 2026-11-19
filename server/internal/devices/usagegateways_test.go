@@ -168,6 +168,57 @@ func TestGatewaysPollKeepLastAnswerWhenUnreachableAndMarkItStale(t *testing.T) {
 	}
 }
 
+func TestUsageGenericAGYTimeoutKeepsWindowTimeUntilRecovery(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	start := now.Add(-time.Minute)
+	reset := now.Add(time.Hour)
+	var phase atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method %s", r.Method)
+		}
+		at, used := start, 0
+		switch phase.Load() {
+		case 1:
+			<-r.Context().Done()
+			return
+		case 2:
+			at, used = now.Add(10*time.Minute), 20
+		}
+		fmt.Fprintf(w, `{"accounts":[{"id":"agy-local","provider":"agy","sampled_at":%q,"windows":[{"label":"5h","model":"Gemini","used_percent":%d,"sampled_at":%q,"resets_at":%q}]}]}`,
+			at.Format(time.RFC3339), used, at.Format(time.RFC3339), reset.Format(time.RFC3339))
+	}))
+	defer server.Close()
+	var g usageGateways
+	g.fetch = func(ctx context.Context, cfg usagesource.Config, at time.Time) (usagesource.Result, error) {
+		if phase.Load() == 1 {
+			c, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+			defer cancel()
+			ctx = c
+		}
+		return usagesource.Fetch(ctx, cfg, at)
+	}
+	g.init(UsageConfig{Sources: []UsageSourceConfig{{ID: "agy", Name: "AGY local", Type: "generic", URL: server.URL}}}, func() {}, nil)
+	for i, expected := range []struct {
+		at      time.Time
+		used    float64
+		stale   bool
+		problem string
+	}{{start, 0, false, ""}, {start, 0, true, "unreachable"}, {now.Add(10 * time.Minute), 20, false, ""}} {
+		phase.Store(int32(i))
+		readAt := now.Add(time.Duration(i) * 6 * time.Minute)
+		g.pollDue(context.Background(), readAt)
+		got := mergeUsageAccounts(g.accounts(readAt), readAt)
+		if len(got) != 1 || len(got[0].Windows) != 1 {
+			t.Fatalf("phase %d: %+v", i, got)
+		}
+		w := got[0].Windows[0]
+		if w.SampledAt == nil || !w.SampledAt.Equal(expected.at) || w.UsedPercent != expected.used || w.Stale != expected.stale || w.Problem != expected.problem {
+			t.Errorf("phase %d: %+v, want %+v", i, w, expected)
+		}
+	}
+}
+
 // A failed read says why the numbers are old (#1902): a key the gateway turned away is not a network problem, and the
 // admin page's reason and the bars' agree. The source failing outranks a relay's own per-account "error".
 func TestGatewaysFailedReadSaysWhy(t *testing.T) {

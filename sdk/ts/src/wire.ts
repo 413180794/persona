@@ -273,6 +273,8 @@ export interface Permissions {
    * held in its memory only.
    */
   gh_login?: boolean;
+  /** Read merged subscription usage windows from machines and gateways (usage.windows), without credentials. */
+  usage_windows?: boolean;
   /**
    * It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
    * accounts, status and quota windows, never a key.

@@ -693,6 +693,8 @@ public nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     /// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub
     /// connector), held in its memory only.
     public var ghLogin: Bool?
+    /// Read merged subscription usage windows from machines and gateways (usage.windows), without credentials.
+    public var usageWindows: Bool?
     /// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
     /// accounts, status and quota windows, never a key.
     public var usageGateways: Bool?
@@ -708,12 +710,13 @@ public nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     /// contributes.auth_relay.
     public var authRelay: Bool?
 
-    public init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil, errorReports: Bool? = nil, storage: ExtensionStoragePermission? = nil, authRelay: Bool? = nil) {
+    public init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageWindows: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil, errorReports: Bool? = nil, storage: ExtensionStoragePermission? = nil, authRelay: Bool? = nil) {
         self.network = network
         self.hubApi = hubApi
         self.hub = hub
         self.launcherKeys = launcherKeys
         self.ghLogin = ghLogin
+        self.usageWindows = usageWindows
         self.usageGateways = usageGateways
         self.agentRuntimes = agentRuntimes
         self.errorReports = errorReports
@@ -727,6 +730,7 @@ public nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         case hub
         case launcherKeys = "launcher_keys"
         case ghLogin = "gh_login"
+        case usageWindows = "usage_windows"
         case usageGateways = "usage_gateways"
         case agentRuntimes = "agent_runtimes"
         case errorReports = "error_reports"
@@ -741,6 +745,7 @@ public nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.hub = try? c.decodeIfPresent([String].self, forKey: .hub)
         self.launcherKeys = try? c.decodeIfPresent(Bool.self, forKey: .launcherKeys)
         self.ghLogin = try? c.decodeIfPresent(Bool.self, forKey: .ghLogin)
+        self.usageWindows = try? c.decodeIfPresent(Bool.self, forKey: .usageWindows)
         self.usageGateways = try? c.decodeIfPresent(Bool.self, forKey: .usageGateways)
         self.agentRuntimes = try? c.decodeIfPresent(Bool.self, forKey: .agentRuntimes)
         self.errorReports = try? c.decodeIfPresent(Bool.self, forKey: .errorReports)

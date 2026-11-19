@@ -92,6 +92,8 @@ const (
 	// usage sources, from their last read (never a key; docs/server/usage-windows.md "The gateway's account list"). The extensions'
 	// usage.gateway_accounts (internal/extmgr, permission usage_gateways) asks it in the manager's process.
 	MethodUsageGatewayAccounts = "devices.usage_gateway_accounts"
+	// MethodUsageWindows returns the merged subscription windows to an authorized extension.
+	MethodUsageWindows = "devices.usage_windows"
 	// EventLinkRTT LinkRTT: a Persona Link's round trip, as the hub's heartbeat on it measured it (its paths are
 	// compared by it).
 	EventLinkRTT = "devices.link_rtt"
