@@ -39,7 +39,7 @@ func (s *Service) agentDecisionSpoke(ctx context.Context, r SessionRef, at time.
 	}
 	a := b.asks[id]
 	if a == nil || !decideAsk(a) || a.AskedAt.IsZero() || !a.AcceptedAt.IsZero() ||
-		!at.After(a.AskedAt) || acceptAskStale(a, t) || acceptAskEnded(a, t) {
+		!at.After(a.AskedAt) || acceptAskStale(a, t) || acceptAskEnded(a, t) || !a.RecheckAt.IsZero() || ownerDecisionReturned(t.Supervision) {
 		b.mu.Unlock()
 		return
 	}
