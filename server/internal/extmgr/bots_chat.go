@@ -35,6 +35,16 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	if err != nil {
 		return nil, nil // something else (a 1.0 event, the url check): nothing to do
 	}
+	done, err := h.opts.Admission.Admit("feishu-event")
+	if err != nil {
+		return nil, err
+	}
+	delegated := false
+	defer func() {
+		if !delegated {
+			done()
+		}
+	}()
 	switch env.Header.EventType {
 	case feishubot.EventMessage:
 		var ev feishubot.MessageEvent
@@ -53,12 +63,16 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		// Its place in line is taken here, as it comes: each handled on its own, a message sent right after another
 		// could be handed to the assistant first, and the conversation read them the wrong way round.
 		b := &h.bots
-		done := make(chan struct{})
+		passed := make(chan struct{})
 		b.mu.Lock()
 		prev := b.line
-		b.line = done
+		b.line = passed
 		b.mu.Unlock()
-		go h.botMessage(ev, env.Event, time.Now(), prev, done)
+		delegated = true
+		go func() {
+			defer done()
+			h.botMessage(ev, env.Event, time.Now(), prev, passed)
+		}()
 	case feishubot.EventCardAction:
 		var a feishubot.CardAction
 		if err := json.Unmarshal(env.Event, &a); err != nil {
@@ -73,7 +87,11 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	case feishubot.EventP2PEntered:
 		var ev feishubot.P2PEntered
 		if json.Unmarshal(env.Event, &ev) == nil {
-			go h.botWelcome(ev.OperatorID.OpenID, ev.ChatID)
+			delegated = true
+			go func() {
+				defer done()
+				h.botWelcome(ev.OperatorID.OpenID, ev.ChatID)
+			}()
 		}
 	}
 	return nil, nil

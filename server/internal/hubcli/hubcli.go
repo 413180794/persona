@@ -23,6 +23,8 @@ const Usage = `  personad hub [run]        run the hub (config ~/.persona/hub.js
                            have the running edge start <path> (default: the program the hub runs now, personad or
                            persona-hub) and switch to it once it is up, waiting at most --timeout; --status only says what
                            serves now; exit 0 switched, 1 it did not (the hub serves on), 3 no edge here (restart the service instead)
+  personad hub admission init | status | (close|check|open) <attempt>
+                           control admission for tracked operations using the local service admission directory
   personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service | --manager-service] [--json]
                     [--lang en|zh-Hans|ja]
                                            set this machine up as the hub: hub.json, database, service, pairing (docs/assistant/onboarding.md);
@@ -93,6 +95,8 @@ func Hub(ctx context.Context, build update.Build, args []string) error {
 		return hub.RunSlot(ctx, build)
 	case "switch":
 		return runHubSwitch(rest)
+	case "admission":
+		return runAdmission(rest, os.Stdout)
 	case "doctor":
 		if len(rest) != 0 {
 			return noArguments("doctor")

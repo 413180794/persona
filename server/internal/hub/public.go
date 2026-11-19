@@ -269,7 +269,7 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 		stopTests = func() {}
 		return err
 	}
-	handler := idleBodies(h.routes()) // a body that stops coming is answered and let go (bodyidle.go)
+	handler := idleBodies(h.admitHTTP(h.routes())) // a body that stops coming is answered and let go (bodyidle.go)
 	plain := newHubHTTPServer(h.cfg.Listen, handler)
 	plain.BaseContext = func(net.Listener) context.Context { return requestCtx }
 	errs := make(chan error, 2)
@@ -291,6 +291,9 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 	listeners = append(listeners, ln)
 	go func() { errs <- plain.Serve(ln) }()
 	h.logf("personad hub %s listening on %s (%s)", h.version, h.cfg.Listen, h.cfg.PublicURL)
+	if h.startupDone != nil {
+		h.startupDone()
+	}
 	if h.slot != nil {
 		h.logf("hub: slot %s, relayed by the hub's edge: the route moves here now", h.slot.Name)
 		h.slot.Ready()

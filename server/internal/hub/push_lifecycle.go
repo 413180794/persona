@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/db"
 )
 
@@ -15,7 +16,7 @@ const (
 
 // maintenanceLoop is tied to hub shutdown. Acceptance timestamps are coalesced;
 // registration ownership and inactivity remain in Postgres across hub versions.
-func (p *Pusher) maintenanceLoop(ctx context.Context) {
+func (p *Pusher) maintenanceLoop(ctx context.Context, gate *admission.Gate) {
 	if p.store == nil {
 		return
 	}
@@ -26,10 +27,15 @@ func (p *Pusher) maintenanceLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			if err := p.reconcileDevices(ctx); err != nil {
-				p.logf("push registration maintenance: %v", err)
+			if done, err := gate.Admit("hub-push-maintenance"); err == nil {
+				func() {
+					defer done()
+					if err := p.reconcileDevices(ctx); err != nil {
+						p.logf("push registration maintenance: %v", err)
+					}
+					p.mirrorSentIfDue(ctx) // delivered pushes for an older build (lnmode.go)
+				}()
 			}
-			p.mirrorSentIfDue(ctx) // the delivered pushes for a build from before hub_push_sent (lnmode.go)
 		}
 	}
 }

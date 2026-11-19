@@ -1580,6 +1580,21 @@ type dueTask struct {
 }
 
 func (s *Service) runDue(ctx context.Context, now time.Time) {
+	done, err := s.maintenanceGate.Admit("manager-schedules")
+	if err != nil {
+		return
+	}
+	var dispatched sync.WaitGroup
+	defer func() {
+		if s.maintenanceGate == nil {
+			done()
+			return
+		}
+		go func() {
+			dispatched.Wait()
+			done()
+		}()
+	}()
 	loc := s.location(ctx)
 	present := s.ownersPresent(now) // read before schedule.mu
 	sc, err := s.lockedSchedule(ctx)
@@ -1731,7 +1746,9 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 	s.broadcastSchedule()
 	for _, d := range due {
 		sc.inflight.Add(1)
+		dispatched.Add(1)
 		go func() {
+			defer dispatched.Done()
 			defer sc.inflight.Done()
 			_, _ = s.runTask(d.t, d.due, now, false, false)
 		}()
