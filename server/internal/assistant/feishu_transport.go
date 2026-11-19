@@ -111,8 +111,8 @@ func (s *Service) botReact(ctx context.Context, messageID, emoji string) (string
 	return res.ReactionID, err
 }
 
-func (s *Service) botUnreact(ctx context.Context, messageID, reactionID string) {
-	_ = s.appCall(ctx, AppFeishu, FeishuUnreact, map[string]any{"message_id": messageID, "reaction_id": reactionID}, nil)
+func (s *Service) botUnreact(ctx context.Context, messageID, reactionID string) error {
+	return s.appCall(ctx, AppFeishu, FeishuUnreact, map[string]any{"message_id": messageID, "reaction_id": reactionID}, nil)
 }
 
 func (s *Service) botMessages(ctx context.Context, messageID string) ([]feishubot.Item, error) {

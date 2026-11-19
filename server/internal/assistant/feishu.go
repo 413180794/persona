@@ -52,14 +52,20 @@ type botThread struct {
 	At     time.Time `json:"at"`
 }
 
+type feishuRecallReceipt struct {
+	MessageID string    `json:"message_id"`
+	At        time.Time `json:"at"`
+}
+
 // botState is the chat's state (botStateKey).
 type botState struct {
 	Current botTarget             `json:"current"`
 	Threads map[string]*botThread `json:"threads,omitempty"`
 	// Runs are an older hub's turns being answered: moved to the channels' runs (takeLegacyBotRuns).
-	Runs     []*botRun            `json:"runs,omitempty"`
-	Seen     []string             `json:"seen,omitempty"`
-	Recalled map[string]time.Time `json:"recalled,omitempty"`
+	Runs          []*botRun                      `json:"runs,omitempty"`
+	Seen          []string                       `json:"seen,omitempty"`
+	Recalled      map[string]time.Time           `json:"recalled,omitempty"`
+	RecallSettled map[string]feishuRecallReceipt `json:"recall_settled,omitempty"`
 	// Cards are the cards asking what is asked that are still open in the chat, by interaction id: only where each
 	// is and what it answers (never what it says), so a card answered elsewhere after a restart is still closed.
 	Cards map[string]*botCardRef `json:"cards,omitempty"`
@@ -156,6 +162,8 @@ type feishuBook struct {
 // it and a few minutes for its downloads.
 const feishuRecalledKeep = 10 * time.Minute
 
+const feishuRecallReceiptKeep = 48 * time.Hour
+
 // FeishuRecalled is feishu.recalled: the owner recalled a message in the bot's chat. One not in its conversation yet
 // is not sent; one being answered stops its turn (recallChannelRun).
 func (s *Service) FeishuRecalled(p FeishuRecalled) {
@@ -180,7 +188,6 @@ func (s *Service) acceptFeishuRecall(ctx context.Context, p FeishuRecalled) erro
 	if err != nil {
 		return err
 	}
-	s.noteRecalled(p.MessageID)
 	b := &s.fbot
 	b.mu.Lock()
 	s.loadBotLocked(ctx)
@@ -189,6 +196,15 @@ func (s *Service) acceptFeishuRecall(ctx context.Context, p FeishuRecalled) erro
 		return errors.New("Feishu recall state could not be read")
 	}
 	now := b.clock()
+	if terminal, ok := b.st.RecallSettled[p.AdmissionEventID]; ok && now.Sub(terminal.At) <= feishuRecallReceiptKeep {
+		b.mu.Unlock()
+		if terminal.MessageID != p.MessageID {
+			return errors.New("Feishu recall event ID is bound to another original")
+		}
+		done()
+		return nil
+	}
+	b.noteRecalledLocked(p.MessageID)
 	if b.st.Recalled == nil {
 		b.st.Recalled = map[string]time.Time{}
 	}
@@ -206,6 +222,24 @@ func (s *Service) acceptFeishuRecall(ctx context.Context, p FeishuRecalled) erro
 	if s.recallChannelRun(channel.Feishu, p.MessageID, channel.ClientMsgID(channel.Feishu, p.MessageID)) {
 		return errors.New("Feishu recall external effects need reconciliation")
 	}
+	b.mu.Lock()
+	if b.st.RecallSettled == nil {
+		b.st.RecallSettled = map[string]feishuRecallReceipt{}
+	}
+	for id, receipt := range b.st.RecallSettled {
+		if now.Sub(receipt.At) > feishuRecallReceiptKeep {
+			delete(b.st.RecallSettled, id)
+		}
+	}
+	b.st.RecallSettled[p.AdmissionEventID] = feishuRecallReceipt{MessageID: p.MessageID, At: now}
+	err = s.saveBotStateLocked()
+	if err != nil {
+		delete(b.st.RecallSettled, p.AdmissionEventID)
+	}
+	b.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	done()
 	return nil
 }
@@ -215,6 +249,10 @@ func (s *Service) noteRecalled(id string) {
 	b := &s.fbot
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.noteRecalledLocked(id)
+}
+
+func (b *feishuBook) noteRecalledLocked(id string) {
 	now := b.clock()
 	for id, at := range b.recalled {
 		if now.Sub(at) > feishuRecalledKeep {

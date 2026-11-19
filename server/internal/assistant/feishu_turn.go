@@ -157,19 +157,21 @@ func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 
 // recalled takes a recalled message's marks off when the run it was folded into goes on without it: its reaction,
 // and its own progress card (which said it is answered with the next message) says it was recalled.
-func (f feishuSink) recalled(ctx context.Context, m channel.Folded) {
+func (f feishuSink) recalled(ctx context.Context, m channel.Folded) error {
+	var reactionErr, cardErr error
 	s := f.s
 	if rx := m.Ext["reaction"]; rx != "" && m.ReplyTo != "" {
-		s.botUnreact(ctx, m.ReplyTo, rx)
+		reactionErr = s.botUnreact(ctx, m.ReplyTo, rx)
 	}
 	if card := m.Ext["card"]; card != "" {
 		l := s.botLang(ctx)
 		c := feishubot.NewCard("", "", "").Note(i18n.T(l, "assistant-feishu.recalled_folded"))
 		endHeader(l, c, channel.EndRecalled)
-		if err := s.botUpdateCard(ctx, card, c); err != nil {
-			s.logf("bots: a recalled message's card: %v", err)
+		if cardErr = s.botUpdateCard(ctx, card, c); cardErr != nil {
+			s.logf("bots: a recalled message's card: %v", cardErr)
 		}
 	}
+	return errors.Join(reactionErr, cardErr)
 }
 
 // answer writes the answer into the progress card (more cards when long), and marks the messages DONE. When nothing

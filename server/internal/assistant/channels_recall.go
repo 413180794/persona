@@ -39,16 +39,17 @@ func (s *Service) recallChannelRun(ch, ref, msgID string) (effectsUnverified boo
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	if gone, ok := r.Unfold(ref, msgID); ok {
-		s.saveChannelStateLocked()
+		stored := s.saveChannelStateLocked() == nil && c.stLoaded
 		c.mu.Unlock()
 		s.logf("channels: %s: a message recalled; the others are still answered", r.ID)
-		if sink, _ := s.sinkFor(ctx, ch); sink != nil {
+		var acknowledged bool
+		if sink, err := s.sinkFor(ctx, ch); err == nil {
 			if rs, ok := sink.(channelRecall); ok {
-				rs.recalled(ctx, gone)
+				acknowledged = rs.recalled(ctx, gone) == nil
 			}
 		}
 		s.channelsChanged()
-		return true
+		return !stored || !acknowledged
 	}
 	r.Recalled = true
 	s.saveChannelStateLocked()
