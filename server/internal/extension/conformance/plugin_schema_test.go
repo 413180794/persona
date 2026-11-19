@@ -207,7 +207,8 @@ var serverCalls = []string{
 // connector protocol's namespace.
 var sentCalls = []string{connector.MethodSentRecord}
 
-var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit}
+var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit,
+	assistantwire.MReceiveNotice, assistantwire.MNoticeStatus, assistantwire.MConfirmNotice}
 
 var kbCalls = []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBDay,
 	assistantwire.MethodKBSearch, assistantwire.MethodKBUpdate, assistantwire.MethodKBOwner, assistantwire.MethodKBRecent,
