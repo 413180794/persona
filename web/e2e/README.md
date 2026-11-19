@@ -1,5 +1,18 @@
 # Bounded Agents list verification
 
+## Automatic workflow board review (#10818)
+
+```sh
+node web/e2e/workspace-board-review.mjs <loopback-web-origin> <artifact-directory> [--chromium <executable>]
+```
+
+Serve the Web app on loopback with an unreachable hub proxy. The runner gives a fresh Chromium context
+immutable synthetic HTTP and WebSocket responses and rejects writes and off-origin traffic. It checks column counts
+and card IDs on desktop and narrow screens. It opens the matching to-do details, confirms the owner verification
+action, checks the accepted history and both states on a mixed-session to-do, and follows its two session links.
+It also checks that a workspace's Open session action opens the session that placed it in the current column.
+The artifact directory receives status and route assertions in `results.json` and screenshots.
+
 ## Paseo workspace pins
 
 ```sh

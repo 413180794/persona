@@ -12,6 +12,8 @@ Cards can be renamed, pinned, archived, and restored. Dragging moves a card acro
 
 Click a card to see its folder and linked Agents, open that machine's Files or Git, or use **New agent** to open the existing creation flow prefilled with the machine and folder. Binding, moving to Done, pinning, and archiving only update board metadata: they do not start or stop Agents, and do not run Git, PRs, releases, or delete folders. Starting an Agent requires an explicit submit in the creation flow.
 
+In **Auto**, **To review** counts to-dos with an open request for you to verify. **Unread** shows ordinary unseen activity, **Idle** includes seen sessions and quiet workspaces, and **Done** keeps completed to-dos reachable. A to-do card opens its own detail. A workspace's **Open session** action follows the session state that put the workspace in its column.
+
 ## Organizing several workspaces (#7583)
 
 For people managing several Agent workspaces, the manual view offers **Select** when the manager advertises bulk
