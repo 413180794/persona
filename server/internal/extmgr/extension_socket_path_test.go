@@ -128,6 +128,37 @@ func TestExtensionSocketPathLimit(t *testing.T) {
 	}
 }
 
+func TestStdioOnlyExtensionWithoutEgressStartsWithLongRunPath(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux namespace and proxy")
+	}
+	withSandbox(t)
+	tail := filepath.Join("run", socketTestID, "proxy.sock")
+	ps, _ := socketTestExtensions(t, maxSocketPath+11, tail)
+	p := longIDExtension(&extension.Runtime{}, extension.Permissions{UsageWindows: true})
+	spec := host.Spec{}
+	if err := ps.confine(context.Background(), p, &hubExtension{}, &spec); err != nil {
+		t.Fatal(err)
+	}
+	_, argv, env, err := spec.Wrap("/x/program", []string{"test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(argv, " ")
+	if !strings.Contains(joined, "--unshare-net") || !strings.HasSuffix(joined, "-- /x/program test") ||
+		strings.Contains(joined, "--proxy-socket") || !strings.Contains(strings.Join(env, " "), "HTTPS_PROXY= ") {
+		t.Fatalf("expected an isolated command without an egress proxy, got %q and %q", argv, env)
+	}
+	if _, err := os.Stat(filepath.Join(ps.root, tail)); !os.IsNotExist(err) {
+		t.Fatalf("unexpected proxy socket: %v", err)
+	}
+	p.Record.Granted.Network = []string{"example.org"}
+	networked := host.Spec{}
+	if err := ps.confine(context.Background(), p, &hubExtension{}, &networked); err == nil {
+		t.Fatal("accepted a long proxy path for an extension granted network access")
+	}
+}
+
 // An installed extension's HTTP socket outside a sandbox (<id>.sock), which its program binds: too long, one that
 // speaks the protocol still starts and its log says why its HTTP side will not; one that serves only HTTP does not
 // start, and its status says why in the app's language.
