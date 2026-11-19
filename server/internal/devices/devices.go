@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -54,9 +55,10 @@ type nodeStateStore interface {
 
 // Options are what Devices needs from the manager it runs in.
 type Options struct {
-	Hub   Host
-	Store Store // nil: nothing is kept (tests)
-	Logf  func(format string, args ...any)
+	Admission *admission.Gate
+	Hub       Host
+	Store     Store // nil: nothing is kept (tests)
+	Logf      func(format string, args ...any)
 	// ManagerID is the manager these devices are ("" and "assistant": the built-in one): its health space on a computer
 	// is named after it (identity.HealthDirName, healthreports.go).
 	ManagerID string

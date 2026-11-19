@@ -31,6 +31,17 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	if err := json.Unmarshal(p.Event, &ev); err != nil {
 		return badRequest(err)
 	}
+	var done func()
+	if s.maintenanceGate != nil {
+		payload, err := json.Marshal(p)
+		if err != nil {
+			return err
+		}
+		done, err = s.maintenanceGate.ContinuePayload("feishu-event", "feishu-dispatch", ev.Message.MessageID, payload)
+		if err != nil {
+			return &rpc.Error{Code: CodeTryAgain, Message: err.Error()}
+		}
+	}
 	// It takes its place as it comes, before the bot's status is read (a call to the hub). One that is not handled
 	// (refused, redelivered) still passes the turn on.
 	b := &s.fbot
@@ -49,6 +60,9 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	defer func() {
 		if !queued {
 			turn.pass()
+			if done != nil {
+				done()
+			}
 		}
 	}()
 	// What it is taken with first: a message taken is always answered, never dropped for want of it.
@@ -69,9 +83,12 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 		turn.waitTurn()
 		if p.From == FeishuFromElsewhere {
 			s.feishuElsewhere(ev, st) // the owner's "@bot /ai …" from a group that is not opted in (feishu_elsewhere.go)
-			return
+		} else {
+			s.feishuMessage(ev, st, p.Action)
 		}
-		s.feishuMessage(ev, st, p.Action)
+		if done != nil {
+			done() // a process crash or panic leaves the payload for reconciliation
+		}
 	}()
 	return nil
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/agents"
 	"github.com/nwverse/persona/server/internal/approval"
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -52,6 +53,7 @@ type Devices interface {
 
 // Options are how the manager reaches what it needs.
 type Options struct {
+	Admission *admission.Gate
 	// Dir is the data directory (~/.persona): hub.json, extensions/ in it, and secret.key unless SecretKey says.
 	Dir string
 	// SecretKey is the manager's own key file (the built-in manager's in its directory, managerconf.OwnFile); "":

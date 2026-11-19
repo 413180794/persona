@@ -582,6 +582,11 @@ func (h *Manager) pruneSentLedger(ctx context.Context) {
 	if days == 0 {
 		days = sentLedgerDays
 	}
+	done, err := h.opts.Admission.Admit("extension-ledger-prune")
+	if err != nil {
+		return
+	}
+	defer done()
 	n, err := st.PruneSentAsUser(ctx, sentLedgerNow().UTC().AddDate(0, 0, -days))
 	switch {
 	case err != nil && ctx.Err() == nil:
