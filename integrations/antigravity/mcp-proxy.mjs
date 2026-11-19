@@ -4,7 +4,8 @@
 // Stdio MCP proxy for an assistant chat's `personad mcp` (lib/compat.js mcpServers). agy defers the MCP tools over its
 // declaration budget, largest schemas first, and for servers passed through ACP it never declares `call_mcp_tool`, so
 // a deferred Persona tool cannot be called at all (#7333). This adds one small tool, persona_call, that calls any
-// Persona tool by name; small, it is never the one deferred. Tool declarations also omit enums agy cannot represent.
+// Persona tool by name. Bound the other declarations so many smaller connector tools cannot crowd it out (#10756).
+// Tool declarations also omit enums agy cannot represent.
 // shortcut: works around agy 1.5.8; drop it once agy declares call_mcp_tool for ACP servers.
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
@@ -25,6 +26,9 @@ const DISPATCH_TOOL = {
     },
   },
 }
+// Leave room in agy's eager budget for the dispatcher, regardless of the server's tool count or schema sizes.
+const MAX_PASSTHROUGH_TOOLS = 8
+const MAX_DECLARATION_BYTES = 4 * 1024
 
 const [command, ...args] = process.argv.slice(2)
 const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'] })
@@ -64,7 +68,16 @@ createInterface({ input: child.stdout, crlfDelay: Infinity }).on('line', (line) 
     const tools = msg.result?.tools
     if (Array.isArray(tools)) {
       names = tools.map((t) => t.name)
-      const declarations = tools.map((tool) => ({ ...tool, inputSchema: agyInputSchema(tool.inputSchema) }))
+      const declarations = []
+      let bytes = Buffer.byteLength(JSON.stringify([DISPATCH_TOOL]))
+      for (const tool of tools) {
+        if (declarations.length >= MAX_PASSTHROUGH_TOOLS) break
+        const declaration = { ...tool, inputSchema: agyInputSchema(tool.inputSchema) }
+        const size = Buffer.byteLength(JSON.stringify(declaration)) + 1 // separating comma
+        if (bytes + size > MAX_DECLARATION_BYTES) continue
+        bytes += size
+        declarations.push(declaration)
+      }
       line = JSON.stringify({ ...msg, result: { ...msg.result, tools: [...declarations, DISPATCH_TOOL] } })
     }
   }

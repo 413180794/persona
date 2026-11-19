@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { mcpServers } from '../lib/compat.js'
+import { agyInputSchema } from '../lib/mcp-schema.js'
 
 const PROXY = fileURLToPath(new URL('../mcp-proxy.mjs', import.meta.url))
 const FAKE = fileURLToPath(new URL('./fake-mcp-server.mjs', import.meta.url))
@@ -45,6 +46,52 @@ describe('MCP proxy (#7333)', { timeout: 15_000 }, () => {
     assert.deepEqual(res.result.tools.map((x) => x.name), ['todo_create', 'agents_list', 'persona_call'])
   })
 
+  it('keeps persona_call eager with many smaller connector tools and dispatches omitted tools (#10756)', async (t) => {
+    const size = (tool) => Buffer.byteLength(JSON.stringify(tool))
+    // Model agy's largest-first deferral with an 8 KiB declaration budget. The old unbounded response loses
+    // persona_call: every connector schema is smaller than its 590-byte declaration.
+    const eager = (tools) => {
+      const kept = [...tools].sort((a, b) => size(a) - size(b))
+      let bytes = kept.reduce((sum, tool) => sum + size(tool), 0)
+      while (bytes > 8 * 1024) bytes -= size(kept.pop())
+      return kept
+    }
+    for (const count of [32, 128, 1024]) {
+      const tools = Array.from({ length: count }, (_, i) => ({
+        name: `connector_read_${i}`, description: 'Read only. '.repeat(35),
+        inputSchema: { type: 'object', properties: {} },
+      }))
+      const { call } = proxied(t, tools)
+      const { result: { tools: declarations } } = await call('tools/list', {})
+      const dispatch = declarations.find((tool) => tool.name === 'persona_call')
+      assert.ok(dispatch)
+      assert.ok(tools.every((tool) => size(tool) < 590 && size(tool) < size(dispatch)))
+      assert.ok(!eager([...tools, dispatch]).some((tool) => tool.name === 'persona_call'), 'fixture reproduces deferral')
+      assert.ok(eager(declarations).some((tool) => tool.name === 'persona_call'))
+      assert.ok(declarations.length <= 9)
+      assert.ok(Buffer.byteLength(JSON.stringify(declarations)) <= 4 * 1024)
+
+      const omitted = tools.at(-1).name
+      assert.ok(!declarations.some((tool) => tool.name === omitted))
+      const list = await call('tools/call', { name: 'persona_call', arguments: {} })
+      assert.equal(list.result.content[0].text, `The Persona tools: ${tools.map((tool) => tool.name).join(', ')}.`)
+      const via = await call('tools/call', { name: 'persona_call', arguments: { name: omitted, arguments: { filter: 'open' } } })
+      assert.deepEqual(JSON.parse(via.result.content[0].text), { name: omitted, args: { filter: 'open' } })
+    }
+  })
+
+  it('reserves the dispatcher before oversized schemas and keeps later small tools', async (t) => {
+    const tools = [
+      { name: 'large', description: 'x'.repeat(16 * 1024), inputSchema: { type: 'object' } },
+      { name: 'small', description: 'Read only', inputSchema: { type: 'object' } },
+    ]
+    const { call } = proxied(t, tools)
+    const listed = await call('tools/list', {})
+    assert.deepEqual(listed.result.tools.map((tool) => tool.name), ['small', 'persona_call'])
+    const via = await call('tools/call', { name: 'persona_call', arguments: { name: 'large' } })
+    assert.deepEqual(JSON.parse(via.result.content[0].text), { name: 'large', args: {} })
+  })
+
   it('sends persona_call on as a call of the named tool, and other calls unchanged', async (t) => {
     const { call } = proxied(t)
     await call('tools/list', {})
@@ -79,14 +126,14 @@ describe('MCP declaration enums (#9944)', { timeout: 15_000 }, () => {
   const taskTool = { name: 'task_review', description: 'Review a task', inputSchema: taskSchema }
   const catalogTool = { name: 'tool_catalog', inputSchema: { type: 'object' } }
 
-  it('projects the real task_review schema without its boolean enum and keeps boolean call arguments', async (t) => {
+  it('projects the real task_review schema and dispatches it even when its declaration is too large', async (t) => {
     assert.deepEqual(taskSchema.properties.evidence.properties.ready.enum, [true])
     const { call } = proxied(t, [taskTool])
     const listed = await call('tools/list', {})
     const expected = structuredClone(taskTool)
     delete expected.inputSchema.properties.evidence.properties.ready.enum
-    assert.deepEqual(listed.result.tools, [expected, listed.result.tools.at(-1)])
-    assert.equal(listed.result.tools.at(-1).name, 'persona_call')
+    assert.deepEqual(agyInputSchema(taskSchema), expected.inputSchema)
+    assert.deepEqual(listed.result.tools.map((tool) => tool.name), ['persona_call'])
     for (const ready of [true, false]) {
       const args = { todo_id: 'todo_fixture', verdict: 'parked', evidence: { kind: 'merge_review', ready } }
       for (const params of [
@@ -138,13 +185,16 @@ describe('MCP declaration enums (#9944)', { timeout: 15_000 }, () => {
   })
 
   it('correlates list responses by id and leaves tool results and ordinary messages unchanged', async (t) => {
-    const tools = [taskTool, catalogTool]
+    const tools = [taskTool, { ...catalogTool, inputSchema: {
+      type: 'object', properties: { ready: { type: 'boolean', enum: [true] } },
+    } }]
     const { call } = proxied(t, tools)
     const pending = call('tools/list', { hold: true }, 'list')
     const catalog = await call('tools/call', { name: 'tool_catalog', arguments: {} }, 0)
     assert.deepEqual(catalog.result, { tools })
     const listed = await pending
-    assert.equal(listed.result.tools[0].inputSchema.properties.evidence.properties.ready.enum, undefined)
+    assert.equal(listed.result.tools[0].name, 'tool_catalog')
+    assert.equal(listed.result.tools[0].inputSchema.properties.ready.enum, undefined)
     assert.deepEqual((await call('test/echo', { tools }, 'list')).result, { tools })
     assert.ok((await call('tools/list', { fail: true }, 0)).error)
     assert.deepEqual((await call('test/echo', { tools }, 0)).result, { tools })
