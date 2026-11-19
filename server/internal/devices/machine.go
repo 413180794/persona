@@ -962,7 +962,10 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 				return nil, err
 			}
 		}
-		return map[string]any{"sessions": out}, nil
+		_, receipt := m.d.opts.Store.(nodeStateReceiptStore)
+		return map[string]any{"sessions": out, "state_put_receipt": receipt}, nil
+	case nodeproto.MethodStateReceipt, nodeproto.MethodStatePutReceipt:
+		return m.stateReceipt(ctx, method, params)
 	case "usage.backfill.status": // the token usage backfill (usage_backfill.go)
 		return m.d.usageBackfillStatus(ctx, m.cfg.ID, params, time.Now())
 	case "usage.backfill":

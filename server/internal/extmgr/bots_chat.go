@@ -35,7 +35,13 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	if err != nil {
 		return nil, nil // something else (a 1.0 event, the url check): nothing to do
 	}
-	done, err := h.opts.Admission.Admit("feishu-event")
+	var ev feishubot.MessageEvent
+	if env.Header.EventType == feishubot.EventMessage {
+		if err := json.Unmarshal(env.Event, &ev); err != nil {
+			return nil, err
+		}
+	}
+	done, err := h.opts.Admission.AdmitPayload("feishu-event", ev.Message.MessageID, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -47,10 +53,6 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	}()
 	switch env.Header.EventType {
 	case feishubot.EventMessage:
-		var ev feishubot.MessageEvent
-		if err := json.Unmarshal(env.Event, &ev); err != nil {
-			return nil, err
-		}
 		// The chat of the owner's own messages in the DM and in a listed group is kept (before the claim: a redelivery
 		// changes nothing). Nobody else's: a stranger writing to the bot must not push out what a reply goes to.
 		if _, set := h.botAPI(); set.Owner != nil && ev.Sender.SenderID.OpenID == set.Owner.OpenID &&
@@ -70,8 +72,13 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		b.mu.Unlock()
 		delegated = true
 		go func() {
-			defer done()
-			h.botMessage(ev, env.Event, time.Now(), prev, passed)
+			retain := false
+			defer func() {
+				if !retain {
+					done()
+				}
+			}()
+			h.botMessage(ev, env.Event, time.Now(), prev, passed, func() { retain = true })
 		}()
 	case feishubot.EventCardAction:
 		var a feishubot.CardAction
@@ -239,7 +246,7 @@ func botTurnWait() time.Duration { return inboundWait + 25*time.Second }
 
 // botMessage handles one message to the bot, which came at since: the owner's go to the assistant, after the one
 // before it (prev; nil for none) is handed over. done is closed once this one is, whatever became of it.
-func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, prev, done chan struct{}) {
+func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, prev, done chan struct{}, retain func()) {
 	passed := false
 	pass := func() {
 		if !passed {
@@ -269,7 +276,7 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 		// A group chat: only the owner's messages in a topic of a chat the owner opted in, and the command that opts
 		// one in (bots_topics.go). Everything else is dropped without a word: in a group anyone could reach the
 		// owner's Persona, and the owner's private chat (Owner.ChatID) is never rewritten from here.
-		h.botGroupMessage(api, set, ev, raw, since, pass)
+		h.botGroupMessage(api, set, ev, raw, since, pass, retain)
 		return
 	}
 	if set.Owner == nil {
@@ -291,14 +298,14 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 	}
 	// The owner wrote it (the hub checked the sender): what it answers, it answers once, like a card's press — but
 	// only a question: the bot takes no typed answer to a plan, a permission or a terminal (#4675).
-	h.handToAssistant(api, ev, raw, h.issueMessageAction(channel.Feishu, proto.IxQuestion), "", since, pass, false)
+	h.handToAssistant(api, ev, raw, h.issueMessageAction(channel.Feishu, proto.IxQuestion), "", since, pass, false, retain)
 }
 
 // handToAssistant hands the owner's message to the assistant; one it cannot take is answered that it could not be
 // sent (in the topic, for a message that came in one). pass releases the next message's wait once this one is handed
 // over, whatever came of it. from is FeishuMessage.From: assistantwire.FeishuFromElsewhere for the owner's "/ai" from a
 // group that is not opted in, whose note goes under that message and nowhere else.
-func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEvent, raw json.RawMessage, action, from string, since time.Time, pass func(), inThread bool) {
+func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEvent, raw json.RawMessage, action, from string, since time.Time, pass func(), inThread bool, retain ...func()) {
 	msg := ev.Message
 	if inThread {
 		h.rememberHandedGroup(msg.MessageID) // before the handover: a recall during it still counts
@@ -307,6 +314,9 @@ func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEve
 	pass() // handed over (or not): the next one need not wait for the note below
 	if err == nil {
 		return
+	}
+	for _, keep := range retain {
+		keep() // Feishu already received success; preserve the unconfirmed message input.
 	}
 	if !errors.Is(err, errAssistantOffline) {
 		h.logf("bots: hand the message to the assistant: %v", err)

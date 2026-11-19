@@ -345,10 +345,10 @@ func (s *Service) keepBotCardLocked(id string, card *botCard) {
 
 // saveBotStateLocked writes the chat's state, once it was read: what is in memory after a failed read would be
 // written over the stored target, threads and pairing.
-func (s *Service) saveBotStateLocked() {
+func (s *Service) saveBotStateLocked() error {
 	b := &s.fbot
 	if !b.loaded {
-		return
+		return nil
 	}
 	if len(b.st.Seen) > botSeenKeep {
 		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
@@ -358,13 +358,15 @@ func (s *Service) saveBotStateLocked() {
 	s.trimBotCardsLocked()
 	st := s.store()
 	if st == nil {
-		return
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := st.PutSetting(ctx, botStateKey, b.st); err != nil {
 		s.logf("bots: save state: %v", err)
+		return err
 	}
+	return nil
 }
 
 // pruneBotThreads drops the threads older than botThreadsKeepFor, then the oldest beyond botThreadsKeep. A thread
@@ -472,8 +474,12 @@ func (s *Service) claimBotMessage(id string) (bool, error) {
 	if id == "" || slices.Contains(b.st.Seen, id) {
 		return false, nil
 	}
+	previous := b.st.Seen
 	b.st.Seen = append(b.st.Seen, id)
-	s.saveBotStateLocked()
+	if err := s.saveBotStateLocked(); err != nil && s.maintenanceGate != nil {
+		b.st.Seen = previous
+		return false, err
+	}
 	return true, nil
 }
 

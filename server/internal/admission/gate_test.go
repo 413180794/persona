@@ -136,3 +136,35 @@ func TestAdmissionUnreadableStateFailsClosed(t *testing.T) {
 		t.Fatal("accepted a symlink as the durable admission directory")
 	}
 }
+
+func TestAdmissionContinuationKeepsExactPayloadAndFence(t *testing.T) {
+	g := testGate(t)
+	parent, err := g.AdmitPayload("feishu-event", "event-one", []byte("original event"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	control(t, g, "close", "feishu-attempt")
+	if _, err := g.ContinuePayload("feishu-event", "feishu-dispatch", "another", nil); !errors.Is(err, ErrClosed) {
+		t.Fatalf("another message continued after close: %v", err)
+	}
+	child, err := g.ContinuePayload("feishu-event", "feishu-dispatch", "event-one", []byte("second-stage event"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent()
+	if s := control(t, g, "check", "feishu-attempt"); s.Phase != "draining" || s.Active["feishu-dispatch"] != 1 {
+		t.Fatalf("handoff disappeared before its worker finished: %+v", s)
+	}
+	files, err := filepath.Glob(filepath.Join(g.dir, "work-feishu-dispatch.*"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("retained files: %v %v", files, err)
+	}
+	payload, err := os.ReadFile(files[0])
+	if err != nil || string(payload) != "second-stage event" {
+		t.Fatalf("payload: %q, %v", payload, err)
+	}
+	child()
+	if s := control(t, g, "check", "feishu-attempt"); s.Phase != "drained" {
+		t.Fatalf("completed handoff did not drain: %+v", s)
+	}
+}

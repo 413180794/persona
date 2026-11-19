@@ -4,6 +4,7 @@ package admission
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,6 +145,21 @@ func (g *Gate) publish(s State) error {
 // An unclean process exit leaves its record behind, so wait cannot mistake
 // process disappearance for successful completion.
 func (g *Gate) Admit(kind string) (func(), error) {
+	return g.record(kind, "", "", nil)
+}
+
+// AdmitPayload retains enough input to reconcile work after process loss.
+func (g *Gate) AdmitPayload(kind, id string, payload []byte) (func(), error) {
+	return g.record(kind, "", id, payload)
+}
+
+// ContinuePayload records a handoff even after admission closes, but only while
+// the same input still has its parent operation. It cannot reopen a fence.
+func (g *Gate) ContinuePayload(parent, kind, id string, payload []byte) (func(), error) {
+	return g.record(kind, parent, id, payload)
+}
+
+func (g *Gate) record(kind, parent, id string, payload []byte) (func(), error) {
 	if g == nil {
 		return func() {}, nil
 	}
@@ -159,16 +175,38 @@ func (g *Gate) Admit(kind string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.Phase != "open" {
-		return nil, ErrClosed
+	prefix := "work-" + kind + "."
+	if id != "" {
+		prefix += fmt.Sprintf("%x.", sha256.Sum256([]byte(id)))
 	}
-	op, err := os.CreateTemp(g.dir, "work-"+kind+".")
+	if s.Phase != "open" {
+		if s.Phase != "draining" || parent == "" || id == "" || !kindPattern.MatchString(parent) {
+			return nil, ErrClosed
+		}
+		parentPrefix := fmt.Sprintf("work-%s.%x.", parent, sha256.Sum256([]byte(id)))
+		files, err := os.ReadDir(g.dir)
+		if err != nil {
+			return nil, err
+		}
+		found := false
+		for _, file := range files {
+			if file.Type().IsRegular() && strings.HasPrefix(file.Name(), parentPrefix) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, ErrClosed
+		}
+	}
+	op, err := os.CreateTemp(g.dir, prefix)
 	if err != nil {
 		return nil, err
 	}
+	_, writeErr := op.Write(payload)
 	syncErr := op.Sync()
 	closeErr := op.Close()
-	if err := errors.Join(syncErr, closeErr); err != nil {
+	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 		return nil, err
 	}
 	if err := g.sync(); err != nil {

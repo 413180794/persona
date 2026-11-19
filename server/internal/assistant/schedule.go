@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
@@ -1580,11 +1581,13 @@ type dueTask struct {
 }
 
 func (s *Service) runDue(ctx context.Context, now time.Time) {
-	done, err := s.maintenanceGate.Admit("manager-schedules")
+	done, err := s.maintenanceGate.AdmitPayload("manager-schedules", "dispatch", nil)
 	if err != nil {
 		return
 	}
 	var dispatched sync.WaitGroup
+	var dispatchFailed atomic.Bool
+	var finishDispatch func()
 	defer func() {
 		if s.maintenanceGate == nil {
 			done()
@@ -1592,6 +1595,9 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 		}
 		go func() {
 			dispatched.Wait()
+			if !dispatchFailed.Load() && finishDispatch != nil {
+				finishDispatch()
+			}
 			done()
 		}()
 	}()
@@ -1731,9 +1737,16 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 		kept = append(kept, t)
 	}
 	if changed {
-		if err := s.saveLocked(sc, kept); err != nil {
+		finishDispatch, err = s.keepScheduleDispatch(due)
+		if err != nil {
 			sc.mu.Unlock()
-			return // none of this batch was consumed: leave it due for the next turn
+			s.logf("cannot persist schedule dispatch: %v", err)
+			return
+		}
+		if err := s.saveLocked(sc, kept); err != nil {
+			dispatchFailed.Store(true) // the storage response may have been lost after committing the change
+			sc.mu.Unlock()
+			return // leave what is still due for the next turn
 		}
 	}
 	sc.mu.Unlock()
@@ -1750,7 +1763,9 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 		go func() {
 			defer dispatched.Done()
 			defer sc.inflight.Done()
-			_, _ = s.runTask(d.t, d.due, now, false, false)
+			if _, err := s.runScheduledTask(d.t, d.due, now, false, false, true, nil); errors.Is(err, errScheduleAdmission) {
+				dispatchFailed.Store(true)
+			}
 		}()
 	}
 }
@@ -1856,6 +1871,18 @@ func taskMessageSource(t Task) *proto.MessageSource {
 }
 
 func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (proto.Session, error) {
+	return s.runScheduledTask(t, due, now, manual, retried, false, nil)
+}
+
+func (s *Service) runScheduledTask(t Task, due, now time.Time, manual, retried, fromScan bool, work *scheduleWork) (proto.Session, error) {
+	if work == nil {
+		operation, finish, err := s.scheduleAdmission(t, due, fromScan)
+		if err != nil {
+			return proto.Session{}, errors.Join(errScheduleAdmission, err)
+		}
+		work = operation
+		defer finish()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	loc, kb := s.location(ctx), s.kbReady(ctx)
@@ -1902,7 +1929,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	draftHandedOff := false
 	startRun := func(m *Device) {
 		draftHandedOff = true
-		s.startScheduledRun(run, t, m)
+		s.startScheduledRunTracked(run, t, m, work)
 	}
 	if t.Repeat != repeatOnce {
 		// Refresh the note under the schedule lock after acquiring the send slot.
@@ -1955,8 +1982,8 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	binding, err := s.resolveModel(ctx, "task."+t.ID)
 	if err != nil {
 		run.Status, run.Error = runFailed, err.Error()
-		s.recordRun(run)
-		s.oneOffNotStarted(ctx, t, run)
+		s.verifyScheduleReceipt(work, s.recordRun(run), runFailed)
+		s.oneOffNotStarted(ctx, t, run, work)
 		return proto.Session{}, err
 	}
 	launcher := strings.TrimPrefix(binding.Provider, "launcher.")
@@ -2016,8 +2043,8 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	if err != nil {
 		s.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
-		s.recordRun(run)
-		s.oneOffNotStarted(ctx, t, run)
+		s.verifyScheduleReceipt(work, s.recordRun(run), runFailed)
+		s.oneOffNotStarted(ctx, t, run, work)
 		return proto.Session{}, err
 	}
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
@@ -2061,7 +2088,7 @@ func (s *Service) resumeOwn(ctx context.Context, machine, sid string, params map
 // (watchScheduledRun), and it is tried once more after runRetryDelay, as the task is then (deleted: not). A failed retry
 // is told too, and not tried again. A repeating task runs again at its next time and has its streak notice (#4658);
 // Run now is answered in the app.
-func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun) {
+func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun, work *scheduleWork) {
 	if t.Facts || t.Report {
 		s.briefNotStarted(ctx, t, run)
 		return
@@ -2082,7 +2109,9 @@ func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun)
 	if s.runRetry > 0 {
 		delay = s.runRetry
 	}
+	settle := work.hold()
 	go func() {
+		defer settle()
 		time.Sleep(delay)
 		cctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		cur, ok := s.retryStillDue(cctx, t.ID, run)
@@ -2090,7 +2119,7 @@ func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun)
 		if !ok {
 			return
 		}
-		if _, err := s.runTask(cur, time.Now(), time.Now(), false, true); err != nil {
+		if _, err := s.runScheduledTask(cur, time.Now(), time.Now(), false, true, false, work); err != nil {
 			s.logf("task %s retry: %v", t.ID, err)
 		}
 	}()
@@ -2179,6 +2208,10 @@ const runRetryDelay = 3 * time.Minute
 // told; the watcher records it as failed, pushes it, and retries once (the task as it is then, see watchScheduledRun).
 // m is the machine the run went to (nil: none).
 func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
+	s.startScheduledRunTracked(run, t, m, nil)
+}
+
+func (s *Service) startScheduledRunTracked(run ScheduleRun, t Task, m *Device, work *scheduleWork) {
 	s.sched.mu.Lock()
 	delete(s.sched.waitTold, t.ID) // it runs again: a later wait on the user is news again
 	s.sched.mu.Unlock()
@@ -2189,16 +2222,26 @@ func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
 		s.noteReportTurn(run.SessionID) // its answer is pushed however quick it was (#3438)
 	}
 	run.ID = s.recordRun(run)
+	s.verifyScheduleReceipt(work, run.ID, run.Status)
 	if m == nil || run.ID == "" {
+		work.retain()                                  // a dispatched turn with no watcher has an unconfirmed outcome
 		s.endRound(run.MachineID, run.SessionID, t.ID) // no watcher to see its turn end: its plans ask
 		// There's no watcher to confirm success. Discard the draft so the next run reads only the last saved note.
 		s.takeTaskStateDraft(t.stateRunKey)
 		return
 	}
-	go s.watchScheduledRun(run, t, *m)
+	settle := work.hold()
+	go func() {
+		defer settle()
+		s.watchScheduledRunTracked(run, t, *m, work)
+	}()
 }
 
 func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
+	s.watchScheduledRunTracked(run, t, m, nil)
+}
+
+func (s *Service) watchScheduledRunTracked(run ScheduleRun, t Task, m Device, work *scheduleWork) {
 	defer s.takeTaskStateDraft(t.stateRunKey)
 	ctx, cancel := context.WithTimeout(context.Background(), runWatchTimeout)
 	defer cancel()
@@ -2206,6 +2249,7 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	// Its turn ended (or is no longer followed): a later turn there is not its round, and a retry below notes its own.
 	s.endRound(m.ID, run.SessionID, t.ID)
 	if !ended {
+		work.retain()
 		return
 	}
 	text := s.lastTurnAPIError(ctx, m.ID, run.SessionID)
@@ -2238,6 +2282,7 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	s.logf("task %s run %s failed: %s", t.ID, run.ID, text)
 	briefing := t.Facts || t.Report
 	streak := s.updateRun(run, runFailed, text, briefing)
+	s.verifyScheduleReceipt(work, run.ID, runFailed)
 	run.Status, run.Error = runFailed, text
 	s.finishScheduledTodo(ctx, t, run)
 	name := t.labelIn(s.lang(ctx))
@@ -2308,7 +2353,7 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	if briefing {
 		due = run.Due // one scheduled occurrence keeps its identity across the automatic retry
 	}
-	if _, err := s.runTask(cur, due, time.Now(), false, true); err != nil {
+	if _, err := s.runScheduledTask(cur, due, time.Now(), false, true, false, work); err != nil {
 		s.logf("task %s retry: %v", t.ID, err)
 	}
 }

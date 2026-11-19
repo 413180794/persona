@@ -2,8 +2,14 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -59,7 +65,15 @@ type NodeSession struct {
 	AwaitingFirstMessage bool `json:"awaiting_first_message,omitempty"`
 }
 
+type nodeSessionExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
 func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSession) error {
+	return putNodeSession(ctx, d.pool, machine, id, s)
+}
+
+func putNodeSession(ctx context.Context, executor nodeSessionExecutor, machine, id string, s NodeSession) error {
 	// The table needs a timestamp for retention, but a row stored without a start time
 	// next to an ultracode observation returns without one: the node tells the rows
 	// #3782 wrote for sessions the user started by that (node.observationOnly).
@@ -78,7 +92,7 @@ func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSessi
 	// SQL NULL for none: the key holds a JSON null.
 	pendingSwitch, engineHistory, pendingHandoff := jsonOrNil(s.PendingSwitch), jsonOrNil(s.EngineHistory), jsonOrNil(s.PendingHandoff)
 	modelRecovery := jsonOrNil(s.ModelRecovery)
-	_, err = d.pool.Exec(ctx, `WITH saved AS (
+	_, err = executor.Exec(ctx, `WITH saved AS (
 		INSERT INTO node_sessions (machine_id, session_id, pane, launcher, cwd, started_at, tasks, updated_at, creation_id, incarnation)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $15, $16)
 		ON CONFLICT (machine_id, session_id) DO UPDATE SET pane = $3, launcher = $4, cwd = $5, started_at = $6, tasks = $7, updated_at = now(),
@@ -105,6 +119,60 @@ func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSessi
 		s.UltracodeProcess, unknownStart, s.CreationID, s.Incarnation, guest, s.GuestKind, s.ConfigDir, pendingSwitch, engineHistory, pendingHandoff,
 		modelRecovery, s.FollowsSetting, string(s.StopCause), s.StopCauseAt, s.AwaitingFirstMessage, jsonOrNil(s.IdleCompaction))
 	return err
+}
+
+var ErrNodeSessionRevision = errors.New("node session receipt predecessor changed")
+
+func nodeSessionReceiptKey(machine, id string) string {
+	return fmt.Sprintf("node_state_receipt.%x", sha256.Sum256([]byte(machine+"\x00"+id)))
+}
+
+func readNodeSessionReceipt(ctx context.Context, query interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, key string) (string, error) {
+	var current string
+	err := query.QueryRow(ctx, "SELECT value #>> '{}' FROM settings WHERE key=$1", key).Scan(&current)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return current, err
+}
+
+func (d *DB) NodeSessionReceipt(ctx context.Context, machine, id string) (string, error) {
+	return readNodeSessionReceipt(ctx, d.pool, nodeSessionReceiptKey(machine, id))
+}
+
+// PutNodeSessionReceipt acknowledges only a committed snapshot. Repeating the
+// current operation is harmless even if its reply was lost. A stale predecessor
+// cannot overwrite a newer state.
+func (d *DB) PutNodeSessionReceipt(ctx context.Context, machine, id, previous, revision string, s NodeSession) error {
+	key := nodeSessionReceiptKey(machine, id)
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key); err != nil {
+		return err
+	}
+	current, err := readNodeSessionReceipt(ctx, tx, key)
+	if err != nil {
+		return err
+	}
+	if current == revision {
+		return nil
+	}
+	if current != previous {
+		return ErrNodeSessionRevision
+	}
+	if err := putNodeSession(ctx, tx, machine, id, s); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO settings (key, value, updated_at) VALUES ($1, to_jsonb($2::text), now())
+		ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, key, revision); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // nodeSessionsSQL reads a machine's sessions from the last 60 days through node_sessions_started (0418), with the

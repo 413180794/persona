@@ -358,7 +358,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	var svc *Service
 	var ext *extmgr.Manager
 	// ConfigFile: its usage section (the account-pool gateways and their keys) is the devices', read and written there.
-	devs := devices.New(devices.Options{Store: database, ConfigFile: o.ConfigFile, TailcatKey: o.TailcatKey, ManagerID: o.ID,
+	devs := devices.New(devices.Options{Store: database, Admission: o.Admission, ConfigFile: o.ConfigFile, TailcatKey: o.TailcatKey, ManagerID: o.ID,
 		Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if !waitsOnPerson(method) && method != "mcp.tools" { // discovery watches reconnect after restart; actual tool calls hold idle
