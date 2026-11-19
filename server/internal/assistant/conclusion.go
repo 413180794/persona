@@ -54,6 +54,9 @@ func recommendText(l i18n.Lang, a *acceptAsk) string {
 
 // askSummary is the plain line a card of ask a falls back to, and what the chat list shows of it.
 func askSummary(l i18n.Lang, a *acceptAsk) string {
+	if decideAsk(a) && !a.AcceptedAt.IsZero() {
+		return acceptedNote(l, a)
+	}
 	if a.Conclusion {
 		return verdictText(l, a)
 	}
@@ -65,6 +68,8 @@ func acceptedNote(l i18n.Lang, a *acceptAsk) string {
 	switch {
 	case decideAsk(a) && a.ByDefault:
 		return i18n.T(l, "assistant-reports.verdict_taken_default")
+	case decideAsk(a) && a.Custom:
+		return i18n.T(l, "assistant-reports.decision_custom_noted", i18n.Args{"instruction": a.Chosen})
 	case decideAsk(a) && a.Chosen != "":
 		return i18n.T(l, "assistant-reports.decision_chosen_noted", i18n.Args{"option": a.Chosen})
 	case decideAsk(a) && a.Response != "":
@@ -89,16 +94,20 @@ func (s *Service) conclusionCard(ctx context.Context, t Todo, a acceptAsk) *feis
 	case outcomeCannot:
 		color = feishubot.Red
 	case outcomeDecide:
-		color = feishubot.Orange
+		if a.AcceptedAt.IsZero() {
+			color = feishubot.Orange
+		}
 	}
-	c := feishubot.NewCard(icon+" "+title, color, verdictText(l, &a))
+	summary := askSummary(l, &a)
+	c := feishubot.NewCard(icon+" "+title, color, summary)
+	answered := decideAsk(&a) && !a.AcceptedAt.IsZero()
 	// The goal, where it is now (with how far the work went out) and the evidence below (#3218).
-	now := feishubot.EscapeMarkdown(verdictText(l, &a))
+	now := feishubot.EscapeMarkdown(summary)
 	if live := liveText(l, s.todoStages(ctx)[t.ID]); live != "" && a.Outcome != outcomeDecide {
 		now += " · " + feishubot.EscapeMarkdown(live)
 	}
 	c.Markdown(i18n.T(l, "assistant-reports.goal_head", i18n.Args{"goal": feishubot.EscapeMarkdown(clip(oneLine(t.Title), 80)), "now": now}))
-	if r := recommendText(l, &a); r != "" {
+	if r := recommendText(l, &a); !answered && r != "" {
 		c.Markdown(feishubot.EscapeMarkdown(r))
 	}
 	// The criteria and how each ended stay on the task's page, not on the card (#10380): the card leads with the result,
@@ -117,6 +126,9 @@ func (s *Service) conclusionCard(ctx context.Context, t Todo, a acceptAsk) *feis
 	}
 	if a.Link != "" {
 		c.Markdown(i18n.T(l, "assistant-reports.verdict_link", i18n.Args{"link": "[" + feishubot.EscapeMarkdown(clip(a.Link, 80)) + "](" + a.Link + ")"}))
+	}
+	if answered {
+		return c
 	}
 	if !a.AcceptedAt.IsZero() {
 		return c.Note(acceptedNote(l, &a))
@@ -150,6 +162,10 @@ func (s *Service) conclusionCard(ctx context.Context, t Todo, a acceptAsk) *feis
 		if len(more) > 0 {
 			c.Buttons(more...)
 		}
+		c.Form("decision_custom",
+			[]any{feishubot.Input("custom", i18n.T(l, "assistant-reports.decision_input_label"), "", false)},
+			feishubot.Submit(i18n.T(l, "assistant-reports.decision_input_submit"), feishubot.Default, "decide_submit",
+				map[string]any{"a": "accept", "id": t.ID, "asked_at": round, "free": "1"}))
 		var cannot []feishubot.Button
 		for _, r := range ownerResponses {
 			cannot = append(cannot, feishubot.Btn(i18n.T(l, "assistant-reports.decision_response_"+r), feishubot.Default,
@@ -233,7 +249,11 @@ func (s *Service) askConclusion(ctx context.Context, t Todo, in conclusionInput)
 	b.mu.Unlock()
 	l := s.botLang(ctx)
 	note, _, _ := strings.Cut(strings.TrimSpace(in.Note), "\n")
-	a := acceptAsk{Conclusion: true, Outcome: in.Outcome, Reason: clip(oneLine(cmp.Or(strings.TrimSpace(in.Reason), note)), 120),
+	reason := oneLine(cmp.Or(strings.TrimSpace(in.Reason), note))
+	if in.Outcome != outcomeDecide {
+		reason = clip(reason, 120)
+	}
+	a := acceptAsk{Conclusion: true, Outcome: in.Outcome, Reason: reason,
 		Recommend: clip(oneLine(in.Recommend), 120), Link: s.conclusionLink(ctx, t, in), AskedAt: time.Now().UTC(), Earlier: earlier}
 	if in.Outcome == outcomeDecide && a.Recommend != "" {
 		a.Deadline, a.Reversible = in.Deadline, in.Reversible

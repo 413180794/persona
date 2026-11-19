@@ -78,8 +78,9 @@ type acceptAsk struct {
 	RecheckAt     time.Time        `json:"recheck_at,omitzero"`
 	RaisedAt      time.Time        `json:"raised_at,omitzero"`
 	Response      string           `json:"response,omitempty"`
-	// Chosen: the option the owner chose when it was not the recommended one.
+	// Chosen: an alternative option or the owner's own instruction (Custom).
 	Chosen string `json:"chosen,omitempty"`
+	Custom bool   `json:"custom,omitempty"`
 	// ForBriefing: a decision that can wait (#4930, decision_wait.go), raised without a push and without a card, while
 	// it waits for a briefing to bring it to the owner; cleared once one did, or once it was pushed after all, at
 	// PushedAt: its card is due from then (retryAcceptance).

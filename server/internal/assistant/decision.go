@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -85,10 +86,12 @@ const decisionElse = "When nothing needs the user, don't use needs_user: decide 
 	"send the work back (rework), or close it (accepted or cancelled). A task that only waits for something or someone is no " +
 	"decision either: park it (parked, with reason, waiting_on, evidence and until), and it comes back to you at that time."
 
+const decisionReasonMax = 120 // runes, as described by task_review
+
 // readDecision checks a review's decision: every part there, the recommended option first among two to four. The
 // error names everything missing at once, and what to do when nothing needs the owner.
 func readDecision(why, reason, recommend, cost string, options []DecisionOption) (reviewDecision, error) {
-	d := reviewDecision{WhyOwner: strings.TrimSpace(why), Reason: clip(oneLine(reason), 200), Recommend: clip(oneLine(recommend), 120),
+	d := reviewDecision{WhyOwner: strings.TrimSpace(why), Reason: oneLine(reason), Recommend: clip(oneLine(recommend), 120),
 		CostOfWaiting: clip(oneLine(cost), 200)}
 	for _, o := range options {
 		o.Label, o.LeadsTo = clip(oneLine(o.Label), 120), clip(oneLine(o.LeadsTo), 200)
@@ -127,6 +130,9 @@ func readDecision(why, reason, recommend, cost string, options []DecisionOption)
 		return reviewDecision{}, fmt.Errorf("needs_user is refused: it is not yet a decision the user can answer. Missing: %s. %s",
 			strings.Join(missing, "; "), decisionElse)
 	}
+	if utf8.RuneCountInString(d.Reason) > decisionReasonMax {
+		return reviewDecision{}, fmt.Errorf("needs_user reason must be one complete sentence of at most %d characters; rewrite it in the user's everyday language", decisionReasonMax)
+	}
 	return d, nil
 }
 
@@ -163,7 +169,7 @@ func (s *Service) decisionBackground(ctx context.Context, t Todo) (*askFrom, str
 	if brief, ok := s.briefOfTodo(t.ID); ok {
 		switch {
 		case brief.Request != nil && strings.TrimSpace(brief.Request.Text) != "":
-			from.Message, from.At, from.ByAssistant = clip(oneLine(brief.Request.Text), 200), brief.Request.At, false
+			from.Message, from.At, from.ByAssistant = decisionQuote(brief.Request.Text), brief.Request.At, false
 			return from, s.decisionStands(t)
 		case brief.StartedBy != briefByUnknown && brief.StartedBy != briefByOwner && brief.StartedBy != "":
 			from.StartedBy = brief.StartedBy
@@ -188,7 +194,7 @@ func (s *Service) decisionBackground(ctx context.Context, t Todo) (*askFrom, str
 				!firstReview.IsZero() && !it.At.Before(firstReview) {
 				continue
 			}
-			if text := clip(oneLine(body.Text), 200); text != "" {
+			if text := decisionQuote(body.Text); text != "" {
 				from.Message, from.ByAssistant = text, false
 				break
 			}
@@ -196,6 +202,8 @@ func (s *Service) decisionBackground(ctx context.Context, t Todo) (*askFrom, str
 	}
 	return from, s.decisionStands(t)
 }
+
+func decisionQuote(text string) string { return clip(oneLine(cleanUserQuote(text)), 120) }
 
 // decisionStands is where task t stands: its latest agent's closeout when it wrote one, else its work line.
 func (s *Service) decisionStands(t Todo) string {
@@ -214,6 +222,14 @@ func (s *Service) decisionStands(t Todo) string {
 // backgroundText is a decision's one line of background: where its task came from, when, and where it stands. "" for
 // an ask that has none (not a decision, or one from before #3804).
 func backgroundText(l i18n.Lang, loc *time.Location, a *acceptAsk) string {
+	line := decisionOriginText(l, loc, a)
+	if line != "" && a.Stands != "" {
+		line += " · " + i18n.T(l, "assistant-reports.decision_stands", i18n.Args{"stands": a.Stands})
+	}
+	return line
+}
+
+func decisionOriginText(l i18n.Lang, loc *time.Location, a *acceptAsk) string {
 	f := a.From
 	if f == nil {
 		return ""
@@ -225,7 +241,8 @@ func backgroundText(l i18n.Lang, loc *time.Location, a *acceptAsk) string {
 	case f.Title != "":
 		where = i18n.T(l, "assistant-reports.decision_where_named", i18n.Args{"title": f.Title})
 	}
-	args := i18n.Args{"where": where, "date": f.At.In(loc).Format("2006-01-02"), "message": f.Message}
+	message := decisionQuote(f.Message)
+	args := i18n.Args{"where": where, "date": f.At.In(loc).Format("2006-01-02"), "message": message}
 	origin := "assistant-reports.decision_from_assistant"
 	switch f.StartedBy {
 	case briefByLeader:
@@ -236,11 +253,8 @@ func backgroundText(l i18n.Lang, loc *time.Location, a *acceptAsk) string {
 		origin = "assistant-reports.decision_from_hub"
 	}
 	line := i18n.T(l, origin, args)
-	if !f.ByAssistant && f.Message != "" {
+	if !f.ByAssistant && message != "" {
 		line = i18n.T(l, "assistant-reports.decision_from_owner", args)
-	}
-	if a.Stands != "" {
-		line += " · " + i18n.T(l, "assistant-reports.decision_stands", i18n.Args{"stands": a.Stands})
 	}
 	return line
 }
@@ -252,8 +266,14 @@ func decisionLines(l i18n.Lang, loc *time.Location, a *acceptAsk) []string {
 		return nil
 	}
 	var out []string
-	if b := backgroundText(l, loc, a); b != "" {
+	if b := decisionOriginText(l, loc, a); b != "" {
 		out = append(out, b)
+	}
+	if !a.AcceptedAt.IsZero() {
+		return out
+	}
+	if a.Stands != "" {
+		out = append(out, i18n.T(l, "assistant-reports.decision_stands", i18n.Args{"stands": a.Stands}))
 	}
 	for i, o := range a.Options {
 		out = append(out, i18n.T(l, "assistant-reports.decision_option", i18n.Args{"n": i + 1, "label": o.Label, "leads_to": o.LeadsTo}))
@@ -412,6 +432,10 @@ func (s *Service) askCardNow(id, card string) bool {
 // endAsk marks task id's decision asked at as answered (response: the fixed answer it got, or chosen: the option
 // taken that was not the recommended one), and redraws its cards.
 func (s *Service) endAsk(ctx context.Context, id string, asked time.Time, response, chosen string) {
+	s.endAskWithAnswer(ctx, id, asked, response, chosen, false)
+}
+
+func (s *Service) endAskWithAnswer(ctx context.Context, id string, asked time.Time, response, chosen string, custom bool) {
 	b := &s.accept
 	b.mu.Lock()
 	a := b.asks[id]
@@ -419,7 +443,7 @@ func (s *Service) endAsk(ctx context.Context, id string, asked time.Time, respon
 		b.mu.Unlock()
 		return
 	}
-	a.AcceptedAt, a.Response, a.Chosen = time.Now().UTC(), response, chosen
+	a.AcceptedAt, a.Response, a.Chosen, a.Custom = time.Now().UTC(), response, chosen, custom
 	s.saveAcceptLocked(ctx)
 	cp := *a
 	b.mu.Unlock()

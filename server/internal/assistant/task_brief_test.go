@@ -334,6 +334,14 @@ func TestBriefOfAssistantInitiatedWork(t *testing.T) {
 		strings.Contains(got.Request.Text, "snapshot") {
 		t.Fatalf("request = %+v", got.Request)
 	}
+	withAttachment := proto.Item{ID: "m10", ClientMsgID: "m10", Role: "user", Kind: proto.KindText, TS: asked,
+		Text: "<persona-context route=\"main\">snapshot</persona-context>看看登录问题 [Image #1]\n<attached_images>\n/home/example/screenshot.png\n</attached_images>\n/tmp/report.txt"}
+	f.setItems(withAttachment)
+	got = s.briefOrigin(context.Background(), "server", "conv1")
+	quote, err := s.resolveQuote(context.Background(), "conv1", "m10")
+	if want := "看看登录问题"; err != nil || got.Request == nil || got.Request.Text != want || quote == nil || quote.Text != want {
+		t.Fatalf("brief = %+v, cross-conversation quote = %+v, %v", got.Request, quote, err)
+	}
 }
 
 // A scope change is an entry in the brief's log that applies the new criteria; the brief itself stays. One that adds a

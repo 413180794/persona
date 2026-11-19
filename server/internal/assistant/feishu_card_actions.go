@@ -40,6 +40,9 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 	case "ix":
 		return s.answerFromCard(ctx, a, action)
 	case "accept":
+		if a.Str("free") == "1" {
+			return s.decisionFormAction(ctx, l, a)
+		}
 		// The hub checked the owner pressed it; marking a task verified approves nothing.
 		var result acceptResult
 		var err error
@@ -66,20 +69,7 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 		} else {
 			result, err = s.acceptTry(ctx, a.Str("id"), a.Context.MessageID)
 		}
-		if errors.Is(err, errAcceptStore) { // the asks could not be read or saved: not accepted, the button works again
-			return toast("error", i18n.T(l, "http-status.unavailable"))
-		}
-		if err != nil { // another delivery failure: not taken, nothing recorded, the button works again
-			return toast("error", i18n.T(l, "assistant-reports.accept_not_taken", i18n.Args{"error": clip(oneLine(i18n.Localize(err, l)), 120)}))
-		}
-		if result.undelivered != nil {
-			why := clip(oneLine(i18n.Localize(result.undelivered, l)), 120)
-			return toast("success", i18n.T(l, "assistant-reports.accept_decided_not_sent", i18n.Args{"error": why}))
-		}
-		if result.taken {
-			return toast("success", acceptedNote(l, &ask)) // "verified", "got it", or the recommendation taken (conclusion.go)
-		}
-		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
+		return acceptActionToast(l, result, err, acceptedNote(l, &ask))
 	case "later_done": // the Handled button of a question that can wait, on a briefing card (later.go)
 		ok, err := s.laterHandled(ctx, a.Str("id"), time.Now())
 		if err != nil { // the queue (or a question's to-do) can't be read or written: the question stays, the button works again
@@ -179,6 +169,51 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 
 func toast(kind, text string) *feishubot.CardResponse {
 	return &feishubot.CardResponse{Toast: &feishubot.Toast{Type: kind, Content: text}}
+}
+
+func acceptActionToast(l i18n.Lang, result acceptResult, err error, success string) *feishubot.CardResponse {
+	switch {
+	case errors.Is(err, errAcceptStore):
+		return toast("error", i18n.T(l, "http-status.unavailable"))
+	case err != nil:
+		return toast("error", i18n.T(l, "assistant-reports.accept_not_taken", i18n.Args{"error": clip(oneLine(i18n.Localize(err, l)), 120)}))
+	case result.undelivered != nil:
+		why := clip(oneLine(i18n.Localize(result.undelivered, l)), 120)
+		return toast("success", i18n.T(l, "assistant-reports.accept_decided_not_sent", i18n.Args{"error": why}))
+	case result.taken:
+		return toast("success", success)
+	default:
+		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
+	}
+}
+
+func (s *Service) decisionFormAction(ctx context.Context, l i18n.Lang, a *feishubot.CardAction) *feishubot.CardResponse {
+	text := strings.TrimSpace(a.Form("custom"))
+	if text == "" {
+		return toast("warning", i18n.T(l, "assistant-reports.decision_input_empty"))
+	}
+	id, round, card := a.Str("id"), a.Str("asked_at"), a.Context.MessageID
+	done := make(chan *feishubot.CardResponse, 1)
+	go func() {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		defer cancel()
+		result, err := s.answerDecisionInWords(rctx, id, round, card, text)
+		done <- acceptActionToast(l, result, err, i18n.T(l, "assistant-reports.decision_input_received"))
+	}()
+	select {
+	case response := <-done:
+		return response
+	case <-time.After(cardAnswerWait):
+		go func() {
+			response := <-done
+			if response.Toast.Type == "error" {
+				nctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+				defer cancel()
+				s.botNote(nctx, card, response.Toast.Content)
+			}
+		}()
+		return toast("info", i18n.T(l, "assistant-feishu_cards.working_on_it"))
+	}
 }
 
 // cardAnswerWait is how long a press waits for its answer to go through before it says "Processing…": the hub has

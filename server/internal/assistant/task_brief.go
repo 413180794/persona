@@ -714,7 +714,7 @@ func withToolCaller(ctx context.Context, machine, conversation string) context.C
 }
 
 // briefOrigin is who started the work conversation is handing out now, read off that conversation on machine: the
-// latest message in it decides. One the owner wrote is the request, verbatim. One Persona or another conversation put
+// latest message in it decides. One the owner wrote supplies the request. One Persona or another conversation put
 // there (a supervision message, a notice, a follow-up, a routine's run, a relayed message) means the owner did not
 // ask for this just now: the work is marked as started by the assistant, a leader or a routine, with what it followed,
 // and no older message of the owner's is attributed. A conversation that cannot be read says unknown.
@@ -739,11 +739,11 @@ func (s *Service) briefOrigin(ctx context.Context, machine, conversation string)
 		}
 		src := prompts.ItemSource(it)
 		if src == nil && it.From == "" && !it.Wake {
-			text := stripContext(it.Text)
-			if text == "" {
-				continue // only context: not what led to anything
+			req := ownerRequest(it.Text, it.TS, conversation, it.ID)
+			if req == nil {
+				continue // only context or an attachment
 			}
-			rec.Request, rec.StartedBy = ownerRequest(text, it.TS, conversation, it.ID), briefByOwner
+			rec.Request, rec.StartedBy = req, briefByOwner
 			return rec
 		}
 		rec.StartedBy = briefByAssistant

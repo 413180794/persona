@@ -83,20 +83,27 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accept_gone"))
 		return true
 	}
+	if decideAsk(&ask) {
+		result, err := s.answerDecisionInWords(ctx, id, ask.AskedAt.Format(timeKeyLayout), ids[parent], text)
+		note := i18n.T(l, "assistant-reports.accept_sent")
+		switch {
+		case err != nil:
+			note = i18n.T(l, "http-status.unavailable")
+		case result.undelivered != nil:
+			note = i18n.T(l, "assistant-reports.accept_decided_not_sent", i18n.Args{"error": clip(oneLine(i18n.Localize(result.undelivered, l)), 120)})
+		case !result.taken:
+			note = i18n.T(l, "assistant-feishu_cards.already_handled")
+		}
+		s.botNote(ctx, messageID, withMediaDropped(l, note, media))
+		return true
+	}
 	if a, _ := s.acceptAskLocked(id); a != nil && acceptAskStale(a, t) { // old round's change is answered, not routed
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
 		return true
 	}
 	question, msg := i18n.T(l, "assistant-reports.accept_question"), i18n.T(l, "assistant-reports.accept_to_agent", i18n.Args{"feedback": text})
-	switch {
-	case decideAsk(&ask):
-		question = cmp.Or(ask.Reason, i18n.T(l, "assistant-reports.verdict_decide"))
-		msg = i18n.T(l, "assistant-reports.verdict_decided_to_agent", i18n.Args{"decision": text})
-	case ask.Conclusion:
+	if ask.Conclusion {
 		msg = i18n.T(l, "assistant-reports.verdict_to_agent", i18n.Args{"feedback": text})
-	}
-	if decideAsk(&ask) {
-		s.deadlineAnswered(ctx, id, ask.AskedAt) // the owner answered: no default at its deadline, even if the send fails
 	}
 	if st := s.todoDB(); st != nil {
 		at := decisionNow()
@@ -119,37 +126,70 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 	if _, err := s.relayToTask(ctx, t.Origin, id, msg, nil); err != nil {
 		s.logf("task %s: acceptance to agent: %v", id, err)
 		why := clip(oneLine(err.Error()), 120)
-		if !decideAsk(&ask) {
-			s.botNote(ctx, messageID, withMediaDropped(l, i18n.T(l, "assistant-reports.accept_not_sent", i18n.Args{"error": why}), media))
-			return true
-		}
-		// A decision answered in words is made even when its agent cannot take it now: recorded above, its ask is answered,
-		// and its supervisor is told to pass it on. Never resent by the hub, so the agent cannot get it twice.
-		s.answeredInWords(ctx, id)
-		s.decisionNotDelivered(ctx, id, ask.AskedAt, text, err)
-		s.botNote(ctx, messageID, withMediaDropped(l, i18n.T(l, "assistant-reports.accept_decided_not_sent", i18n.Args{"error": why}), media))
+		s.botNote(ctx, messageID, withMediaDropped(l, i18n.T(l, "assistant-reports.accept_not_sent", i18n.Args{"error": why}), media))
 		return true
 	}
-	if decideAsk(&ask) {
-		s.userDecided(ctx, id) // decided: its agent's next stop goes back to the supervisor
+	b := &s.accept
+	b.mu.Lock()
+	if a := b.asks[id]; a != nil && a.AskedAt.Equal(ask.AskedAt) {
+		delete(b.asks, id) // changed again: the next deploy asks again
+		s.saveAcceptLocked(ctx)
 	}
-	s.answeredInWords(ctx, id)
+	b.mu.Unlock()
 	s.botNote(ctx, messageID, withMediaDropped(l, i18n.T(l, "assistant-reports.accept_sent"), media))
 	return true
 }
 
-// answeredInWords: the owner's words answered task id's ask. Changed again: the next deploy asks again. A decision is answered:
-// its card stays known, and says so to a reply.
-func (s *Service) answeredInWords(ctx context.Context, id string) {
-	b := &s.accept
-	b.mu.Lock()
-	if a := b.asks[id]; a != nil && decideAsk(a) {
-		a.AcceptedAt = time.Now().UTC()
-	} else {
-		delete(b.asks, id)
+// answerDecisionInWords handles both Feishu text replies and form submissions. The task's action lock
+// serializes them with option buttons and default decisions, and the round owns one decision row.
+func (s *Service) answerDecisionInWords(ctx context.Context, id, round, card, text string) (acceptResult, error) {
+	s.reviewDismissals.actions.acquire(id)
+	defer s.reviewDismissals.actions.release(id)
+	if card == "" || round == "" {
+		return acceptResult{}, nil
 	}
-	s.saveAcceptLocked(ctx)
-	b.mu.Unlock()
+	a, err := s.askRound(id, round)
+	if err != nil || a == nil {
+		return acceptResult{}, err
+	}
+	if card != a.MessageID && !slices.Contains(a.Messages, card) {
+		return acceptResult{}, nil
+	}
+	t, _ := s.todoNow(id)
+	completeDismissal, err := s.prepareDismissalForAnswer(ctx, t)
+	if err != nil {
+		return acceptResult{}, err
+	}
+	l := s.botLang(ctx)
+	choice := decisionText(text)
+	if st := s.todoDB(); st != nil {
+		at := decisionNow()
+		inserted, err := s.insertDecision(ctx, st, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: id,
+			Question: cmp.Or(a.Reason, i18n.T(l, "assistant-reports.verdict_decide")), Choice: choice,
+			Source: db.DecisionManual, SourceMessage: "feishu-decision-" + a.AskedAt.Format(timeKeyLayout), CreatedAt: at})
+		if err != nil || !inserted {
+			return acceptResult{}, err
+		}
+		s.decisionsChanged(ctx, id, at)
+	}
+	s.deadlineAnswered(ctx, id, a.AskedAt)
+	msg := i18n.T(l, "assistant-reports.verdict_decided_to_agent", i18n.Args{"decision": choice})
+	_, sendErr := s.relayToTask(ctx, t.Origin, id, msg, func(cur Todo) bool {
+		return !acceptAskStale(a, cur) && !acceptAskEnded(a, cur)
+	})
+	// Agent delivery can outlive its caller. The recorded answer still has to finish and redraw.
+	finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	defer cancel()
+	result := acceptSucceeded()
+	if sendErr != nil {
+		s.logf("task %s: decision to agent: %v", id, sendErr)
+		result = s.decisionNotDelivered(finish, id, a.AskedAt, choice, sendErr)
+	} else {
+		s.userDecided(finish, id)
+	}
+	s.endAskWithAnswer(finish, id, a.AskedAt, "", choice, true)
+	completeDismissal()
+	return result, nil
 }
 
 // withMediaDropped is note with, when the reply carried pictures or files, the line saying they did not go to the agent.
@@ -175,7 +215,7 @@ func (s *Service) decisionNotDelivered(ctx context.Context, id string, askedAt t
 	l := s.botLang(ctx)
 	s.userDecided(ctx, id)
 	s.signal(superviseSignal{Todo: id, Kind: sigIdle, Key: "undelivered|" + askedAt.UTC().Format(time.RFC3339Nano),
-		Detail: i18n.T(l, "assistant-reports.decision_not_delivered", i18n.Args{"decision": clip(oneLine(choice), 200),
+		Detail: i18n.T(l, "assistant-reports.decision_not_delivered", i18n.Args{"decision": decisionText(choice),
 			"error": clip(oneLine(i18n.Localize(cause, l)), 120)})})
 	return acceptResult{taken: true, undelivered: cause}
 }

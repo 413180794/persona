@@ -328,7 +328,7 @@ func TestDecisionCarriesTheRecommendationAndOKTakesIt(t *testing.T) {
 	if len(cards) != 1 {
 		t.Fatalf("%d conclusion cards", len(cards))
 	}
-	for _, want := range []string{"🤔 要你拍板：先灰度还是直接全量", "推荐：先灰度 10%", "按推荐来", "回「OK」就按推荐来"} {
+	for _, want := range []string{"🤔 要你拍板：先灰度还是直接全量", "推荐：先灰度 10%", "按推荐来", "回「OK」按推荐执行"} {
 		if !strings.Contains(cards[0], want) {
 			t.Errorf("card lacks %q:\n%s", want, cards[0])
 		}

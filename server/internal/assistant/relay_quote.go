@@ -62,8 +62,12 @@ func (b *quoteBook) loadLocked(ctx context.Context, s *Service) bool {
 	return true
 }
 
-// ownerRequest is the owner's message as a brief keeps it: the text verbatim, cut at briefRequestMax.
+// ownerRequest is the owner's words as a brief keeps them, cut at briefRequestMax.
 func ownerRequest(text string, at time.Time, conversation, id string) *BriefRequest {
+	text = cleanUserQuote(text)
+	if text == "" {
+		return nil
+	}
 	req := &BriefRequest{Text: text, At: at.UTC(), Conversation: conversation, MessageID: id}
 	if utf8.RuneCountInString(text) > briefRequestMax {
 		req.Text, req.Truncated = string([]rune(text)[:briefRequestMax]), true
@@ -88,6 +92,10 @@ func (s *Service) verifiedQuote(ctx context.Context, from, id string) *BriefRequ
 		return nil
 	}
 	req := q.Request
+	req.Text = cleanUserQuote(req.Text)
+	if req.Text == "" {
+		return nil
+	}
 	req.Via = slices.Clone(req.Via)
 	return &req
 }
@@ -162,6 +170,9 @@ func (s *Service) resolveQuote(ctx context.Context, self, quote string) (*BriefR
 		if text := ownerMessageText(it); text != "" {
 			if quote == quoteLatest || it.ID == quote {
 				req := ownerRequest(text, it.TS, self, it.ID)
+				if req == nil {
+					continue
+				}
 				req.Via = []string{self}
 				return req, nil
 			}

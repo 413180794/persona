@@ -49,7 +49,7 @@
   "run_if_failed": "运行前检查失败：{error}",
   "todo_no_evidence": "未观察到 Agent 新答复、验收项状态变化或显式进展上报。",
   "todo_stalled": "{name}：连续 {count} 次定时检查没有可观察的进展。上次运行：{reason}",
-  "todo_decide": "无进展原因：{reason}。换做法，还是继续等？",
+  "todo_decide": "最近几次检查都没看到进展，你想换个做法，还是继续等？",
   "todo_unknown": "基线或 Agent 证据无法读取，尚不能判断有无进展。运行小结：{reason}",
   "todo_save_failed": "无法保存「{name}」的进展，无进展计数和升级提醒可能不完整。错误：{error}",
   "todo_change": "换做法",

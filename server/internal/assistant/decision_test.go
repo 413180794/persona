@@ -274,7 +274,7 @@ func TestDecisionBackgroundReadsTheBrief(t *testing.T) {
 		message, by string
 		assistant   bool
 	}{
-		{briefRecord{StartedBy: briefByOwner, Goal: "修登录崩溃", Request: &BriefRequest{Text: "iPad 横屏登录会崩，\n修一下", At: asked}}, "iPad 横屏登录会崩， 修一下", "", false},
+		{briefRecord{StartedBy: briefByOwner, Goal: "修登录崩溃", Request: &BriefRequest{Text: "iPad 横屏登录会崩，\n修一下 [Image #1]\n<attached_images>\n/home/example/shot.png\n</attached_images>\n~/Desktop/details.txt", At: asked}}, "iPad 横屏登录会崩， 修一下", "", false},
 		{briefRecord{StartedBy: briefByRoutine, Goal: "修登录崩溃", Reason: "晨间巡检发现崩溃"}, "", briefByRoutine, true},
 	} {
 		s, _, todo := newSupervisedService(t)

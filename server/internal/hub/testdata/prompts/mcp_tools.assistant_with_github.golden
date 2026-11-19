@@ -2516,7 +2516,7 @@
   },
   {
     "name": "task_review",
-    "description": "Verify handed-out work. accepted closes it, stopping its idle Agent but keeping the terminal. rework sends gaps to that Agent: at most 2 rounds; a third requires a complete owner decision. A stopped Agent is read-only: replace with agent_start. External waits use parked with source evidence, not needs_user. Only answerable owner-only decisions use needs_user: why_owner, reason, recommend, 2–4 options (recommended first, each with leads_to), cost_of_waiting. Otherwise act within your authority, rework or close.\n\naccepted with outcome done (default) and current done_when requires every criterion exactly once in checks, met=true with nonblank evidence. Refuse missing/duplicate/unknown/unmet checks before writing; user_check cannot bypass this. outcome cannot, cancelled and no-criteria tasks are unchanged. Other verdicts may omit checks without erasing progress. Report each criterion as met, not met or dropped (logged scope change), then also_done. Judge the scoped brief, not a later handover or the Agent's word; review every task supervision asks you to.\n\nSupervised accepted/needs_user send one Lark conclusion card (verdict, reason, link; needs_user adds recommend, selected by “OK”); do not duplicate it. Give accepted's outcome/reason/link or needs_user's reason/recommend. Acceptance passes an existing “Please verify” card; user_check means the owner must still inspect. needs_user defaults to recommend after 24h/deadline except irreversible or visible_to_others: never default those, remind daily. Recheck once at 24h. can_wait requires nobody blocked today, low waiting cost and no deadline within 12h (see schema). “You decide”, “This isn't what I asked for”, “Tell me the background first” return to supervision: don't repeat the question or take irreversible/external action.\n\nA non-main conversation reviewing another supervisor's task may only accept/cancel; send gaps with agent_send. A leader's needs_user reaches main too. Cancel only duplicates/unwanted tasks; their Agents close/archive and waiting cards end.",
+    "description": "Review handed-out work. accepted closes the task and stops its idle Agent, keeping the terminal. rework sends gaps back for at most 2 rounds; a third requires an owner decision. Replace stopped Agents with agent_start. External waits use parked with evidence. For answerable owner-only decisions use needs_user with why_owner, reason, recommend, 2–4 options (recommend first, each with leads_to), and cost_of_waiting. Otherwise decide, rework or close.\n\naccepted/done (default) with done_when requires each current criterion once in checks with met=true and evidence. Refuse missing, duplicate, unknown, unmet or blank-evidence checks even with user_check. No such gate for cannot, cancelled or tasks without criteria. Omitted checks otherwise keep progress. Report each criterion (met, unmet or dropped by logged scope change), then also_done. Review every task supervision asks you to against its scoped brief and evidence.\n\nFor accepted give outcome/reason/link; for needs_user give reason/recommend. Each sends one Lark conclusion card; do not duplicate it. “OK” takes recommend. Acceptance passes “Please verify” unless the owner must inspect (user_check). Default to recommend at 24h or deadline. Irreversible or visible_to_others never default; remind daily. Recheck once at 24h. Defer with can_wait only if nobody is blocked today, waiting costs little and no deadline is within 12h. “You decide”, “This isn't what I asked for” and “Tell me the background first” return to supervision; don't repeat the ask or take irreversible/external action.\n\nUse everyday language on the owner's card: what's affected, what to choose and what each choice or waiting means. Omit internal IDs, paths, log timestamps, log wording and jargon.\n\nOutside main, only accept/cancel another supervisor's task; send gaps via agent_send. A leader's needs_user also reaches main. Cancel duplicates/unwanted tasks, closing/archiving Agents and ending cards.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -2560,7 +2560,7 @@
               }
             }
           },
-          "description": "each criterion, met or not, with its evidence or gap; updates that done_when entry's persisted state, evidence, time and supervisor identity. Omitted entries keep their progress"
+          "description": "updates each given criterion's state, evidence or gap, time and reviewer; omitted criteria keep progress"
         },
         "note": {
           "type": "string",
@@ -2576,7 +2576,7 @@
         },
         "reason": {
           "type": "string",
-          "description": "accepted: the conclusion card's one sentence of why, in the user's language; default the note's first line. needs_user (required): one sentence saying what is to be decided, in the user's language. parked (required): one sentence saying what the task waits for, in the user's language; waiting on a PR: include its link"
+          "description": "accepted: the conclusion card's one sentence of why, in the user's language; default the note's first line. needs_user (required): one complete sentence (max 120 characters) saying what to decide, in the user's language. parked (required): one sentence saying what the task waits for, in the user's language; waiting on a PR: include its link"
         },
         "waiting_on": {
           "type": "string",
@@ -2635,7 +2635,7 @@
         },
         "cost_of_waiting": {
           "type": "string",
-          "description": "needs_user (required): one sentence saying what it costs if the user does not answer soon"
+          "description": "needs_user: one sentence on what waiting costs the owner"
         },
         "can_wait": {
           "type": "boolean",

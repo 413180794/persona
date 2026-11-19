@@ -45,7 +45,7 @@ func IndexText(it proto.Item) (string, bool) {
 		if it.From != "" || searchInjected(it) {
 			return "", false // another session's message, or Persona's to the model: not the user's words
 		}
-		text = searchUserText(it.Text)
+		text = UserText(it.Text)
 	default:
 		return "", false
 	}
@@ -66,9 +66,9 @@ func searchInjected(it proto.Item) bool {
 	return prompts.ParseInjected(it.Text) != nil
 }
 
-// searchUserText is the user's words as the bubble shows them: without the view errors, quoted contexts, files,
+// UserText is the user's words as the bubble shows them: without the view errors, quoted contexts, files,
 // photos and the card answer's tag they travel with; pasted text as itself.
-func searchUserText(s string) string {
+func UserText(s string) string {
 	s = transcript.ViewErrorsRe.Regexp().ReplaceAllString(s, "")
 	s = searchContextRe.Regexp().ReplaceAllString(s, "")
 	s = searchFileRe.Regexp().ReplaceAllString(s, "")

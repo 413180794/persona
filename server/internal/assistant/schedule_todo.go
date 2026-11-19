@@ -411,7 +411,7 @@ func (s *Service) escalateScheduledTodo(ctx context.Context, task Task, run Sche
 		args, _ := json.Marshal(map[string]any{
 			"todo_id": t.ID, "verdict": reviewNeedsUser, "why_owner": whyPriority,
 			"note":      detail + "\n" + progress.EscalationRun,
-			"reason":    i18n.T(lang, "assistant-schedule.todo_decide", i18n.Args{"reason": result.Reason}),
+			"reason":    i18n.T(lang, "assistant-schedule.todo_decide"),
 			"recommend": change, "cost_of_waiting": i18n.T(lang, "assistant-schedule.todo_wait_cost"),
 			"options": []DecisionOption{
 				{Label: change, LeadsTo: i18n.T(lang, "assistant-schedule.todo_change_result")},
