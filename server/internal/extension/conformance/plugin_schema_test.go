@@ -131,6 +131,12 @@ var goTypes = map[string]any{
 	"AssistantDataStatusParams":    assistantwire.AssistantDataStatusParams{},
 	"AssistantDataStatusResult":    assistantwire.AssistantDataStatusResult{},
 
+	"ChannelNoticeConfirmParams": wire.ChannelNoticeConfirmParams{},
+	"ChannelNoticeParams":        assistantwire.NoticeParams{},
+	"ChannelNoticeResult":        assistantwire.NoticeResult{},
+	"ChannelNoticeStatusParams":  assistantwire.NoticeStatusParams{},
+	"ChannelNoticeStatusResult":  assistantwire.NoticeStatusResult{},
+
 	"ModelCompleteParams": assistantwire.ModelCompleteParams{},
 	"ModelCompleteResult": assistantwire.ModelCompleteResult{},
 	"ModelPause":          assistantwire.ModelPause{},
