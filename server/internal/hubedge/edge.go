@@ -4,6 +4,7 @@ package hubedge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -91,6 +92,9 @@ func Run(ctx context.Context, o Options) error {
 	e.logf("hub edge %s: holding %d port(s), starting the hub (%s)", o.Version, len(o.Listeners), o.Binary)
 	p, err := e.startActive(o.Binary)
 	if err != nil {
+		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+			return nil // a planned stop while the first slot is still parked
+		}
 		return fmt.Errorf("hub edge: the hub did not start: %w", err)
 	}
 	e.setActive(p)

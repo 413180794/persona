@@ -184,6 +184,8 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		resp = map[string]any{"ok": true}
 	case "claude-plugin.status": // which sessions' Persona plugin polls this node (ccplugin.go): installers, doctor
 		resp = n.ccPluginStatusNow()
+	case "state.checkpoint":
+		resp = n.checkpointRequest(ctx)
 	case "ping": // personad node doctor, persona-link node switch: a round trip that changes nothing
 		resp = map[string]any{"ok": true, "program": n.Program, "version": n.Version}
 	case "update.inventory":

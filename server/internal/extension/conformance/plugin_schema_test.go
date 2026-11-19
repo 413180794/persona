@@ -97,6 +97,8 @@ var goTypes = map[string]any{
 	"ConnectorChangedEvent":         serve.ChangedEvent{},
 	"ConnectorInitParams":           serve.InitParams{},
 	"ConnectorSentRecordParams":     connector.SentRecordParams{},
+	"ConnectorSentRecordOnceParams": connector.SentRecordOnceParams{},
+	"ConnectorSentRecordOnceResult": connector.SentRecordOnceResult{},
 
 	"ChannelReceiveParams": channel.ReceiveParams{},
 	"ChannelStatusParams":  channel.StatusParams{},
@@ -211,7 +213,7 @@ var serverCalls = []string{
 
 // sent.record is the hub's own (extmgr answers it for a connector that declares sends_as_user), outside the
 // connector protocol's namespace.
-var sentCalls = []string{connector.MethodSentRecord}
+var sentCalls = []string{connector.MethodSentRecord, connector.MethodSentRecordOnce, connector.MethodSentRecordGuarded}
 
 var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit,
 	assistantwire.MReceiveNotice, assistantwire.MNoticeStatus, assistantwire.MConfirmNotice}
@@ -278,6 +280,57 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	}
 	if c := wire.Calls[serve.InPlugin(serve.EChanged)]; !c.Event || c.From != "program" {
 		t.Errorf("connector.changed: %+v, want an event from the program", c)
+	}
+}
+
+func TestConnectorSentRecordOnceWire(t *testing.T) {
+	method := connector.MethodSentRecordGuarded
+	call, ok := wire.Calls[method]
+	if !ok || call.From != "program" {
+		t.Fatalf("missing program call %s: %+v", method, call)
+	}
+	older := wire.Calls[connector.MethodSentRecordOnce]
+	if older.Params != call.Params || older.Result != call.Result {
+		t.Fatalf("guarded and compatibility methods disagree on payload types: %+v %+v", call, older)
+	}
+	s := loadSchemas(t)
+	for _, def := range []string{call.Params, call.Result} {
+		s.compare(t, def, s.def(t, def), reflect.TypeOf(goTypes[def]), map[string]bool{})
+	}
+	for _, raw := range []string{
+		`{"contribution":"test","target":{},"text":"","message_ref":"msg"}`,
+		`{"contribution":"test","target":{},"text":"","message_ref":"msg","lookup_only":true}`,
+		`{"contribution":"test","target":{},"text":"","message_ref":"msg","lookup_only":false}`,
+	} {
+		if err := wire.ValidateParams(method, json.RawMessage(raw)); err != nil {
+			t.Errorf("valid request %s: %v", raw, err)
+		}
+	}
+	for _, raw := range []string{
+		`{"contribution":"test","target":{},"text":""}`,
+		`{"contribution":"test","target":{},"text":"","message_ref":""}`,
+		`{"contribution":"test","target":{},"text":"","message_ref":"msg","lookup_only":"true"}`,
+		`{"contribution":"test","target":{},"text":"","message_ref":"msg","lookup_only":null}`,
+	} {
+		// ValidateParams normalizes optional nulls for older Go codecs. The
+		// exact contract itself and the Hub decoder require a real boolean.
+		if err := wire.ValidateJSON(call.Params, []byte(raw)); err == nil {
+			t.Errorf("invalid request accepted: %s", raw)
+		}
+	}
+	for _, status := range []string{connector.SentRecordRecorded, connector.SentRecordMissing, connector.SentRecordPruned} {
+		raw, err := json.Marshal(connector.SentRecordOnceResult{MessageRef: "msg", Status: status})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := wire.ValidateResult(method, raw); err != nil {
+			t.Errorf("invalid result %s: %v", raw, err)
+		}
+	}
+	for _, raw := range []string{`{"status":"recorded"}`, `{"status":"ok","message_ref":"msg"}`} {
+		if err := wire.ValidateResult(method, json.RawMessage(raw)); err == nil {
+			t.Errorf("invalid result accepted: %s", raw)
+		}
 	}
 }
 

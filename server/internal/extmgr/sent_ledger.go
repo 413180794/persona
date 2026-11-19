@@ -12,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/db"
@@ -318,14 +322,26 @@ func (l *sentLimiter) take(id string) time.Duration {
 // and session it names are its own word, kept beside it), let_through is auto (with the setting that allowed it). A
 // failed write is the caller's to see, as an error with a message and no code: the send already happened and stays so.
 func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw json.RawMessage) (any, error) {
+	return ps.extensionRecordSent(ctx, id, raw, false)
+}
+
+func (ps *extensions) extensionRecordSent(ctx context.Context, id string, raw json.RawMessage, once bool) (any, error) {
 	if wait := ps.sentLimit.take(id); wait > 0 {
 		data, _ := json.Marshal(map[string]float64{"retry_after": wait.Seconds()})
 		return nil, &rpc.Error{Code: serve.CodeRateLimited, Data: data,
 			Message: fmt.Sprintf("sent.record: more than %d calls in a minute, try again in %.0f seconds", sentRecordBurst, max(1, wait.Seconds()))}
 	}
 	var p connector.SentRecordParams
+	var lookupOnly bool
 	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &p); err != nil {
+		if once {
+			var exact connector.SentRecordOnceParams
+			if err := json.Unmarshal(raw, &exact); err != nil {
+				return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record_once: " + err.Error()}
+			}
+			p, lookupOnly = exact.SentRecordParams, exact.LookupOnly
+			p.MessageRef = exact.MessageRef
+		} else if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record: " + err.Error()}
 		}
 	}
@@ -366,13 +382,79 @@ func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw js
 	row := db.SentAsUser{At: time.Now(), Connector: p.Contribution, Action: sentRecordAction, Target: mustJSON(target),
 		Text: cutRunes(cleanText(*p.Text), connector.SentTextMost), Summary: cutRunes(strings.TrimSpace(summary), sentSummaryMost),
 		Origin: mustJSON(origin), LetThrough: mustJSON(through), MessageRef: proto.CleanMessageRef(p.MessageRef)}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	if once && (row.MessageRef == "" || row.MessageRef != p.MessageRef) {
+		return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record_once: an exact message_ref is required"}
+	}
+	exactStore, supportsExact := st.(interface {
+		RecordSentAsUserOnce(context.Context, db.SentAsUser, bool) (int64, error)
+	})
+	if once && !supportsExact {
+		return nil, &rpc.Error{Code: "no_database", Message: "sent.record_once: the ledger does not support exact records"}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	settled := false
+	if !lookupOnly {
+		gate := ps.h.opts.Admission
+		operation, done, err := gate.AdmitLedger()
+		if errors.Is(err, admission.ErrClosed) {
+			return nil, &rpc.Error{Code: "admission_closed", Message: "sent ledger writes are paused"}
+		}
+		if err != nil {
+			ps.logf("sent ledger: admission: %v", err)
+			return nil, &rpc.Error{Code: "admission_unavailable", Message: "sent ledger admission is unavailable"}
+		}
+		row.Operation = operation
+		defer func() {
+			if settled {
+				done()
+			} else if gate != nil {
+				ps.logf("sent ledger: %s: %s: admission ticket retained for an unsettled write", id, p.Contribution)
+			}
+		}()
+		// The send already happened. An admitted write may settle after the
+		// extension disconnects, but the release gate tracks it until SQL returns.
+		ctx = context.WithoutCancel(ctx)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if _, err := st.RecordSentAsUser(ctx, row); err != nil {
+	if once {
+		rowID, err := exactStore.RecordSentAsUserOnce(ctx, row, lookupOnly)
+		settled = sentRecordTransactionSettled(err)
+		result := connector.SentRecordOnceResult{MessageRef: row.MessageRef, Status: connector.SentRecordRecorded}
+		switch {
+		case errors.Is(err, db.ErrSentRecordPruned):
+			result.Status = connector.SentRecordPruned
+		case errors.Is(err, db.ErrSentRecordConflict):
+			return nil, &rpc.Error{Code: "conflict", Message: "sent.record_once: ambiguous or mismatched ledger entry"}
+		case err != nil:
+			ps.logf("sent ledger: %s: %s: %v", id, p.Contribution, err)
+			return nil, errors.New("sent.record_once: the ledger could not be reconciled")
+		case rowID == 0:
+			result.Status = connector.SentRecordMissing
+		}
+		return result, nil
+	}
+	_, err = st.RecordSentAsUser(ctx, row)
+	settled = sentRecordTransactionSettled(err)
+	if errors.Is(err, db.ErrSentRecordConflict) || errors.Is(err, db.ErrSentRecordPruned) {
+		return nil, &rpc.Error{Code: "conflict", Message: "sent.record: a guarded entry cannot be confirmed"}
+	}
+	if err != nil {
 		ps.logf("sent ledger: %s: %s: %v", id, p.Contribution, err)
 		return nil, errors.New("sent.record: the ledger could not be written")
 	}
 	return struct{}{}, nil
+}
+
+// A lost database connection may hide a commit. Retain its release ticket
+// until the operator reconciles it, just as for a process that exits mid-write.
+func sentRecordTransactionSettled(err error) bool {
+	var pgErr *pgconn.PgError
+	return err == nil || errors.Is(err, db.ErrSentRecordConflict) ||
+		errors.Is(err, db.ErrSentRecordPruned) || errors.Is(err, db.ErrLedgerAuthorityMismatch) || errors.Is(err, pgx.ErrTxCommitRollback) ||
+		(errors.As(err, &pgErr) && pgErr.SeverityUnlocalized == "ERROR")
 }
 
 // recordedTarget is the target an extension gave, as a row keeps it: values that are short strings, numbers,
@@ -582,6 +664,11 @@ func (h *Manager) pruneSentLedger(ctx context.Context) {
 	if days == 0 {
 		days = sentLedgerDays
 	}
+	done, err := h.opts.Admission.Admit("extension-ledger-prune")
+	if err != nil {
+		return
+	}
+	defer done()
 	n, err := st.PruneSentAsUser(ctx, sentLedgerNow().UTC().AddDate(0, 0, -days))
 	switch {
 	case err != nil && ctx.Err() == nil:

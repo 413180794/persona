@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/hubedge"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -156,6 +158,17 @@ func RunSlot(ctx context.Context, b update.Build) error {
 		return errors.New("hub slot: only the hub's edge starts slots (personad hub run)")
 	}
 	slot.Hello(b.Version, b.Number)
+	gate, err := admission.FromEnv()
+	if err != nil {
+		return err
+	}
+	// A closed gate must be reopened locally before this slot can touch its database.
+	booted, err := gate.Startup(ctx, "hub-startup")
+	if err != nil {
+		return err
+	}
+	booted = sync.OnceFunc(booted)
+	defer booted()
 	logger := slotLogger(slot)
 	// An update that keeps failing goes back before anything else can fail, the config included (selfupdate.go).
 	fail := func(err error) error {
@@ -194,7 +207,7 @@ func RunSlot(ctx context.Context, b update.Build) error {
 		case <-ctx.Done():
 		}
 	}()
-	if err := runConfigured(ctx, b, cfg, updating, slot); err != nil {
+	if err := runConfigured(ctx, b, cfg, updating, slot, gate, booted); err != nil {
 		return fail(err)
 	}
 	return nil

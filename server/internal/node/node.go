@@ -41,7 +41,8 @@ import (
 )
 
 type Node struct {
-	runtimeUsage runtimeUsageReports
+	nodeStateJournal atomic.Pointer[stateJournal]
+	runtimeUsage     runtimeUsageReports
 
 	// The assistant's one memory (memory_merge.go), both under memoryMu: per project key, the other profiles' notes
 	// already merged, and when a merge that failed is tried again.
@@ -641,6 +642,13 @@ func (n *Node) reloadState(ctx context.Context) bool {
 // persistState writes session id's record v through the hub (state.put). One a launcher switch writes after this
 // connection ended (it runs on to its end) goes to the next connection's Node, which writes it (switch_share.go).
 func (n *Node) persistState(id string, v sessionState) {
+	if j := n.nodeStateJournal.Load(); j != nil {
+		if err := j.append(id, v); err != nil {
+			n.logf("persist node state journal: %v", err)
+			n.switches().keep(n, id, v)
+		}
+		return
+	}
 	if n.peer == nil {
 		devicewire.ShareCreationLog(n.logf, id, "node_notify", "peer_unavailable")
 		return
@@ -658,13 +666,18 @@ func (n *Node) fetchState(ctx context.Context) bool {
 	if n.peer == nil {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(ctx, stateLoadTimeout)
+	call, cancel := context.WithTimeout(ctx, stateLoadTimeout)
 	defer cancel()
 	var res struct {
-		Sessions map[string]sessionState `json:"sessions"`
+		Sessions        map[string]sessionState `json:"sessions"`
+		StatePutReceipt bool                    `json:"state_put_receipt"`
 	}
-	if err := n.peer.Call(ctx, "state.load", map[string]any{}, &res); err != nil {
+	if err := n.peer.Call(call, "state.load", map[string]any{}, &res); err != nil {
 		n.logger.Printf("load state from hub: %v", err)
+		return false
+	}
+	if err := n.configureStateJournal(ctx, res.StatePutReceipt); err != nil {
+		n.logf("load durable node state journal: %v", err)
 		return false
 	}
 	n.state.merge(res.Sessions)

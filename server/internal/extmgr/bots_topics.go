@@ -266,7 +266,7 @@ func topicsCmd(text string, mentions []feishubot.Mention) (cmd string, ok bool) 
 // botGroupMessage takes a message from a group chat (not the bot's private chat): see the five conditions above, and
 // the owner's "@bot /ai …" from a group that is not on the list (botAIElsewhere). Every one that fails is a plain return:
 // no note, no reaction, nothing in the chat.
-func (h *Manager) botGroupMessage(api *feishubot.Client, set FeishuBotSettings, ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, pass func()) {
+func (h *Manager) botGroupMessage(api *feishubot.Client, set FeishuBotSettings, ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, pass func(), retain ...func()) {
 	msg := ev.Message
 	if set.Owner == nil || ev.Sender.SenderID.OpenID != set.Owner.OpenID || msg.ChatID == "" {
 		return // not paired, or not the owner: in a group anyone could write to the owner's Persona
@@ -291,14 +291,14 @@ func (h *Manager) botGroupMessage(api *feishubot.Client, set FeishuBotSettings, 
 		}
 	}
 	if !set.topicChat(msg.ChatID) {
-		h.botAIElsewhere(api, set, ev, raw, since, pass)
+		h.botAIElsewhere(api, set, ev, raw, since, pass, retain...)
 		return
 	}
 	if msg.ThreadID == "" {
 		return
 	}
 	// No action: a message in a topic answers no card (the assistant does not look for one), so none is issued.
-	h.handToAssistant(api, ev, raw, "", "", since, pass, true)
+	h.handToAssistant(api, ev, raw, "", "", since, pass, true, retain...)
 }
 
 // botAIElsewhere takes the owner's "@bot /ai …" from a group chat that is not on the list (#6146, docs/extensions/bots.md "Asking
@@ -306,7 +306,7 @@ func (h *Manager) botGroupMessage(api *feishubot.Client, set FeishuBotSettings, 
 // rich-text message (a merged forward is nothing to run), that @-mentions the bot, whose words, the leading @ of the bot
 // taken off, start with /ai. It is kept as a source (the bot may reply to it, aiSourceReply), audited, and handed to the
 // assistant marked FeishuFromElsewhere. Anything else is dropped without a word, as every message of such a group was.
-func (h *Manager) botAIElsewhere(api *feishubot.Client, set FeishuBotSettings, ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, pass func()) {
+func (h *Manager) botAIElsewhere(api *feishubot.Client, set FeishuBotSettings, ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, pass func(), retain ...func()) {
 	msg := ev.Message
 	if msg.MessageType != "text" && msg.MessageType != "post" || msg.MessageID == "" {
 		return
@@ -333,7 +333,7 @@ func (h *Manager) botAIElsewhere(api *feishubot.Client, set FeishuBotSettings, e
 	}
 	h.takeAISource(msg.ChatID, msg.MessageID)
 	h.audit(context.Background(), channel.Feishu, auditBotAITaken, botChatActor(set.Owner.OpenID), map[string]any{"chat_id": msg.ChatID})
-	h.handToAssistant(api, ev, raw, "", assistantwire.FeishuFromElsewhere, since, pass, false)
+	h.handToAssistant(api, ev, raw, "", assistantwire.FeishuFromElsewhere, since, pass, false, retain...)
 }
 
 // botOpenID is the bot's own open id, which tells its @ from anyone else's: read at start-up, and once more here when
