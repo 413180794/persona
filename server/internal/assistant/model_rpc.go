@@ -87,7 +87,11 @@ func (s *Service) extensionComplete(ctx context.Context, raw json.RawMessage) (a
 	if err != nil {
 		return nil, err
 	}
-	purpose := assistantwire.ExtensionPurposePrefix + call.StorageKey()
+	storageKey := call.StorageKey()
+	if storageKey == "lark-context" {
+		return s.completeLarkContextModel(ctx, "extension "+call.Extension, c)
+	}
+	purpose := assistantwire.ExtensionPurposePrefix + storageKey
 	if _, ok := s.extensionPurposeDef(ctx, purpose); !ok {
 		return nil, &rpc.Error{Code: assistantwire.CodeModelUnavailable, Message: "model.complete: the extension has no model purpose (is it on and granted models?)"}
 	}
@@ -210,16 +214,7 @@ func (s *Service) runModelCall(ctx context.Context, purpose, who, what string, c
 	if !config.Configured() {
 		return nil, &rpc.Error{Code: assistantwire.CodeModelUnavailable, Message: "model.complete: nothing to call for " + what + "; pick a model for it in Settings › Model configuration"}
 	}
-	var usage assistantwire.ModelUsage
-	started := time.Now()
-	out, outcome, err := s.attemptModel(ctx, s.countedClient(purpose, "", b.Provider, config), c, c.timeout, &usage)
-	s.logf("assistant: %s model call%s on %s: %s in %s, %d request(s), %d input + %d output tokens (cache read %d, written %d)",
-		who, labelPart(c.p.Label), config.Model, outcome, time.Since(started).Round(time.Millisecond), usage.Requests,
-		usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens, usage.CacheCreationInputTokens)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+	return s.runConfiguredModelCall(ctx, purpose, who, b.Provider, config, c, false)
 }
 
 // attemptModel makes c once on client within timeout, adding what it spends to usage: the answer, or the coded

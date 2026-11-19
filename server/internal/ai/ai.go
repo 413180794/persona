@@ -35,11 +35,12 @@ var errNotConfigured = errors.New("还没有能直接调用的模型：在 设�
 func IsNotConfigured(err error) bool { return errors.Is(err, errNotConfigured) }
 
 type Client struct {
-	cfg      Config
-	http     *http.Client
-	resolve  func(context.Context) (*Client, error)
-	run      func(context.Context, Request) (Reply, error)
-	onResult func(Reply, error)
+	cfg           Config
+	http          *http.Client
+	singleRequest bool
+	resolve       func(context.Context) (*Client, error)
+	run           func(context.Context, Request) (Reply, error)
+	onResult      func(Reply, error)
 }
 
 // NewResolved resolves the execution configuration at the start of every request.
@@ -54,6 +55,18 @@ func (c *Client) Config() Config { return c.cfg }
 func (c *Client) WithResult(report func(Reply, error)) *Client {
 	copied := *c
 	copied.onResult = report
+	return &copied
+}
+
+// WithSingleRequest keeps a call on its configured endpoint and disables compatibility replays.
+func (c *Client) WithSingleRequest() *Client {
+	copied := *c
+	copied.singleRequest = true
+	if c.http != nil {
+		hc := *c.http
+		hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		copied.http = &hc
+	}
 	return &copied
 }
 

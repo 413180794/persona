@@ -29,6 +29,8 @@ const (
 	// CodeModelUnavailable: the extension's purpose has nothing it can call (no connection with an address, a model
 	// and a key); the user sets one up in Settings › Models.
 	CodeModelUnavailable = "model_unavailable"
+	// CodeModelLocalLauncherRequired carries the configured binding for execution by the extension's local runtime.
+	CodeModelLocalLauncherRequired = "model_local_launcher_required"
 	// CodeModelPaused: the connection is held (quota used up or busy, ai.IsPaused); data ModelPause. Nothing was
 	// sent: try again after until.
 	CodeModelPaused = "model_paused"
@@ -47,6 +49,20 @@ const (
 	// each did. A single candidate that fails answers with its own code and data instead.
 	CodeModelCandidatesFailed = "model_candidates_failed"
 )
+
+// ModelLocalLauncherRequired contains only a launcher's identity and effective model settings.
+type ModelLocalLauncherRequired struct {
+	Binding ModelLocalLauncherBinding `json:"binding"`
+}
+
+// ModelLocalLauncherBinding identifies the exact provider without exposing its execution configuration.
+// Empty model or effort uses that launcher's own default.
+type ModelLocalLauncherBinding struct {
+	Provider string `json:"provider"`
+	Runtime  string `json:"runtime"`
+	Model    string `json:"model"`
+	Effort   string `json:"effort"`
+}
 
 // ModelCandidatesMost is how many candidate models one call may name.
 const ModelCandidatesMost = 8
