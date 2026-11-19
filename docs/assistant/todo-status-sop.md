@@ -394,8 +394,8 @@ redesign changes them:
   `safe`; a run's ask is what its pending card asks (`question`, `plan`, `tool`, `form` or `secret`, the card's id as
   `interaction`; the session's own card before Persona's about its turn, then the oldest), `safe` only when a
   notification may answer that card too (one question with options, not a Just me turn's or a health conversation's,
-  and its asker did not say going ahead cannot be undone; the hub's push for such a card offers no options either,
-  Android's own notification actions not yet, `docs/protocol/protocol.md` "Answering a question from its notification").
+  and its asker did not say going ahead cannot be undone. The hub and Android omit option actions for an explicitly
+  irreversible question. See `docs/protocol/protocol.md`, "Answering a question from its notification").
   A failed start of a to-do no conversation opened carries no retry, since the hub would refuse it; its row still
   says why it did not start. The table is in `spec/fixtures/todo-view/README.md` ("Risk and the lock screen"). The
   decision's push says the same rule (`lockscreen`; `open_only` sends `TODO_DECIDE_OPEN`, which offers no action,

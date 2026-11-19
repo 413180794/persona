@@ -1099,6 +1099,7 @@ data class Interaction(
     @SerialName("questions") val questions: List<Question>? = null,
     /** The runtime can discard this question without answering or interrupting the task. */
     @SerialName("can_cancel") val canCancel: Boolean? = null,
+    val reversible: Boolean? = null,
     @SerialName("plan") val plan: String? = null,
     @SerialName("plan_then") val planThen: String? = null,
     @SerialName("tool_input") val toolInput: JsonElement? = null,
