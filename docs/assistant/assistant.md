@@ -1929,10 +1929,17 @@ Handshake: `initialize` (experimentalApi) → `skills/extraRoots/set` → `threa
 Assistant conversations with no selected permission mode now default to Allow Everything. An explicitly selected mode continues to use the native mapping below, including managed restrictions. An explicit mode, including Default, still uses the mapping below; transcript policy readback is not treated as a selection. Inherited workspace policies keep their own network and writable-root settings, so memory access outside those roots may require approval. Existing persisted choices remain explicit.
 Snapshots accompany each message as Claude does (first `turn/start` / `turn/steer` input); `developerInstructions` holds only memory.
 
+The assistant's working directory may also contain native Codex Desktop chats (#10752). A verified owner follow-up to
+one of those goes through its uniquely registered app-server when the conversation needs no Persona-specific role.
+On Linux the node also checks the kernel lock for the recorded Codex home and thread before relaunching. If the
+writer cannot be joined, Persona Web keeps the unsent message with instructions to continue in the original Codex
+session or close it there and retry. An active-writer refusal from `thread/resume` gives the same HTTP 409 with
+`delivered: "none"` if the lock is invisible or changes after the check.
+
 | Capability | Claude (`claude -p`) | Codex (`codex app-server`) |
 | --- | --- | --- |
 | Streaming | `stream_event` text_delta | `item/agentMessage/delta` → same `session.delta` |
-| Continue / after restart | `--resume <id>` | Reuse live process, otherwise start a new one with `thread/resume` (verified after hub / node restart) |
+| Continue / after restart | `--resume <id>` | Reuse the node's live process. When it no longer owns the thread, resume from history if Codex allows it. |
 | Stop | Kill process, next message `--resume` | `turn/interrupt`, retain process, then `thread/backgroundTerminals/clean`; interrupt alone doesn't stop commands (measured `sleep 120` remained backgrounded) |
 | Interject during reply | Queued message absorbed mid-turn | `turn/steer` into current turn (same effect, verified within its reply); start a turn if it just ended |
 | Persona MCP | `--mcp-config` + `--allowedTools mcp__persona` | `-c mcp_servers.persona.*`; Codex asks via `mcpServer/elicitation/request` (`codex_approval_kind: mcp_tool_call`); node always allows compatibility server `persona`. `tool_timeout_sec` one day (default 60 seconds times out ask_user phone waits) |
