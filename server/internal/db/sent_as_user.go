@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/nwverse/persona/server/internal/admission"
 )
 
 // The ledger of what was written as the user (migrations/0420_sent_as_user.sql, docs/extensions/connectors.md "Sent as the user").
@@ -27,8 +29,8 @@ type SentAsUser struct {
 	LetThrough json.RawMessage `json:"let_through"`
 	MessageRef string          `json:"message_ref,omitempty"`
 	RecalledAt *time.Time      `json:"recalled_at,omitempty"`
-	// OperationID is assigned by the local admission gate, never by an extension.
-	OperationID string `json:"-"`
+	// Operation is assigned by the local admission gate, never by an extension.
+	Operation admission.LedgerOperation `json:"-"`
 }
 
 // How many rows one read of the ledger gives: by default, and at most.
@@ -48,7 +50,7 @@ const insertSentAsUser = `INSERT INTO sent_as_user (at, connector, action, targe
 // RecordSentAsUser adds a row (At: now when zero) and returns its id. An empty JSON field is an empty object.
 // Legacy extension records still append unless the exact RPC has claimed their reference.
 func (d *DB) RecordSentAsUser(ctx context.Context, s SentAsUser) (int64, error) {
-	if s.OperationID != "" || (s.Action == "sent.record" && s.MessageRef != "") {
+	if s.Operation.ID != "" || (s.Action == "sent.record" && s.MessageRef != "") {
 		return d.recordExtensionSent(ctx, s, sentRecordLegacy)
 	}
 	return insertSent(ctx, d.pool, s)
@@ -98,6 +100,11 @@ func (d *DB) recordExtensionSent(ctx context.Context, s SentAsUser, mode sentRec
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	if mode != sentRecordLookup && s.Operation.ID != "" {
+		if err := verifyLedgerAuthority(ctx, tx, s.Operation.Authority); err != nil {
+			return 0, err
+		}
+	}
 	if mode != sentRecordLookup && s.MessageRef != "" {
 		// Both RPCs take the same lock before reading so writers see the preceding commit.
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('sent.record_once:' || $1), hashtext($2))`,
@@ -117,7 +124,7 @@ func (d *DB) recordExtensionSent(ctx context.Context, s SentAsUser, mode sentRec
 		if err != nil {
 			return 0, err
 		}
-		return commitSentRecord(ctx, tx, s.OperationID, id)
+		return commitSentRecord(ctx, tx, s.Operation.ID, id)
 	}
 
 	rows, err := tx.Query(ctx, `SELECT id, target = $4::jsonb AND text = $5 AND summary = $6 AND origin = $7::jsonb AND let_through = $8::jsonb
@@ -163,7 +170,7 @@ func (d *DB) recordExtensionSent(ctx context.Context, s SentAsUser, mode sentRec
 	if mode == sentRecordLookup {
 		return id, tx.Commit(ctx)
 	}
-	return commitSentRecord(ctx, tx, s.OperationID, id)
+	return commitSentRecord(ctx, tx, s.Operation.ID, id)
 }
 
 // A receipt proves that this invocation reached a committed terminal success,
@@ -175,20 +182,6 @@ func commitSentRecord(ctx context.Context, tx pgx.Tx, operation string, id int64
 		}
 	}
 	return id, tx.Commit(ctx)
-}
-
-// SentRecordOperationCommitted reads the configured Manager primary without
-// migrating or writing. The ledger reference or row alone is not proof.
-func (d *DB) SentRecordOperationCommitted(ctx context.Context, operation string) (bool, error) {
-	var primary, present bool
-	if err := d.pool.QueryRow(ctx, `SELECT NOT pg_is_in_recovery(),
-		EXISTS (SELECT 1 FROM sent_record_operations WHERE operation_id = $1)`, operation).Scan(&primary, &present); err != nil {
-		return false, err
-	}
-	if !primary {
-		return false, errors.New("cannot reconcile against a standby database")
-	}
-	return present, nil
 }
 
 func objectOrEmpty(raw json.RawMessage) []byte {

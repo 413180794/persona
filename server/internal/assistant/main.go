@@ -330,6 +330,15 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer database.Close()
+	if o.Admission != nil {
+		authority, err := database.LedgerAuthority(ctx)
+		if err != nil {
+			return fmt.Errorf("read ledger writer database identity: %w", err)
+		}
+		if err := o.Admission.BindLedgerWriter(authority); err != nil {
+			return fmt.Errorf("bind ledger writer database: %w", err)
+		}
+	}
 	// Its own secret.key (keyrotate.go), before anything of it reads a secret; the old key's watcher, if any, stops
 	// before the database closes.
 	keyDone := make(chan struct{})

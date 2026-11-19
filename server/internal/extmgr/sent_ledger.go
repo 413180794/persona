@@ -405,7 +405,7 @@ func (ps *extensions) extensionRecordSent(ctx context.Context, id string, raw js
 			ps.logf("sent ledger: admission: %v", err)
 			return nil, &rpc.Error{Code: "admission_unavailable", Message: "sent ledger admission is unavailable"}
 		}
-		row.OperationID = operation
+		row.Operation = operation
 		defer func() {
 			if settled {
 				done()
@@ -453,7 +453,7 @@ func (ps *extensions) extensionRecordSent(ctx context.Context, id string, raw js
 func sentRecordTransactionSettled(err error) bool {
 	var pgErr *pgconn.PgError
 	return err == nil || errors.Is(err, db.ErrSentRecordConflict) ||
-		errors.Is(err, db.ErrSentRecordPruned) || errors.Is(err, pgx.ErrTxCommitRollback) ||
+		errors.Is(err, db.ErrSentRecordPruned) || errors.Is(err, db.ErrLedgerAuthorityMismatch) || errors.Is(err, pgx.ErrTxCommitRollback) ||
 		(errors.As(err, &pgErr) && pgErr.SeverityUnlocalized == "ERROR")
 }
 

@@ -61,14 +61,16 @@ func TestAdmissionReconcileLedgerCLI(t *testing.T) {
 	if err := run("init"); err != nil {
 		t.Fatal(err)
 	}
-	id, _, err := gate.AdmitLedger()
+	bindFixtureWriter(t, gate, own)
+	operation, _, err := gate.AdmitLedger()
 	if err != nil {
 		t.Fatal(err)
 	}
-	row := db.SentAsUser{Connector: "cli-fixture", Action: "sent.record", Text: "synthetic", OperationID: id}
+	row := db.SentAsUser{Connector: "cli-fixture", Action: "sent.record", Text: "synthetic", Operation: operation}
 	if _, err := own.RecordSentAsUser(ctx, row); err != nil {
 		t.Fatal(err)
 	}
+	id := operation.ID
 	// A receipt in an unconfigured database is not enough to settle the ticket.
 	const attempt = "cli-reconcile"
 	if err := run("close", attempt); err != nil {
@@ -99,12 +101,12 @@ func TestAdmissionReconcileLedgerCLI(t *testing.T) {
 	if err := run("reconcile-ledger", "wrong-attempt", id); err == nil {
 		t.Fatal("another attempt settled the ticket")
 	}
-	for range 2 {
+	for _, source := range []string{"database", "archive"} {
 		if err := run("reconcile-ledger", attempt, id); err != nil {
 			t.Fatal(err)
 		}
 		var receipt admission.LedgerSettlement
-		if err := json.Unmarshal(out.Bytes(), &receipt); err != nil || receipt.Status != "committed" || receipt.Operation != id {
+		if err := json.Unmarshal(out.Bytes(), &receipt); err != nil || receipt.Status != "committed" || receipt.Operation != id || receipt.Authority != operation.Authority || receipt.ProofSource != source {
 			t.Fatalf("reconcile output %q: %v", out.String(), err)
 		}
 	}
@@ -116,11 +118,12 @@ func TestAdmissionReconcileLedgerCLI(t *testing.T) {
 	}
 
 	// A stale shared database may still have an exact receipt after a move.
+	bindFixtureWriter(t, gate, base)
 	stale, _, err := gate.AdmitLedger()
 	if err != nil {
 		t.Fatal(err)
 	}
-	row.OperationID = stale
+	row.Operation = stale
 	if _, err := base.RecordSentAsUser(ctx, row); err != nil {
 		t.Fatal(err)
 	}
@@ -135,11 +138,23 @@ func TestAdmissionReconcileLedgerCLI(t *testing.T) {
 	if err := run("close", staleAttempt); err != nil {
 		t.Fatal(err)
 	}
-	if err := run("reconcile-ledger", staleAttempt, stale); err == nil {
+	if err := run("reconcile-ledger", staleAttempt, stale.ID); err == nil {
 		t.Fatal("the exact receipt in a stale shared database settled the ticket")
 	}
 	if err := run("check", staleAttempt); err == nil {
 		t.Fatal("the stale proof unblocked the fence")
 	}
 
+}
+
+func bindFixtureWriter(t *testing.T, gate *admission.Gate, database *db.DB) admission.LedgerAuthority {
+	t.Helper()
+	authority, err := database.LedgerAuthority(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.BindLedgerWriter(authority); err != nil {
+		t.Fatal(err)
+	}
+	return authority
 }

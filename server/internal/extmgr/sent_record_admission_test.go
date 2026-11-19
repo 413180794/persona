@@ -34,6 +34,7 @@ func TestSentRecordAdmissionTracksAcceptedTransactions(t *testing.T) {
 			if _, err := gate.Control("init", ""); err != nil {
 				t.Fatal(err)
 			}
+			bindTestLedgerWriter(t, gate, st)
 			h := newTestManager(t)
 			h.store, h.opts.Admission = st, gate
 			const cid = "releaseledger"
@@ -180,6 +181,7 @@ func TestSentRecordAdmissionKeepsUnsettledWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := storagePostgres(t)
+	bindTestLedgerWriter(t, gate, st)
 	h := newTestManager(t)
 	h.store, h.opts.Admission = ambiguousSentStore{st}, gate
 	spec := sentExtensionSpec(t, h, "unknown-ledger", `[{"id":"unknownledger","name":"Unknown Ledger","capabilities":["status"],"sends_as_user":true}]`)
@@ -220,6 +222,7 @@ func TestSentRecordAdmissionReconcilesOnlyTheCommittedOperation(t *testing.T) {
 			if _, err := gate.Control("init", ""); err != nil {
 				t.Fatal(err)
 			}
+			bindTestLedgerWriter(t, gate, st)
 			h := newTestManager(t)
 			h.store, h.opts.Admission = st, gate
 			spec := sentExtensionSpec(t, h, "release-receipt", `[{"id":"receiptledger","name":"Receipts","capabilities":["status"],"sends_as_user":true}]`)
@@ -258,13 +261,13 @@ func TestSentRecordAdmissionReconcilesOnlyTheCommittedOperation(t *testing.T) {
 				t.Fatalf("expected two identifiable operations: %+v %v", pending, err)
 			}
 			committed := pending.Operations[0]
-			if committed == unproved {
+			if committed == unproved.ID {
 				committed = pending.Operations[1]
 			}
 			if _, err := afterRestart.ReconcileLedger(ctx, "wrong-attempt", committed, st.SentRecordOperationCommitted); err == nil {
 				t.Fatal("wrong attempt was allowed to reconcile")
 			}
-			if _, err := afterRestart.ReconcileLedger(ctx, attempt, unproved, st.SentRecordOperationCommitted); err == nil {
+			if _, err := afterRestart.ReconcileLedger(ctx, attempt, unproved.ID, st.SentRecordOperationCommitted); err == nil {
 				t.Fatal("another operation's receipt was accepted")
 			}
 			if n, err := st.PruneSentAsUser(ctx, time.Now().Add(time.Minute)); err != nil || n < 1 {
@@ -275,13 +278,15 @@ func TestSentRecordAdmissionReconcilesOnlyTheCommittedOperation(t *testing.T) {
 				t.Fatalf("cannot reconcile the committed operation: %+v %v", settled, err)
 			}
 			data, err := os.ReadFile(filepath.Join(dir, settled.Audit))
-			if err != nil || string(data) != committed+"\n" {
+			var recorded admission.LedgerOperation
+			if err != nil || json.Unmarshal(data, &recorded) != nil || recorded.ID != committed || recorded.Authority != settled.Authority {
 				t.Fatalf("unexpected audit file: %q %v", data, err)
 			}
-			repeat, err := afterRestart.ReconcileLedger(ctx, attempt, committed, func(context.Context, string) (bool, error) {
+			repeat, err := afterRestart.ReconcileLedger(ctx, attempt, committed, func(context.Context, admission.LedgerOperation) (bool, error) {
 				t.Fatal("repeated reconciliation should read the durable audit")
 				return false, nil
 			})
+			settled.ProofSource = "archive"
 			if err != nil || repeat != settled {
 				t.Fatalf("failed to replay reconciliation: %+v %v", repeat, err)
 			}
@@ -300,5 +305,16 @@ func TestSentRecordAdmissionReconcilesOnlyTheCommittedOperation(t *testing.T) {
 				t.Fatal("reconcile succeeded on the open fence")
 			}
 		})
+	}
+}
+
+func bindTestLedgerWriter(t *testing.T, gate *admission.Gate, st *db.DB) {
+	t.Helper()
+	authority, err := st.LedgerAuthority(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.BindLedgerWriter(authority); err != nil {
+		t.Fatal(err)
 	}
 }

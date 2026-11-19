@@ -181,7 +181,7 @@ func TestLedgerReconciliationDoesNotAcceptUnidentifiedTickets(t *testing.T) {
 		t.Fatalf("old empty ticket: %+v %v", pending, err)
 	}
 	const id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	if _, err := g.ReconcileLedger(t.Context(), attempt, id, func(context.Context, string) (bool, error) {
+	if _, err := g.ReconcileLedger(t.Context(), attempt, id, func(context.Context, LedgerOperation) (bool, error) {
 		t.Fatal("proof callback must not run without the matching identified ticket")
 		return true, nil
 	}); err == nil {
@@ -189,5 +189,38 @@ func TestLedgerReconciliationDoesNotAcceptUnidentifiedTickets(t *testing.T) {
 	}
 	if state := control(t, g, "check", attempt); state.Phase != "draining" || state.Active["extension-ledger-record"] != 1 {
 		t.Fatalf("empty ticket no longer blocks: %+v", state)
+	}
+}
+
+func TestLedgerAuthorityCannotRebindUntilOpenAndSettled(t *testing.T) {
+	g := testGate(t)
+	if _, _, err := g.AdmitLedger(); err == nil {
+		t.Fatal("ledger write admitted before the writer bound its database")
+	}
+	source := LedgerAuthority{SystemIdentifier: "123", DatabaseOID: 1}
+	candidate := LedgerAuthority{SystemIdentifier: "123", DatabaseOID: 2}
+	if err := g.BindLedgerWriter(source); err != nil {
+		t.Fatal(err)
+	}
+	op, done, err := g.AdmitLedger()
+	if err != nil || op.Authority != source {
+		t.Fatalf("unbound admitted write: %+v %v", op, err)
+	}
+	if err := g.BindLedgerWriter(candidate); err == nil {
+		t.Fatal("active ledger ticket was moved to another database")
+	}
+	const attempt = "frozen-authority"
+	closed := control(t, g, "close", attempt)
+	if closed.LedgerAuthority == nil || *closed.LedgerAuthority != source {
+		t.Fatalf("wrong frozen database: %+v", closed)
+	}
+	done()
+	control(t, g, "check", attempt)
+	if err := g.BindLedgerWriter(candidate); !errors.Is(err, ErrClosed) {
+		t.Fatalf("closed gate permitted rebinding: %v", err)
+	}
+	control(t, g, "open", attempt)
+	if err := g.BindLedgerWriter(candidate); err != nil {
+		t.Fatalf("reopened gate did not accept the new Manager: %v", err)
 	}
 }

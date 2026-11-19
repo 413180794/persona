@@ -30,6 +30,8 @@ type State struct {
 	Phase   string         `json:"phase"`
 	Attempt string         `json:"attempt,omitempty"`
 	Active  map[string]int `json:"active,omitempty"`
+	// The open writer's attested identity becomes immutable when the gate closes.
+	LedgerAuthority *LedgerAuthority `json:"ledger_authority,omitempty"`
 }
 
 // FromEnv returns a nil, open gate for sites that have not configured admission.
@@ -87,6 +89,9 @@ func (g *Gate) state() (State, error) {
 	}
 	if len(s.Active) != 0 {
 		return s, errors.New("invalid admission state with embedded operation counts")
+	}
+	if s.LedgerAuthority != nil && !s.LedgerAuthority.valid() {
+		return s, errors.New("invalid admission ledger authority")
 	}
 	return s, nil
 }
@@ -269,7 +274,7 @@ func (g *Gate) Control(action, attempt string) (State, error) {
 	case "status":
 	case "close":
 		if s.Phase == "open" {
-			s = State{Phase: "draining", Attempt: attempt}
+			s.Phase, s.Attempt = "draining", attempt
 		}
 	case "check":
 		if len(active) == 0 {
@@ -279,7 +284,7 @@ func (g *Gate) Control(action, attempt string) (State, error) {
 		if len(active) != 0 {
 			return s, errors.New("admission has unsettled operations")
 		}
-		s = State{Phase: "open"}
+		s = State{Phase: "open", LedgerAuthority: s.LedgerAuthority}
 	default:
 		return s, errors.New("unknown admission action")
 	}

@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +19,54 @@ const ledgerAuditPrefix = "ledger-committed."
 
 var ledgerID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
+// LedgerAuthority identifies the primary database used by the running Manager.
+type LedgerAuthority struct {
+	SystemIdentifier string `json:"system_identifier"`
+	DatabaseOID      uint32 `json:"database_oid"`
+}
+
+func (a LedgerAuthority) valid() bool {
+	system, err := strconv.ParseInt(a.SystemIdentifier, 10, 64)
+	return err == nil && system != 0 && a.SystemIdentifier == strconv.FormatInt(system, 10) && a.DatabaseOID != 0
+}
+
+type LedgerOperation struct {
+	ID        string          `json:"operation_id"`
+	Authority LedgerAuthority `json:"ledger_authority"`
+}
+
+// BindLedgerWriter is called by the Manager from its actual database, before it
+// serves. The local operator's close command never reads a DSN to set this.
+func (g *Gate) BindLedgerWriter(authority LedgerAuthority) error {
+	if !authority.valid() {
+		return errors.New("invalid ledger writer database identity")
+	}
+	lock, err := g.lock()
+	if err != nil {
+		return err
+	}
+	defer lock.close()
+	state, err := g.state()
+	if err != nil {
+		return err
+	}
+	if state.Phase != "open" {
+		return ErrClosed
+	}
+	if state.LedgerAuthority != nil && *state.LedgerAuthority == authority {
+		return nil
+	}
+	active, err := g.active()
+	if err != nil {
+		return err
+	}
+	if active["extension-ledger-record"] != 0 {
+		return errors.New("cannot bind another ledger database while ledger tickets are active")
+	}
+	state.LedgerAuthority = &authority
+	return g.publish(state)
+}
+
 type LedgerPending struct {
 	Attempt      string   `json:"attempt"`
 	Operations   []string `json:"operations"`
@@ -24,53 +74,58 @@ type LedgerPending struct {
 }
 
 type LedgerSettlement struct {
-	Attempt   string `json:"attempt"`
-	Operation string `json:"operation_id"`
-	Audit     string `json:"audit_file"`
-	Status    string `json:"status"`
+	Attempt     string          `json:"attempt"`
+	Operation   string          `json:"operation_id"`
+	Audit       string          `json:"audit_file"`
+	Status      string          `json:"status"`
+	ProofSource string          `json:"proof_source"`
+	Authority   LedgerAuthority `json:"ledger_authority"`
 }
 
 // AdmitLedger publishes the opaque operation ID before the caller can start SQL.
 // A crash before the ticket is published cannot leave an empty active ticket.
-func (g *Gate) AdmitLedger() (string, func(), error) {
+func (g *Gate) AdmitLedger() (LedgerOperation, func(), error) {
 	if g == nil {
-		return "", func() {}, nil
+		return LedgerOperation{}, func() {}, nil
 	}
 	lock, err := g.lock()
 	if err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
 	defer lock.close()
 	s, err := g.state()
 	if err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
 	if s.Phase != "open" {
-		return "", nil, ErrClosed
+		return LedgerOperation{}, nil, ErrClosed
+	}
+	if s.LedgerAuthority == nil {
+		return LedgerOperation{}, nil, errors.New("no ledger writer database is bound")
 	}
 
 	var entropy [16]byte
 	if _, err := rand.Read(entropy[:]); err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
-	id := hex.EncodeToString(entropy[:])
+	operation := LedgerOperation{ID: hex.EncodeToString(entropy[:]), Authority: *s.LedgerAuthority}
 	tmp, err := os.CreateTemp(g.dir, ".ledger.")
 	if err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
 	defer os.Remove(tmp.Name())
-	_, writeErr := tmp.WriteString(id + "\n")
+	writeErr := json.NewEncoder(tmp).Encode(operation)
 	if err := errors.Join(writeErr, tmp.Sync(), tmp.Close()); err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
-	path := filepath.Join(g.dir, ledgerTicketPrefix+id)
+	path := filepath.Join(g.dir, ledgerTicketPrefix+operation.ID)
 	if err := os.Link(tmp.Name(), path); err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
 	if err := g.sync(); err != nil {
-		return "", nil, err
+		return LedgerOperation{}, nil, err
 	}
-	return id, func() {
+	return operation, func() {
 		if err := g.finish(path); err != nil {
 			log.Printf("admission left an unsettled extension-ledger-record operation: %v", err)
 		}
@@ -85,7 +140,8 @@ func (g *Gate) LedgerPending(attempt string) (LedgerPending, error) {
 		return LedgerPending{}, err
 	}
 	defer lock.close()
-	if _, err := g.ledgerAttempt(attempt); err != nil {
+	state, err := g.ledgerAttempt(attempt)
+	if err != nil {
 		return LedgerPending{}, err
 	}
 	files, err := os.ReadDir(g.dir)
@@ -98,7 +154,8 @@ func (g *Gate) LedgerPending(attempt string) (LedgerPending, error) {
 		if !match {
 			continue
 		}
-		if !ledgerID.MatchString(id) || checkLedgerTicket(filepath.Join(g.dir, file.Name()), id) != nil {
+		if state.LedgerAuthority == nil || !ledgerID.MatchString(id) ||
+			checkLedgerTicket(filepath.Join(g.dir, file.Name()), LedgerOperation{ID: id, Authority: *state.LedgerAuthority}) != nil {
 			p.Unidentified++
 			continue
 		}
@@ -110,7 +167,7 @@ func (g *Gate) LedgerPending(attempt string) (LedgerPending, error) {
 // ReconcileLedger archives exactly one ticket after verifying that operation's
 // committed receipt. A single same-directory rename publishes the audit record
 // and removes the active ticket. Repeating it under the same fence is safe.
-func (g *Gate) ReconcileLedger(ctx context.Context, attempt, id string, committed func(context.Context, string) (bool, error)) (LedgerSettlement, error) {
+func (g *Gate) ReconcileLedger(ctx context.Context, attempt, id string, committed func(context.Context, LedgerOperation) (bool, error)) (LedgerSettlement, error) {
 	if !ledgerID.MatchString(id) {
 		return LedgerSettlement{}, errors.New("invalid ledger operation ID")
 	}
@@ -123,17 +180,23 @@ func (g *Gate) ReconcileLedger(ctx context.Context, attempt, id string, committe
 	if err != nil {
 		return LedgerSettlement{}, err
 	}
+	if state.LedgerAuthority == nil {
+		return LedgerSettlement{}, errors.New("this closed attempt has no bound ledger database")
+	}
 	name := ledgerAuditPrefix + attempt + "." + id
 	audit := filepath.Join(g.dir, name)
 	ticket := filepath.Join(g.dir, ledgerTicketPrefix+id)
-	result := LedgerSettlement{Attempt: attempt, Operation: id, Audit: name, Status: "committed"}
-	if err := checkLedgerTicket(audit, id); err == nil {
+	result := LedgerSettlement{Attempt: attempt, Operation: id, Audit: name, Status: "committed",
+		Authority: *state.LedgerAuthority, ProofSource: "database"}
+	operation := LedgerOperation{ID: id, Authority: *state.LedgerAuthority}
+	if err := checkLedgerTicket(audit, operation); err == nil {
 		if _, activeErr := os.Lstat(ticket); !errors.Is(activeErr, os.ErrNotExist) {
 			return LedgerSettlement{}, errors.New("archived ledger operation still has a live ticket")
 		}
 		if err := g.sync(); err != nil {
 			return LedgerSettlement{}, err
 		}
+		result.ProofSource = "archive"
 		return result, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return LedgerSettlement{}, err
@@ -141,10 +204,10 @@ func (g *Gate) ReconcileLedger(ctx context.Context, attempt, id string, committe
 	if state.Phase != "draining" {
 		return LedgerSettlement{}, errors.New("ledger reconciliation requires a draining fence")
 	}
-	if err := checkLedgerTicket(ticket, id); err != nil {
+	if err := checkLedgerTicket(ticket, operation); err != nil {
 		return LedgerSettlement{}, err
 	}
-	proved, err := committed(ctx, id)
+	proved, err := committed(ctx, operation)
 	if err != nil {
 		return LedgerSettlement{}, err
 	}
@@ -171,20 +234,21 @@ func (g *Gate) ledgerAttempt(attempt string) (State, error) {
 	return s, nil
 }
 
-func checkLedgerTicket(path, id string) error {
+func checkLedgerTicket(path string, expected LedgerOperation) error {
 	stat, err := os.Lstat(path)
 	if err != nil {
 		return err
 	}
-	if !stat.Mode().IsRegular() || stat.Size() != int64(len(id)+1) {
+	if !stat.Mode().IsRegular() || stat.Size() > 256 {
 		return errors.New("invalid ledger ticket")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	if string(data) != id+"\n" {
-		return errors.New("ledger ticket identity does not match its filename")
+	var operation LedgerOperation
+	if err := json.Unmarshal(data, &operation); err != nil || operation != expected {
+		return errors.New("ledger ticket does not match the operation and bound database")
 	}
 	return nil
 }
