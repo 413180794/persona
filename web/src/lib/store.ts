@@ -4,7 +4,7 @@ import { compatibleEnvelope, setCompatibilityFeatures } from "./compatibility";
 // App-wide state: what the hub pushes over the WebSocket (machines, sessions, interactions), plus the assistant.
 // Views read it with useStore(selector); per-session item streams go to listeners (ChatView subscribes).
 
-import { chosenManager, defaultKnown, defaultManager, fromShownManager, noteConversation, noteItemManager, onDefaultManager, onManagerChoice, shownManager } from "./manager-choice";
+import { chosenManager, defaultKnown, defaultManager, fromShownManager, noteConversation, noteItemManager, onDefaultManager, onManagerChoice, sameManager, shownManager } from "./manager-choice";
 import { BASE } from "./base";
 import { mainConversationMachine, clearMemoryPages, discardFeedCache, feedCacheScope, readFeedCache } from "./feed-cache";
 import { useRef, useSyncExternalStore } from "react";
@@ -252,7 +252,7 @@ function listedOver(row: Session, listed: Session): Session {
  *  hints, never `sessions` / `sessions_delta`, so nothing else moves them: the Persona sidebar and All chats kept the
  *  state of the last /assistant read, and a conversation read mid-turn kept spinning after its turn had ended until a
  *  reload, a send or opening it. Its row in the conversations and the detail kept of it (which those lists lay over
- *  them) both take the change; no other row is made or kept. */
+ *  them) both take the change. A new row is a hint to reread the scoped assistant list. */
 function followConversations(upsert: Session[]) {
   const a = state.assistant;
   if (!a || !upsert.length) return;
@@ -260,6 +260,11 @@ function followConversations(upsert: Session[]) {
   for (const row of upsert) if (row.machine_id === a.machine_id) changed.set(row.session_id, row);
   if (!changed.size) return;
   const ids = new Set(a.conversations.map((c) => c.session_id));
+  const manager = shownManager();
+  if (upsert.some((row) => row.machine_id === a.machine_id && row.assistant && !row.space && !row.archived &&
+    !ids.has(row.session_id) && sameManager(row.manager, manager) && availableConversation(row))) {
+    void refreshAssistant().catch(() => {});
+  }
   let moved = false;
   const conversations = a.conversations.map((c) => {
     const row = changed.get(c.session_id);

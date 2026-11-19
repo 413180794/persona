@@ -21,10 +21,12 @@ const row = (id: string, extra: Partial<Session> = {}): Session => ({ machine_id
 const working = (id: string, extra: Partial<Session> = {}) => row(id, { status: "working", state: "working", assistant: true, ...extra });
 let changed: Session[];
 let conversations: Session[];
+let revision: string;
 
 beforeEach(() => {
   vi.useFakeTimers();
   changed = [];
+  revision = "r2";
   conversations = [working("main"), working("leader", { turn_error: "API Error: 503", turn_error_kind: "server" })];
   vi.stubGlobal("WebSocket", Socket);
   vi.stubGlobal("location", { protocol: "http:", host: "demo" });
@@ -35,7 +37,7 @@ beforeEach(() => {
     if (url.pathname === "/api/v1/assistant") return Response.json({ machine_id: "hub", main: "main", conversations });
     if (url.pathname === "/api/v1/sessions") {
       if (url.searchParams.has("counts")) return Response.json({ total: 3, machine: { hub: 3 }, project: {}, group: {}, state: {}, revision: "r1" });
-      if (url.searchParams.has("since")) return Response.json({ sessions: changed, remove: [], total: 3, has_more: false, revision: "r2" });
+      if (url.searchParams.has("since")) return Response.json({ sessions: changed, remove: [], total: 3, has_more: false, revision });
       return Response.json({ sessions: [], remove: [], total: 3, has_more: false, revision: "r1" });
     }
     return Response.json({});
@@ -88,5 +90,31 @@ describe("the assistant's conversations follow the list (#9049)", () => {
     await settle();
     await settle();
     expect(getState().assistant).toBe(before);
+  });
+
+  it("rereads the assistant list once for new in-scope conversations in a page of changes", async () => {
+    await listMode();
+    const reads = () => vi.mocked(fetch).mock.calls.filter(([path]) => path === "/api/v1/assistant").length;
+    const initialReads = reads();
+    changed = [
+      working("other-manager", { manager: "work", waiting: false }),
+      working("another-machine", { machine_id: "laptop", waiting: false }),
+      working("health", { space: "health", waiting: false }),
+      working("archived", { archived: true, waiting: false }),
+      working("deleted", { deleted: true, waiting: false }),
+    ];
+    Socket.last.push({ type: "sessions_list", revision: "r2" });
+    await settle();
+    expect(reads()).toBe(initialReads);
+
+    const newRows = [working("existing-one"), working("existing-two")];
+    conversations = [...conversations, ...newRows];
+    changed = newRows.map((row) => ({ ...row, waiting: false }));
+    revision = "r3";
+    Socket.last.push({ type: "sessions_list", revision });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(reads()).toBe(initialReads + 1);
+    expect(getState().assistant?.conversations.map((row) => row.session_id)).toEqual(["main", "leader", "existing-one", "existing-two"]);
   });
 });
