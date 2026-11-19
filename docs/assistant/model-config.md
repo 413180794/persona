@@ -98,7 +98,16 @@ When Lark Context is enabled and explicitly granted `models`, Model configuratio
 with Main chat as its parent and category. Its empty binding follows the current Main chat provider, model and
 effort. Its editor saves an independent revision and can reset the binding to following. The native `/agent`
 conversation API still accepts `lark.agent` and uses that same binding for new conversations. Existing conversations
-keep the settings they started with. Other extension text purposes retain their Information processing defaults.
+keep the settings they started with. This follows the Main chat purpose in Model configuration. A one-message pick
+and a chat-specific model pick apply within that conversation. Other extension text purposes retain their Information
+processing defaults.
+
+Lark Context has one binding and does not display candidate-model controls. The extension's one-shot calls use
+Persona's credentials for direct API requests. For local CLI inference, the response carries only the supported
+launcher's effective identity, model and effort. The extension runs the matching isolated command on the development
+machine. A local launcher that needs settings the isolated command cannot reproduce, or whose model is unknown, is
+unavailable. The native Agent path needs a compatible long-running runtime. Ordinary TraeX and Responses and Chat
+Completions transports can serve one-shot text, while complete Agent starts require a compatible native runtime.
 
 The v3 binding starts in `model_config.overrides.v1.extension.lark-context`. The previous extension direct-API
 record in `model_config.extension.lark-context`, the native override in `model_config.overrides.v1.lark.agent`,

@@ -39,7 +39,7 @@ func (s *Service) modelPurpose(ctx context.Context, id string, providers []Model
 		return p, err
 	}
 	p.InheritedFrom = inheritedLabel(s.requestCtxLang(ctx), p, base, from, providers)
-	if isExtensionPurpose(p.ID) && !readOnly {
+	if isExtensionPurpose(p.ID) && p.ID != larkContextModelPurposeID && !readOnly {
 		p.Candidates = s.purposeCandidates(ctx, p.ID, r.Candidates, p.Effective)
 	}
 	if p.Kind == "api" {

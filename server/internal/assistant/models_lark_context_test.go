@@ -100,7 +100,7 @@ func TestLarkContextModelSettingsAndLegacyRecords(t *testing.T) {
 		t.Helper()
 		p := purposeOf(t, s, larkContextModelPurposeID)
 		if p.ID != larkContextModelPurposeID || p.Parent != "assistant" || p.CategoryID != "assistant" || p.Kind != "launcher" ||
-			p.Launch != "headless" || p.Name != "Lark Context" || p.Revision != revision || p.Override != override || p.Effective != want ||
+			p.Launch != "headless" || p.Name != "Lark Context" || p.Candidates != nil || p.Revision != revision || p.Override != override || p.Effective != want ||
 			!slices.Equal(p.Fields, []string{"provider", "model", "effort"}) || (p.InheritedFrom != "") != (override.Provider == "") {
 			t.Fatalf("canonical purpose: %+v, want binding %+v revision %d override %+v", p, want, revision, override)
 		}
@@ -131,6 +131,7 @@ func TestLarkContextModelSettingsAndLegacyRecords(t *testing.T) {
 		method, body string
 		code         int
 	}{
+		{http.MethodPatch, `{"revision":0,"candidates":{"mode":"off"}}`, http.StatusBadRequest},
 		{http.MethodPut, `{"revision":0,"provider":"launcher.shortcut-claude","model":"separately-picked","effort":"medium"}`, http.StatusOK},
 		{http.MethodPatch, `{"revision":1,"effort":"xhigh"}`, http.StatusOK},
 		{http.MethodPatch, `{"revision":1,"model":"stale"}`, http.StatusConflict},
