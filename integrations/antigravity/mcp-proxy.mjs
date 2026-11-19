@@ -4,7 +4,7 @@
 // Stdio MCP proxy for an assistant chat's `personad mcp` (lib/compat.js mcpServers). agy defers the MCP tools over its
 // declaration budget, largest schemas first, and for servers passed through ACP it never declares `call_mcp_tool`, so
 // a deferred Persona tool cannot be called at all (#7333). This adds one small tool, persona_call, that calls any
-// Persona tool by name. Bound the other declarations so many smaller connector tools cannot crowd it out (#10756).
+// Persona tool by name. Keep it smaller than every passthrough declaration and bound their total size (#10756).
 // Tool declarations also omit enums agy cannot represent.
 // shortcut: works around agy 1.5.8; drop it once agy declares call_mcp_tool for ACP servers.
 import { spawn } from 'node:child_process'
@@ -14,21 +14,23 @@ import { agyInputSchema } from './lib/mcp-schema.js'
 const DISPATCH = 'persona_call'
 const DISPATCH_TOOL = {
   name: DISPATCH,
-  description:
-    'Call a Persona tool by name. Use it for any Persona tool that is not in your tool list: Antigravity defers large ' +
-    'MCP tools and cannot call deferred ones in this session (there is no call_mcp_tool). Read the tool\'s schema file ' +
-    'first when you do not know its arguments. Without a name it lists the Persona tools.',
+  description: 'Call any Persona tool by name; omit name to list tools.',
   inputSchema: {
     type: 'object',
     properties: {
-      name: { type: 'string', description: 'The Persona tool, e.g. todo_create' },
-      arguments: { type: 'object', description: 'Its arguments, as its schema describes them', additionalProperties: true },
+      name: { type: 'string' },
+      arguments: { type: 'object', additionalProperties: true },
     },
   },
 }
 // Leave room in agy's eager budget for the dispatcher, regardless of the server's tool count or schema sizes.
 const MAX_PASSTHROUGH_TOOLS = 8
 const MAX_DECLARATION_BYTES = 4 * 1024
+// agy stores/counts only these fields, renaming inputSchema to parameters; annotations/_meta add no schema bytes.
+const schemaBytes = (tool) => Buffer.byteLength(JSON.stringify({
+  name: tool.name, description: tool.description, parameters: tool.inputSchema,
+}))
+const DISPATCH_BYTES = schemaBytes(DISPATCH_TOOL)
 
 const [command, ...args] = process.argv.slice(2)
 const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'] })
@@ -73,6 +75,7 @@ createInterface({ input: child.stdout, crlfDelay: Infinity }).on('line', (line) 
       for (const tool of tools) {
         if (declarations.length >= MAX_PASSTHROUGH_TOOLS) break
         const declaration = { ...tool, inputSchema: agyInputSchema(tool.inputSchema) }
+        if (schemaBytes(declaration) <= DISPATCH_BYTES) continue
         const size = Buffer.byteLength(JSON.stringify(declaration)) + 1 // separating comma
         if (bytes + size > MAX_DECLARATION_BYTES) continue
         bytes += size

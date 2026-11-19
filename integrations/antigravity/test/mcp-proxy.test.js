@@ -40,31 +40,34 @@ function proxied(t, tools) {
 }
 
 describe('MCP proxy (#7333)', { timeout: 15_000 }, () => {
-  it('adds persona_call to the server\'s tools', async (t) => {
+  it('keeps compact server tools reachable through persona_call', async (t) => {
     const { call } = proxied(t)
     const res = await call('tools/list', {})
-    assert.deepEqual(res.result.tools.map((x) => x.name), ['todo_create', 'agents_list', 'persona_call'])
+    assert.deepEqual(res.result.tools.map((x) => x.name), ['persona_call'])
   })
 
   it('keeps persona_call eager with many smaller connector tools and dispatches omitted tools (#10756)', async (t) => {
-    const size = (tool) => Buffer.byteLength(JSON.stringify(tool))
-    // Model agy's largest-first deferral with an 8 KiB declaration budget. The old unbounded response loses
-    // persona_call: every connector schema is smaller than its 590-byte declaration.
+    const size = (tool) => Buffer.byteLength(JSON.stringify({
+      name: tool.name, description: tool.description, parameters: tool.inputSchema,
+    }))
+    // Model largest-first deferral down to a 512 B budget, below the old 590 B dispatcher. Include _meta that agy
+    // drops: measuring the full MCP object would wrongly consider these tiny schemas larger than the dispatcher.
     const eager = (tools) => {
       const kept = [...tools].sort((a, b) => size(a) - size(b))
       let bytes = kept.reduce((sum, tool) => sum + size(tool), 0)
-      while (bytes > 8 * 1024) bytes -= size(kept.pop())
+      while (bytes > 512) bytes -= size(kept.pop())
       return kept
     }
     for (const count of [32, 128, 1024]) {
       const tools = Array.from({ length: count }, (_, i) => ({
-        name: `connector_read_${i}`, description: 'Read only. '.repeat(35),
+        name: `connector_read_${i}`, description: 'Read only.', _meta: { note: 'x'.repeat(300) },
         inputSchema: { type: 'object', properties: {} },
       }))
       const { call } = proxied(t, tools)
       const { result: { tools: declarations } } = await call('tools/list', {})
       const dispatch = declarations.find((tool) => tool.name === 'persona_call')
       assert.ok(dispatch)
+      assert.ok(size(dispatch) < 270, 'dispatcher is smaller than the observed mail_accounts schema')
       assert.ok(tools.every((tool) => size(tool) < 590 && size(tool) < size(dispatch)))
       assert.ok(!eager([...tools, dispatch]).some((tool) => tool.name === 'persona_call'), 'fixture reproduces deferral')
       assert.ok(eager(declarations).some((tool) => tool.name === 'persona_call'))
@@ -83,13 +86,32 @@ describe('MCP proxy (#7333)', { timeout: 15_000 }, () => {
   it('reserves the dispatcher before oversized schemas and keeps later small tools', async (t) => {
     const tools = [
       { name: 'large', description: 'x'.repeat(16 * 1024), inputSchema: { type: 'object' } },
-      { name: 'small', description: 'Read only', inputSchema: { type: 'object' } },
+      { name: 'small', description: 'Read only. '.repeat(20), inputSchema: { type: 'object' } },
     ]
     const { call } = proxied(t, tools)
     const listed = await call('tools/list', {})
     assert.deepEqual(listed.result.tools.map((tool) => tool.name), ['small', 'persona_call'])
     const via = await call('tools/call', { name: 'persona_call', arguments: { name: 'large' } })
     assert.deepEqual(JSON.parse(via.result.content[0].text), { name: 'large', args: {} })
+  })
+
+  it('keeps the dispatcher smallest among every passthrough declaration', async (t) => {
+    const tools = Array.from({ length: 32 }, (_, i) => ({
+      name: `connector_read_${i}`, description: 'Read only. '.repeat(35),
+      inputSchema: { type: 'object', properties: {} },
+    }))
+    const { call } = proxied(t, tools)
+    const { result: { tools: declarations } } = await call('tools/list', {})
+    const size = (tool) => Buffer.byteLength(JSON.stringify({
+      name: tool.name, description: tool.description, parameters: tool.inputSchema,
+    }))
+    const dispatch = declarations.find((tool) => tool.name === 'persona_call')
+    assert.ok(declarations.length > 1)
+    assert.ok(declarations.filter((tool) => tool !== dispatch).every((tool) => size(tool) > size(dispatch)))
+    const eager = [...declarations].sort((a, b) => size(a) - size(b))
+    let bytes = eager.reduce((sum, tool) => sum + size(tool), 0)
+    while (bytes > size(dispatch)) bytes -= size(eager.pop())
+    assert.deepEqual(eager.map((tool) => tool.name), ['persona_call'])
   })
 
   it('sends persona_call on as a call of the named tool, and other calls unchanged', async (t) => {
@@ -185,7 +207,7 @@ describe('MCP declaration enums (#9944)', { timeout: 15_000 }, () => {
   })
 
   it('correlates list responses by id and leaves tool results and ordinary messages unchanged', async (t) => {
-    const tools = [taskTool, { ...catalogTool, inputSchema: {
+    const tools = [taskTool, { ...catalogTool, description: 'Read only. '.repeat(20), inputSchema: {
       type: 'object', properties: { ready: { type: 'boolean', enum: [true] } },
     } }]
     const { call } = proxied(t, tools)
