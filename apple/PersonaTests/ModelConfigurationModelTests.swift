@@ -62,10 +62,11 @@ struct ModelConfigurationModelTests {
         #expect(hub.sent("GET", "/api/v1/model-config/purposes/lark.agent").count == 2)
     }
 
-    @Test func larkContextFollowsMainChatAndKeepsItsOwnEditableBinding() async throws {
+    @Test(arguments: ["messages", "responses", "chat"])
+    func larkContextFollowsMainChatAndKeepsItsOwnEditableBinding(api: String) async throws {
         let hub = FakeHub()
-        let context = #"{"id":"extension.lark-context","category_id":"assistant","parent":"assistant","name":"Lark Context","group":"Extensions","kind":"api","override":{},"effective":{"provider":"launcher.strong","model":"model-a","effort":"medium"},"revision":7,"fields":["provider","model","effort"],"provider_ids":["launcher.strong","legacy.ai"]}"#
-        let providers = #"[{"id":"launcher.strong","name":"strong","kind":"launcher"},{"id":"legacy.ai","name":"Messages API","kind":"api","api":"messages"},{"id":"api.other","name":"Other API","kind":"api","api":"responses"}]"#
+        let context = #"{"id":"extension.lark-context","category_id":"assistant","parent":"assistant","name":"Lark Context","group":"Extensions","kind":"launcher","launch":"headless","machine_id":"server","override":{},"effective":{"provider":"launcher.strong","model":"model-a","effort":"medium"},"revision":7,"fields":["provider","model","effort"],"provider_ids":["launcher.strong","launcher.fixture-api"]}"#
+        let providers = #"[{"id":"launcher.strong","name":"strong","kind":"launcher"},{"id":"launcher.fixture-api","name":"Direct API","kind":"api","api":"\#(api)"},{"id":"api.other","name":"Other API","kind":"api","api":"responses"}]"#
         let detail = #"{"purpose":\#(context),"providers":\#(providers)}"#
         let main = Self.purpose.replacingOccurrences(of: "agent.new", with: "assistant")
         hub.on("GET", "/api/v1/model-config", json: #"{"purposes":[\#(main),\#(Self.purpose),\#(context)],"providers":\#(providers)}"#)
@@ -77,10 +78,10 @@ struct ModelConfigurationModelTests {
             let body = try JSONSerialization.jsonObject(with: req.body ?? Data()) as! [String: Any]
             #expect(body["revision"] as? Int == saved.revision)
             if saved.revision == 7 {
-                #expect(body["provider"] as? String == "legacy.ai")
+                #expect(body["provider"] as? String == "launcher.fixture-api")
                 #expect(body["model"] as? String == "lark-model")
-                #expect(body["effort"] as? String == "high")
-                saved.override = .init(provider: "legacy.ai", model: "lark-model", effort: "high")
+                #expect(body["effort"] as? String == "off")
+                saved.override = .init(provider: "launcher.fixture-api", model: "lark-model", effort: "off")
             } else {
                 #expect(body["provider"] is NSNull && body["model"] is NSNull && body["effort"] is NSNull)
                 saved.override = .init()
@@ -96,15 +97,21 @@ struct ModelConfigurationModelTests {
         #expect(page.independentPurposes.map(\.id) == ["extension.lark-context"])
         #expect(ModelConfigurationModel.followsCategory(row))
         #expect(!ModelConfigurationModel.followsMainChat(row)) // Supervisor-specific UI stays separate.
+        var legacy = row
+        legacy.kind = "api"
+        legacy.parent = "kb"
+        legacy.categoryID = "kb"
+        #expect(!ModelConfigurationModel.followsCategory(legacy))
         #expect(page.inheritanceStatus(row) == String(localized: "Follow Main Chat"))
         #expect(page.modelSummary(row).contains("model-a"))
         await page.load(purposeID: row.id)
         #expect(page.followLabel == String(localized: "Follow Main Chat"))
-        #expect(page.candidates.map(\.id) == ["launcher.strong", "legacy.ai"])
-        page.chooseProvider("legacy.ai")
-        #expect(page.allowsEffort)
+        #expect(page.candidates.map(\.id) == ["launcher.strong", "launcher.fixture-api"])
+        #expect(!page.larkContextUsesAPI)
+        page.chooseProvider("launcher.fixture-api")
+        #expect(page.larkContextUsesAPI && page.allowsEffort)
         page.draft.model = "lark-model"
-        page.draft.effort = "high"
+        page.draft.effort = "off"
         #expect(await page.save())
         #expect(page.inheritanceStatus(try #require(page.purpose)) == String(localized: "Separately configured"))
         page.restoreInheritance()

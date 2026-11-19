@@ -122,6 +122,7 @@ data class ModelPurpose(
     @SerialName("fields") val fields: List<String>? = null,
     /** The providers it can use; without the list, the providers of the same kind. */
     @SerialName("provider_ids") val providerIds: List<String>? = null,
+    @SerialName("category_id") val categoryId: String? = null,
 ) {
     val displayName: String get() = name.ifBlank { id }
 

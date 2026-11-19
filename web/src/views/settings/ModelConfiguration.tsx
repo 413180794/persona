@@ -6,8 +6,8 @@ import {
   type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelProvider, type ModelPurpose, type ModelPurposeBody,
 } from "../../lib/model-config";
 import {
-  agentsOverride, catalogLists, chooseProvider, claudeCodeOnly, configDirChoices, configDirLabel, draftFor, effortOffered, executionForm, followedCategory, isLarkContext, modelConfiguration, modelPatch, overridden,
-  ownRecord, parentCategory, providersFor, purposeDescription, purposeGroups, purposeLaunch, resetPatch, runtimeChoices, saveModelPurpose, supportsField, withPurposeAfter,
+  agentsOverride, catalogLists, chooseProvider, claudeCodeOnly, configDirChoices, configDirLabel, draftFor, effortOffered, executionForm, executionKind, followedCategory, isLarkContext, modelConfiguration, modelPatch, overridden,
+  ownRecord, parentCategory, providersFor, purposeDescription, purposeGroups, resetPatch, runtimeChoices, saveModelPurpose, supportsField, withPurposeAfter,
   withUsesAfterCategories,
 } from "../../lib/model-config-execution";
 import { ASSISTANT_MODEL_PICK_FEATURE, mainChatAgentMismatch } from "../../lib/assistant-models";
@@ -114,7 +114,9 @@ function ModelConfigurationForManager({ manager, open, onOpen, onProviders }: { 
 function PurposeRow({ purpose: p, providers, sourceName, category, onOpen }: { purpose: ModelPurpose; providers: ModelProvider[]; sourceName: (id?: string) => string | undefined; category?: ModelPurpose; onOpen: () => void }) {
   const machines = useStore((s) => s.machines);
   const form = executionForm(p, providers, machines);
-  const directAPI = p.kind === "api" && !ownRecord(p) && providers.find((v) => v.id === p.effective.provider)?.kind === "api";
+  const effectiveProvider = providers.find((v) => v.id === p.effective.provider);
+  const kind = executionKind(p, effectiveProvider);
+  const directAPI = kind === "api" && (!ownRecord(p) || isLarkContext(p)) && effectiveProvider?.kind === "api";
   const status = directAPI && p.status === UNVERIFIED_STATUS ? "" : p.status;
   const [help, setHelp] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -168,9 +170,9 @@ function PurposeRow({ purpose: p, providers, sourceName, category, onOpen }: { p
     </div>
     {help && <div id={helpID} role="region" aria-label={t("settings-modelconfiguration.execution_help", { name: p.name })}
       className="border-t border-line bg-inset px-4 py-3 text-[12px] leading-relaxed text-ink-2">
-      <p>{t(`settings-modelconfiguration.execution_${purposeLaunch(p) || p.kind}`)}</p>
+      <p>{t(`settings-modelconfiguration.execution_${kind}`)}</p>
       <p className="mt-2 font-medium">{t("settings-modelconfiguration.execution_current", { backend: form.backend, provider: providerName(p.effective?.provider, providers) ?? t("settings-modelconfiguration.not_configured") })}</p>
-      {p.kind === "launcher" && <p className="mt-2 text-ink-3">{t("settings-modelconfiguration.execution_unverified")}</p>}
+      {kind !== "api" && p.kind === "launcher" && <p className="mt-2 text-ink-3">{t("settings-modelconfiguration.execution_unverified")}</p>}
       {usage && <p className="mt-2">{usageDetail}</p>}
     </div>}
   </div>;
@@ -276,10 +278,12 @@ function PurposeEditor({ manager, id, sourceName, catalog, onClose, onSaved }: {
   // override, the category's); with a provider picked here it is that provider's default (the list's "Default").
   const inheritedModel = draft.provider ? undefined : following ? parent?.effective?.model : !p?.override?.model ? p?.effective?.model : undefined;
   const inherited: ModelBinding = inheritedModel ? { model: inheritedModel } : {};
-  const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
-    ? effortChoices(launcherList.list, draft.model, inherited) : (p?.id === "inbox.triage" || p?.kind === "api" ? ["off", "low", "medium", "high", "xhigh", "max"] : ["low", "medium", "high", "xhigh", "max"]);
   const effectiveAgent = providerAgent(effectiveProvider, p?.effective?.provider);
   const chosenAgent = (launcherList.provider === listProvider && launcherList.list?.agent) || providerAgent(chosen, runsOn);
+  const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
+    ? effortChoices(launcherList.list, draft.model, inherited)
+    : larkContext && chosen?.kind === "api" ? ["off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+    : p?.id === "inbox.triage" || p?.kind === "api" ? ["off", "low", "medium", "high", "xhigh", "max"] : ["low", "medium", "high", "xhigh", "max"];
   const mainDefaultProvider = draft.provider || p?.effective?.provider;
   const mainInfo: AssistantLaunchers = {
     launchers: (data?.providers ?? []).map((v) => ({ name: v.id, display_name: v.name, agent: providerAgent(v) })),
@@ -347,7 +351,7 @@ function PurposeEditor({ manager, id, sourceName, catalog, onClose, onSaved }: {
           <Row label={t("settings-modelconfiguration.model")} mono><span className="max-w-[220px] truncate">{p.effective?.model || t("settings-modelconfiguration.provider_default")}</span></Row>
           {runtimes.length > 0 && <Row label={t("settings-modelconfiguration.runtime")}><span>{runtimeLabel(p.effective?.runtime, effectiveAgent)}</span></Row>}
           {configDirChoices(p, effectiveAgent).length > 0 && <Row label={t("settings-modelconfiguration.config_dir")}><span>{configDirLabel(p.effective?.config_dir)}</span></Row>}
-          {p.status && !(directAPI && p.status === UNVERIFIED_STATUS) && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
+          {p.status && !((directAPI || (larkContext && effectiveProvider?.kind === "api")) && p.status === UNVERIFIED_STATUS) && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
         </Group>
         {supportsField(p, "provider") && <div>
           <label className="block">

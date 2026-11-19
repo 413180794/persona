@@ -145,27 +145,32 @@ class SettingsAssistantEntriesTest {
     }
 
     @Test fun theLarkAgentsModelIsTheCurrentAssistants() {
-        show("feishu")
+        val old = ModelPurpose("lark.agent", "Lark /agent", "Agents", parent = "agent.new", categoryId = "agent.new",
+            fields = listOf("provider", "model", "effort"))
+        val extension = old.copy(id = "extension.lark-context", kind = "api", parent = "kb", categoryId = "kb")
+        show("feishu", modelCatalog(listOf(old, extension)))
         tap("/agent 模型")
         assertEquals(ModelPurposeRoute("lark.agent", work), opened.last())
     }
 
     @Test fun theUnifiedCatalogHidesTheOldModelLinkForTheCurrentAssistant() {
         val reads = mutableListOf<String?>()
-        val models = object : ModelConfiguration {
-            override suspend fun catalog(): ModelCatalog {
-                reads += currentCoroutineContext()[RequestManager]?.id
-                return ModelCatalog(listOf(ModelPurpose("extension.lark-context", "Lark Context", "Extensions", kind = "api",
-                    parent = "assistant", fields = listOf("provider", "model", "effort"))))
-            }
-            override suspend fun purpose(id: String): ModelPurposeDetail = error("The connector only needs the catalog")
-            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
-            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = error("No edit")
-        }
-        show("feishu", models)
+        val unified = ModelPurpose("extension.lark-context", "Lark Context", "Extensions", kind = "launcher",
+            parent = "assistant", categoryId = "assistant", fields = listOf("provider", "model", "effort"))
+        show("feishu", modelCatalog(listOf(unified)) { reads += it })
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("/agent"))
         rule.onNodeWithText("/agent 模型").assertDoesNotExist()
         assertEquals(listOf(work), reads)
+    }
+
+    private fun modelCatalog(purposes: List<ModelPurpose>, read: (String?) -> Unit = {}) = object : ModelConfiguration {
+        override suspend fun catalog(): ModelCatalog {
+            read(currentCoroutineContext()[RequestManager]?.id)
+            return ModelCatalog(purposes)
+        }
+        override suspend fun purpose(id: String): ModelPurposeDetail = error("The connector only needs the catalog")
+        override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
+        override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = error("No edit")
     }
 
     /** The shell's own path (Root.kt): the sheet's stack and each tab's lose the first group's pages on a switch, not before. */

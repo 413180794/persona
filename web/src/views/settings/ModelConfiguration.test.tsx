@@ -29,6 +29,7 @@ const providers: ModelProvider[] = [
   { id: "launcher.messages", name: "Messages provider", kind: "api", api: "messages", model: "api-default" },
   { id: "launcher.codex", name: "Codex", kind: "launcher", agent: "codex" },
   { id: "launcher.responses", name: "Responses provider", kind: "api", api: "responses" },
+  { id: "launcher.chat", name: "Chat provider", kind: "api", api: "chat" },
 ];
 const main: ModelPurpose = {
   ...agents, id: "assistant", category_id: "assistant", name: "主对话", launch: "headless", runtimes: ["cli", "agentsdk"],
@@ -39,9 +40,10 @@ const LARK = { id: "lark.agent", name: "Lark /agent" };
 const TWIN = { id: "inbox.agent", name: "AI twin runs" };
 const LARK_CONTEXT = "extension.lark-context";
 const larkContext = (override: ModelBinding = {}, revision = 7): ModelPurpose => ({
-  id: LARK_CONTEXT, name: "Lark Context", group: "Extensions", kind: "api", parent: "assistant", category_id: "assistant",
+  id: LARK_CONTEXT, name: "Lark Context", group: "Extensions", kind: "launcher", launch: "headless",
+  parent: "assistant", category_id: "assistant", machine_id: "server",
   override, revision, effective: { ...main.effective, ...override }, fields: ["provider", "model", "effort"],
-  provider_ids: ["launcher.default", "launcher.messages"],
+  provider_ids: ["launcher.default", "launcher.messages", "launcher.responses", "launcher.chat"],
 });
 let use = LARK;
 const child = (override: ModelBinding = {}, revision = 7): ModelPurpose => ({
@@ -361,29 +363,36 @@ describe("Lark Context model configuration", () => {
     expect(row().textContent).toContain(follow);
     await open();
     const options = [...dialog().querySelectorAll("select option")];
-    expect(options.map((o) => o.getAttribute("value"))).toEqual(["", "launcher.default", "launcher.messages"]);
+    expect(options.map((o) => o.getAttribute("value"))).toEqual(["", "launcher.default", "launcher.messages", "launcher.responses", "launcher.chat"]);
     expect(options[0].textContent).toBe(follow);
     expect(dialog().textContent).toContain("default-model");
     expect(button(follow, dialog())).toBeDefined();
   });
 
-  it("saves provider, model and effort on Lark Context and restores all three to Main chat", async () => {
+  it.each([
+    ["launcher.messages", "Messages", "high"],
+    ["launcher.responses", "Responses", "off"],
+    ["launcher.chat", "Chat", "off"],
+  ])("saves a %s provider, model and effort on Lark Context and restores all three to Main chat", async (provider, protocol, level) => {
     await initI18n("en");
     await render();
     await open();
-    await choose("launcher.messages");
+    await choose(provider);
+    expect(dialog().querySelector("[data-execution-preview]")?.textContent).toBe(`Direct API · ${protocol}`);
+    expect([...dialog().querySelectorAll("#model-efforts option")].map((option) => option.getAttribute("value"))).toContain("off");
     type(dialog().querySelector<HTMLInputElement>(`input[aria-label="${t("settings-modelconfiguration.specific_model")}"]`)!, "lark-model");
-    type(effort(), "high");
+    type(effort(), level);
     await act(async () => button(t("common.save"), dialog()).click());
     await flush();
     expect(row().textContent).toContain("Separately configured");
     expect(row().textContent).toContain("lark-model");
+    expect(row().textContent).toContain(`Direct API · ${protocol}`);
     expect(host.querySelector('[data-model-purpose="assistant"]')?.textContent).toContain("default-model");
     await open();
     await act(async () => button("Follow Main chat", dialog()).click());
     await flush();
     expect(writes).toEqual([
-      { path: `/api/v1/model-config/purposes/${LARK_CONTEXT}`, method: "PATCH", body: { revision: 7, provider: "launcher.messages", model: "lark-model", effort: "high" } },
+      { path: `/api/v1/model-config/purposes/${LARK_CONTEXT}`, method: "PATCH", body: { revision: 7, provider, model: "lark-model", effort: level } },
       { path: `/api/v1/model-config/purposes/${LARK_CONTEXT}`, method: "PATCH", body: { revision: 8, provider: null, model: null, effort: null } },
     ]);
     expect(row().textContent).toContain("Follow Main chat");
@@ -391,7 +400,7 @@ describe("Lark Context model configuration", () => {
   });
 
   it("keeps the old Lark /agent row and extension behavior when the extension follows processing", async () => {
-    current = { ...larkContext(), parent: "kb", category_id: "kb", inherited_from: "kb" };
+    current = { ...larkContext(), kind: "api", launch: undefined, parent: "kb", category_id: "kb", inherited_from: "kb" };
     readonly = child();
     await render();
     expect(host.querySelector('[data-model-purpose="lark.agent"]')?.textContent).toContain(t("settings-modelconfiguration.lark_headless_inheritance"));

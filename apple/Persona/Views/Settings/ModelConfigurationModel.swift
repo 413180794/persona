@@ -59,10 +59,17 @@ nonisolated enum ModelSettingsOwner: Equatable, Sendable {
     var isLarkAgent: Bool { purpose?.id == "lark.agent" }
 
     static func isLarkContext(_ p: ModelPurpose) -> Bool {
-        p.id == "extension.lark-context" && p.kind == "api" && p.parent == "assistant" && p.categoryID == "assistant" && p.hasWritableFields
+        p.id == "extension.lark-context" && p.parent == "assistant" && p.categoryID == "assistant" && p.hasWritableFields
     }
 
     var isLarkContext: Bool { purpose.map(Self.isLarkContext) ?? false }
+
+    private var selectedProvider: ModelProvider? {
+        let id = draft.provider ?? purpose?.effective.provider
+        return providers.first { $0.id == id }
+    }
+
+    var larkContextUsesAPI: Bool { isLarkContext && selectedProvider?.kind == "api" }
 
     /// A use of Agents the hub lets the user set apart (Lark /agent, the Inbox's AI twin): fields of its own, following
     /// Agents while they are empty. An older hub sends no fields for it, and it stays a read-only use of Agents.
@@ -101,8 +108,7 @@ nonisolated enum ModelSettingsOwner: Equatable, Sendable {
     var allowsEffort: Bool {
         guard let purpose, purpose.supports("effort") else { return false }
         if isLarkContext { return true }
-        let id = draft.provider ?? purpose.effective.provider
-        guard let provider = providers.first(where: { $0.id == id }) else { return true }
+        guard let provider = selectedProvider else { return true }
         return purpose.kind == "launcher" || provider.kind != "api" || provider.api == "responses"
     }
 

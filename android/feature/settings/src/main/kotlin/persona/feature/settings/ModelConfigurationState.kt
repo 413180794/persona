@@ -30,7 +30,8 @@ internal fun agentsOverride(purpose: ModelPurpose): Boolean =
     purpose.parent == "agent.new" && purpose.fields.orEmpty().any { it == "provider" || it == "model" || it == "effort" }
 
 internal fun isLarkContext(purpose: ModelPurpose): Boolean =
-    purpose.id == "extension.lark-context" && purpose.kind == "api" && purpose.parent == "assistant" && purpose.fields.orEmpty().contains("provider")
+    purpose.id == "extension.lark-context" && purpose.parent == "assistant" && purpose.categoryId == "assistant" &&
+        purpose.fields.orEmpty().any { it == "provider" || it == "model" || it == "effort" }
 
 /** A model-only or effort-only selection is also an explicit override, even when its provider is inherited. */
 internal fun modelOverrideMode(res: Resources, purpose: ModelPurpose): String? {

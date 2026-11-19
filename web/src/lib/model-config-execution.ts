@@ -18,17 +18,21 @@ function executionLabel(form: string): string {
   return form === "api" ? t("settings.direct_api") : form === "plugin" ? t("settings-nav.tab_extensions") : t(`settings-modelconfiguration.${form}`);
 }
 
+export function executionKind(p: ModelPurpose, provider?: ModelProvider): string {
+  return isLarkContext(p) && provider?.kind === "api" ? "api" : purposeLaunch(p) || p.kind;
+}
+
 export function executionForm(p: ModelPurpose, providers: ModelProvider[] = [], machines: Machine[] = []): { label: string; backend: string } {
   const provider = providers.find((v) => v.id === p.effective?.provider);
-  const launch = purposeLaunch(p);
+  const kind = executionKind(p, provider);
   const agent = providerAgent(provider, p.effective?.provider);
   let backend: string;
   if (p.kind === "plugin") backend = providerName(p.effective?.provider, providers) ?? "";
   // A launcher picked for an API purpose runs Claude Code once per request on the main chat's computer, unless it is a
   // managed one with a Messages gateway, called over HTTP (#5823; the hub decides by protocol, a key marks a managed one).
   else if (p.kind === "api" && provider?.kind === "launcher" && ((provider.api && provider.api !== "messages") || !provider.has_key)) backend = "claude -p";
-  else if (p.kind === "api") backend = { messages: "Messages", responses: "Responses", chat: "Chat" }[provider?.api || "messages"];
-  else if (launch === "headless") {
+  else if (kind === "api") backend = { messages: "Messages", responses: "Responses", chat: "Chat" }[provider?.api || "messages"];
+  else if (kind === "headless") {
     backend = agent === "codex" ? "codex app-server"
       : agent === "claude" ? (p.effective?.runtime === "agentsdk" ? "Agent SDK" : "claude -p")
       : runtimeLabel("cli", agent);
@@ -36,7 +40,7 @@ export function executionForm(p: ModelPurpose, providers: ModelProvider[] = [], 
     const machine = p.machine_id ? machines.find((m) => m.id === p.machine_id) : undefined;
     backend = `${machine ? machine.engine_default || machine.engine || "herdr" : t("lib-agent-groups.by_machine")} · ${agent}`;
   }
-  return { label: executionLabel(launch || p.kind), backend };
+  return { label: executionLabel(kind), backend };
 }
 
 /** What a purpose is for, in a sentence under its name: the hub's (`description`, #5086, in the request's language),
@@ -191,7 +195,7 @@ export function ownRecord(p: ModelPurpose): boolean {
 }
 
 export function isLarkContext(p: ModelPurpose): boolean {
-  return p.id === "extension.lark-context" && p.kind === "api" && p.parent === "assistant" && p.category_id === "assistant" && ownRecord(p);
+  return p.id === "extension.lark-context" && p.parent === "assistant" && p.category_id === "assistant" && ownRecord(p);
 }
 
 /** The category such a use follows (`ownRecord`), as the catalog has it: its `parent` when that is a category there.

@@ -219,12 +219,14 @@ struct ModelPurposeEditorView: View {
                         }
                     }
                     if page.allowsEffort {
+                        let usesAPI = page.larkContextUsesAPI
+                        let effortLevels = usesAPI ? SessionModes.codexEffortLevels : SessionModes.startEffortLevels
                         Picker("Thinking Effort", selection: optional(\.effort)) {
                             Text("Default [Model Configuration View a44f9f]").tag("")
-                            if page.isLarkContext { Text("Off").tag("off") }
-                            ForEach(SessionModes.startEffortLevels) { Text($0.title).tag($0.id) }
-                            if let effort = page.draft.effort, !(page.isLarkContext && effort == "off"),
-                               !SessionModes.startEffortLevels.contains(where: { $0.id == effort }) {
+                            if usesAPI { Text("Off").tag("off") }
+                            ForEach(effortLevels) { Text($0.title).tag($0.id) }
+                            if let effort = page.draft.effort, !(usesAPI && effort == "off"),
+                               !effortLevels.contains(where: { $0.id == effort }) {
                                 Text(effort).tag(effort)
                             }
                         }
