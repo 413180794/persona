@@ -55,6 +55,7 @@
   "secret_env_gone": "为这次启动批准的密钥值已经不在电脑上了：已经有一次启动用掉了它们，或者批准已超过两分钟。什么都没运行；请重新启动 Agent，再批准一次。",
   "directory_untypable": "这个目录的名字里有控制字符（比如制表符或换行），没法从这里在它里面启动 Agent。请给目录改个名，或者换一个目录。",
   "codex_not_ready": "电脑上的 Codex 还没到输入框（还在加载，或开着别的界面），这次什么都没发出去，请稍后再试。",
+  "codex_active_writer": "电脑上的 Codex 仍占用此会话。你可以在原 Codex 会话里继续。若要从 Persona 发送，请先在原处保存工作并关闭会话，待 Codex 释放会话后在此重试。",
   "codex_first_text": "Codex 的第一条消息只能是文字：去掉照片或文件后再发。",
   "codex_first_unconfirmed": "消息已经输入 Codex，但它的会话没有及时出现。再发之前先在电脑上看看。",
   "codex_compact_busy": "Codex 正在运行这一轮，等它结束再压缩。这次什么都没发出去。",

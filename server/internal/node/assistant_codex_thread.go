@@ -62,6 +62,9 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool, star
 		params["excludeTurns"] = true
 	}
 	if err := c.call(ctx, method, params, &res); err != nil {
+		if resume && codexResumeWriterConflict(err, id) {
+			return codexWriterConflict()
+		}
 		return err
 	}
 	if res.Thread.ID == "" {
