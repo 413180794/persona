@@ -80,15 +80,15 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	queued = true
 	go func() {
 		defer turn.pass()
-		if done != nil {
-			defer done()
-		}
 		turn.waitTurn()
 		if p.From == FeishuFromElsewhere {
 			s.feishuElsewhere(ev, st) // the owner's "@bot /ai …" from a group that is not opted in (feishu_elsewhere.go)
-			return
+		} else {
+			s.feishuMessage(ev, st, p.Action)
 		}
-		s.feishuMessage(ev, st, p.Action)
+		if done != nil {
+			done() // a process crash or panic leaves the payload for reconciliation
+		}
 	}()
 	return nil
 }

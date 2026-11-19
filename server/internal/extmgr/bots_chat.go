@@ -73,12 +73,10 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		delegated = true
 		go func() {
 			retain := false
-			defer func() {
-				if !retain {
-					done()
-				}
-			}()
 			h.botMessage(ev, env.Event, time.Now(), prev, passed, func() { retain = true })
+			if !retain {
+				done()
+			}
 		}()
 	case feishubot.EventCardAction:
 		var a feishubot.CardAction

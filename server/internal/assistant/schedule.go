@@ -2232,8 +2232,8 @@ func (s *Service) startScheduledRunTracked(run ScheduleRun, t Task, m *Device, w
 	}
 	settle := work.hold()
 	go func() {
-		defer settle()
 		s.watchScheduledRunTracked(run, t, *m, work)
+		settle()
 	}()
 }
 
