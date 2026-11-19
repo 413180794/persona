@@ -168,11 +168,16 @@ func (d *DB) PutNodeSessionReceipt(ctx context.Context, machine, id, previous, r
 	if err := putNodeSession(ctx, tx, machine, id, s); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO settings (key, value, updated_at) VALUES ($1, to_jsonb($2::text), now())
-		ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, key, revision); err != nil {
+	if err := writeNodeSessionReceipt(ctx, tx, key, revision); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func writeNodeSessionReceipt(ctx context.Context, tx pgx.Tx, key, revision string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO settings (key, value, updated_at) VALUES ($1, to_jsonb($2::text), now())
+		ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, key, revision)
+	return err
 }
 
 // nodeSessionsSQL reads a machine's sessions from the last 60 days through node_sessions_started (0418), with the
@@ -222,7 +227,13 @@ func jsonOrNil(raw json.RawMessage) json.RawMessage {
 
 // NodeSessions returns a machine's sessions from the last 60 days.
 func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeSession, error) {
-	rows, err := d.pool.Query(ctx, nodeSessionsSQL, machine)
+	return queryNodeSessions(ctx, d.pool, machine)
+}
+
+func queryNodeSessions(ctx context.Context, store interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, machine string) (map[string]NodeSession, error) {
+	rows, err := store.Query(ctx, nodeSessionsSQL, machine)
 	if err != nil {
 		return nil, err
 	}
