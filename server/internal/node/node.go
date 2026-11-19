@@ -887,8 +887,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, fmt.Errorf("bad params: %w", err)
 		}
 	}
+	sessionSend := method == "session.send" || method == proto.MethodSessionSendUnseen
 	hasSelectedSkills := false
-	if method == "session.send" && !n.isAssistantSession(p.SessionID) {
+	if sessionSend && !n.isAssistantSession(p.SessionID) {
 		refs, err := assistantskills.References(p.Text)
 		if err != nil {
 			return nil, skillSelectionError(err)
@@ -931,7 +932,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	if n.codexBlocked(p.ResumeSessionID) && devicewire.IsSessionStart(method) {
 		return nil, refusal("identity_conflict", "会话 ID 与另一来源重复，不能恢复", nil)
 	}
-	if method == "assistant.send" || method == "session.send" {
+	if method == "assistant.send" || sessionSend {
 		source := prompts.ItemSource(proto.Item{Role: "user", Kind: proto.KindText, Text: p.Text, Source: p.MessageSource, ClientMsgID: p.ClientMsgID})
 		if source == nil && p.ClientMsgID == "" && !prompts.UserAuthoredContext(p.Text) {
 			if injected := prompts.ParseInjected(p.Text); injected != nil && injected.Kind == proto.InjectedTaskNotice {
@@ -1626,9 +1627,25 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		_ = json.Unmarshal(params, &to)
 		return ok(n.switchIdle(ctx, p.SessionID, p.Launcher, to.From, p.Model))
-	case "session.send":
+	case proto.MethodSessionEchoStatus:
+		check := n.checkEcho(ctx, p.SessionID, p.ClientMsgID)
+		return proto.SessionEchoStatus{State: check.state}, nil
+	case "session.send", proto.MethodSessionSendUnseen:
 		var opts sendOpts
 		_ = json.Unmarshal(params, &opts)
+		var retry *echoRecord
+		var previous *sendRecord
+		if method == proto.MethodSessionSendUnseen {
+			check := n.checkEcho(ctx, p.SessionID, opts.ClientMsgID)
+			switch check.state {
+			case proto.EchoSeen:
+				return ok(nil)
+			case proto.EchoKnownUnseen:
+				retry, previous = &check.record, check.previous
+			default:
+				return nil, echoUnconfirmed()
+			}
+		}
 		ctx = context.WithValue(ctx, sendTraceKey{}, opts.ClientMsgID)
 		ctx, waits := withComputerWait(ctx) // claudebg.go: an outside Claude took it behind a dialog
 		ctx, queued := withSendQueued(ctx)  // codex_desktop_queue.go: it waits behind the turn under way
@@ -1636,7 +1653,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if opts.OwnerInput && ownerInputExact(params) {
 			ctx, owner = withOwnerDelivery(ctx) // ccplugin.go: which way the owner's message went in
 		}
-		err := n.sends.once(opts.ClientMsgID, func() error {
+		err := n.sends.onceReplacing(opts.ClientMsgID, previous, func() error {
+			if retry != nil {
+				return n.sendUnseen(ctx, p.SessionID, p.Text, p.Images, opts, *retry)
+			}
 			var after echoAfter
 			if opts.ClientMsgID != "" {
 				after = n.echoBase(p.SessionID)
@@ -2466,7 +2486,7 @@ func nonNil(items []proto.Item) []proto.Item {
 // managedUser is the launcher a method runs (or asks a CLI about) that may need a managed provider's secrets.
 func managedUser(method, launcher, name string) string {
 	switch method {
-	case "session.start", devicewire.MethodStartWorkSession, "assistant.send", "assistant.warm", "session.send":
+	case "session.start", devicewire.MethodStartWorkSession, "assistant.send", "assistant.warm", "session.send", proto.MethodSessionSendUnseen:
 		return launcher
 	case "session.start.options", "launchers.check", "claude.auth_status", "launchers.models", "launchers.http", "launchers.probe", "launchers.model.check":
 		return name
