@@ -482,8 +482,11 @@ func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabNam
 		}
 	} else {
 		created, err = createStartSlot(ctx, launch, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
-		if ts != nil && created != nil && created.SpaceID == "" {
-			created.SpaceID = ws
+		if err == nil {
+			if ts != nil && created != nil && created.SpaceID == "" {
+				created.SpaceID = ws
+			}
+			n.closeWorktreeShells(ctx, launch, ws, created.Pane.String()) // the Agent's tab is the worktree's tab now
 		}
 	}
 	if err != nil {
