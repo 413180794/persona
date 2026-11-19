@@ -29,7 +29,11 @@ func runAdmission(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := json.NewEncoder(out).Encode(status); err != nil {
+	readback := struct {
+		admission.State
+		Coverage string `json:"coverage"`
+	}{State: status, Coverage: "tracked_operations"}
+	if err := json.NewEncoder(out).Encode(readback); err != nil {
 		return err
 	}
 	if args[0] == "check" && status.Phase != "drained" {
