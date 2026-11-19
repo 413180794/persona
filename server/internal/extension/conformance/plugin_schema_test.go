@@ -207,7 +207,7 @@ var serverCalls = []string{
 
 // sent.record is the hub's own (extmgr answers it for a connector that declares sends_as_user), outside the
 // connector protocol's namespace.
-var sentCalls = []string{connector.MethodSentRecord, connector.MethodSentRecordOnce}
+var sentCalls = []string{connector.MethodSentRecord, connector.MethodSentRecordOnce, connector.MethodSentRecordGuarded}
 
 var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit}
 
@@ -277,10 +277,14 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 }
 
 func TestConnectorSentRecordOnceWire(t *testing.T) {
-	method := connector.MethodSentRecordOnce
+	method := connector.MethodSentRecordGuarded
 	call, ok := wire.Calls[method]
 	if !ok || call.From != "program" {
 		t.Fatalf("missing program call %s: %+v", method, call)
+	}
+	older := wire.Calls[connector.MethodSentRecordOnce]
+	if older.Params != call.Params || older.Result != call.Result {
+		t.Fatalf("guarded and compatibility methods disagree on payload types: %+v %+v", call, older)
 	}
 	s := loadSchemas(t)
 	for _, def := range []string{call.Params, call.Result} {

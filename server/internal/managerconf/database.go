@@ -34,30 +34,45 @@ type OwnDatabase struct {
 // ReadOwnDatabase reads it from the built-in manager's manager.json in the data directory home (nothing when there is
 // none, or it does not read).
 func ReadOwnDatabase(home string) OwnDatabase {
+	d, _ := readOwnDatabase(home, false)
+	return d
+}
+
+// ReadOwnDatabaseChecked is for operator actions that must distinguish a
+// missing configuration from an unreadable or invalid one.
+func ReadOwnDatabaseChecked(home string) (OwnDatabase, error) {
+	return readOwnDatabase(home, true)
+}
+
+func readOwnDatabase(home string, strict bool) (OwnDatabase, error) {
 	var d OwnDatabase
 	b, err := os.ReadFile(DefaultFile(home))
 	if err != nil {
-		return d
+		return d, err
 	}
 	o, err := ParseObject(b)
 	if err != nil {
-		return d
+		return d, err
 	}
 	for key, out := range map[string]*string{"database_url": &d.URL, "database_name": &d.Name, "database_container": &d.Container,
 		"database_location": &d.Location} {
 		if raw, ok := o.Get(key); ok {
-			_ = json.Unmarshal(raw, out)
+			if err := json.Unmarshal(raw, out); err != nil && strict {
+				return d, err
+			}
 		}
 	}
 	if raw, ok := o.Get(DatabaseMovedKey); ok {
 		var m struct {
 			At time.Time `json:"at"`
 		}
-		if json.Unmarshal(raw, &m) == nil {
+		if err := json.Unmarshal(raw, &m); err == nil {
 			d.Moved = m.At
+		} else if strict {
+			return d, err
 		}
 	}
-	return d
+	return d, nil
 }
 
 // WriteOwnDatabase writes d into the built-in manager's manager.json (its other keys as they are); a non-zero Moved

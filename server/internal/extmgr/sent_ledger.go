@@ -397,7 +397,7 @@ func (ps *extensions) extensionRecordSent(ctx context.Context, id string, raw js
 	settled := false
 	if !lookupOnly {
 		gate := ps.h.opts.Admission
-		done, err := gate.Admit("extension-ledger-record")
+		operation, done, err := gate.AdmitLedger()
 		if errors.Is(err, admission.ErrClosed) {
 			return nil, &rpc.Error{Code: "admission_closed", Message: "sent ledger writes are paused"}
 		}
@@ -405,6 +405,7 @@ func (ps *extensions) extensionRecordSent(ctx context.Context, id string, raw js
 			ps.logf("sent ledger: admission: %v", err)
 			return nil, &rpc.Error{Code: "admission_unavailable", Message: "sent ledger admission is unavailable"}
 		}
+		row.OperationID = operation
 		defer func() {
 			if settled {
 				done()

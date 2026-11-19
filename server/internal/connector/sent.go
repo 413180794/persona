@@ -55,6 +55,9 @@ const MethodSentRecord = "sent.record"
 // MethodSentRecordOnce records or verifies one retained ledger row for a stable message reference.
 const MethodSentRecordOnce = "sent.record_once"
 
+// MethodSentRecordGuarded requires a receiver with durable reference guards.
+const MethodSentRecordGuarded = "sent.record_guarded"
+
 // SentRecordParams are sent.record's params (schema/extension/connector.schema.json ConnectorSentRecordParams): an
 // extension's connector that declares sends_as_user tells the hub about a message it sent in the user's name outside
 // the write gate. Where it came from and how it was let through are the hub's to say, not these.

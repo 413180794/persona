@@ -168,3 +168,26 @@ func TestAdmissionContinuationKeepsExactPayloadAndFence(t *testing.T) {
 		t.Fatalf("completed handoff did not drain: %+v", s)
 	}
 }
+
+func TestLedgerReconciliationDoesNotAcceptUnidentifiedTickets(t *testing.T) {
+	g := testGate(t)
+	if _, err := g.Admit("extension-ledger-record"); err != nil {
+		t.Fatal(err)
+	}
+	const attempt = "empty-ticket"
+	control(t, g, "close", attempt)
+	pending, err := g.LedgerPending(attempt)
+	if err != nil || pending.Unidentified != 1 || len(pending.Operations) != 0 {
+		t.Fatalf("old empty ticket: %+v %v", pending, err)
+	}
+	const id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if _, err := g.ReconcileLedger(t.Context(), attempt, id, func(context.Context, string) (bool, error) {
+		t.Fatal("proof callback must not run without the matching identified ticket")
+		return true, nil
+	}); err == nil {
+		t.Fatal("accepted an unidentified ticket")
+	}
+	if state := control(t, g, "check", attempt); state.Phase != "draining" || state.Active["extension-ledger-record"] != 1 {
+		t.Fatalf("empty ticket no longer blocks: %+v", state)
+	}
+}

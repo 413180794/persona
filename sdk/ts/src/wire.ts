@@ -4577,10 +4577,10 @@ export interface ConnectorSentRecordParams {
 }
 
 /**
- * sent.record_once: a connector that declares sends_as_user records one entry for an exact message_ref or strictly
- * reads it with lookup_only. Errors: permission_denied, invalid_params, rate_limited (data {retry_after} in seconds),
- * no_database, conflict (ambiguous retained rows or mismatched contents), and admission_closed /
- * admission_unavailable for write mode. On older hubs the call may return unknown_method.
+ * sent.record_guarded / sent.record_once: a connector that declares sends_as_user records one entry for an exact
+ * message_ref or strictly reads it with lookup_only. Errors: permission_denied, invalid_params, rate_limited (data
+ * {retry_after} in seconds), no_database, conflict (ambiguous retained rows or mismatched contents), and
+ * admission_closed / admission_unavailable for write mode. On older hubs the call may return unknown_method.
  */
 export interface ConnectorSentRecordOnceParams {
   contribution: string;
@@ -6567,6 +6567,7 @@ export const CALLS: Record<string, Call> = {
   "connector.credentials.gh_token": { from: "program", params: "ConnectorGhTokenParams", result: "ConnectorGhToken" },
   "sent.record": { from: "program", params: "ConnectorSentRecordParams", result: "Empty" },
   "sent.record_once": { from: "program", params: "ConnectorSentRecordOnceParams", result: "ConnectorSentRecordOnceResult" },
+  "sent.record_guarded": { from: "program", params: "ConnectorSentRecordOnceParams", result: "ConnectorSentRecordOnceResult" },
   "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
   "channel.receive": { from: "program", params: "ChannelReceiveParams", result: "Empty" },
   "channel.receive_notice": { from: "program", params: "ChannelNoticeParams", result: "ChannelNoticeResult" },

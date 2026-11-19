@@ -1149,7 +1149,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			return assistantwire.AssistantDataStatusResult{Items: items}, nil
 		case connector.MethodSentRecord:
 			return ps.extensionSentRecord(ctx, id, params)
-		case connector.MethodSentRecordOnce:
+		case connector.MethodSentRecordOnce, connector.MethodSentRecordGuarded:
 			return ps.extensionRecordSent(ctx, id, params, true)
 		case "cli.call":
 			if len(p.Manifest.HostIntegrations) != 1 || ps.h == nil {

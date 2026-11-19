@@ -4303,10 +4303,11 @@ type ConnectorSentRecordParams struct {
 	Setting string `json:"setting,omitempty"`
 }
 
-// ConnectorSentRecordOnceParams: sent.record_once: a connector that declares sends_as_user records one entry for an
-// exact message_ref or strictly reads it with lookup_only. Errors: permission_denied, invalid_params, rate_limited
-// (data {retry_after} in seconds), no_database, conflict (ambiguous retained rows or mismatched contents), and
-// admission_closed / admission_unavailable for write mode. On older hubs the call may return unknown_method.
+// ConnectorSentRecordOnceParams: sent.record_guarded / sent.record_once: a connector that declares sends_as_user
+// records one entry for an exact message_ref or strictly reads it with lookup_only. Errors: permission_denied,
+// invalid_params, rate_limited (data {retry_after} in seconds), no_database, conflict (ambiguous retained rows or
+// mismatched contents), and admission_closed / admission_unavailable for write mode. On older hubs the call may
+// return unknown_method.
 type ConnectorSentRecordOnceParams struct {
 	Contribution string `json:"contribution"`
 	// Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
@@ -6968,6 +6969,7 @@ var Calls = map[string]Call{
 	"connector.credentials.gh_token": {Name: "connector.credentials.gh_token", From: "program", Params: "ConnectorGhTokenParams", Result: "ConnectorGhToken"},
 	"sent.record":                    {Name: "sent.record", From: "program", Params: "ConnectorSentRecordParams", Result: "Empty"},
 	"sent.record_once":               {Name: "sent.record_once", From: "program", Params: "ConnectorSentRecordOnceParams", Result: "ConnectorSentRecordOnceResult"},
+	"sent.record_guarded":            {Name: "sent.record_guarded", From: "program", Params: "ConnectorSentRecordOnceParams", Result: "ConnectorSentRecordOnceResult"},
 	"connector.changed":              {Name: "connector.changed", From: "program", Params: "ConnectorChangedEvent", Result: "", Event: true},
 	"channel.receive":                {Name: "channel.receive", From: "program", Params: "ChannelReceiveParams", Result: "Empty"},
 	"channel.receive_notice":         {Name: "channel.receive_notice", From: "program", Params: "ChannelNoticeParams", Result: "ChannelNoticeResult"},
