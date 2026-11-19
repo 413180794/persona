@@ -52,7 +52,7 @@ import type { AgentState, Interaction, Machine, Session } from "../../lib/types"
 import { Button, Collapse, cx, IconButton, Loading, Menu, toast, useNow } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
 import { Icon, type IconName } from "../../ui/icons";
-import { AcceptRow, BriefCard } from "./Brief";
+import { AcceptRow } from "./Brief";
 import { setTodoSeen, todoSeenOn } from "../../lib/todo-seen";
 import { triage } from "../../lib/todo-triage";
 
@@ -480,7 +480,7 @@ export const FeedLineView = memo(function FeedLineView({ item, simplified = fals
     case "today":
       return <TodayCard body={item.body as unknown as TodayBody} conversation={item.conversation} />;
     case "brief":
-      return <BriefCard item={item} />;
+      return <Suspense fallback={null}><LazyBriefCard item={item} /></Suspense>;
     case "message":
       return item.ref && !isLater ? <MessageCard item={item} /> : null;
     case "inbox_suggestion":
@@ -671,6 +671,7 @@ function useSayToPersona(conversation: string) {
 // ── message cards ──
 
 const LazyMessageDraft = lazy(() => import("./MessageDraft"));
+const LazyBriefCard = lazy(() => import("./BriefCard").then((m) => ({ default: m.BriefCard })));
 // a hand-off conversation's write-back (#5932): loaded with the first such card
 const LazyHandoffCard = lazy(() => import("./HandoffCard").then((m) => ({ default: m.HandoffCard })));
 const LazyUrgentCallLine = lazy(() => import("./UrgentCallLine").then((m) => ({ default: m.UrgentCallLine })));

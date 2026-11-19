@@ -20,13 +20,16 @@ import { getState } from "../../lib/store";
 
 let root: Root;
 let host: HTMLDivElement;
-beforeEach(() => {
+beforeEach(async () => {
   api.mockReset();
   toast.mockReset();
   api.mockResolvedValue({});
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  // Warm the same on-demand card as the feed before checking its rendered rows.
+  await act(async () => root.render(<FeedLineView item={{ ...item(), body: undefined }} />));
+  await act(async () => { await vi.dynamicImportSettled(); });
 });
 afterEach(() => {
   act(() => root.unmount());
