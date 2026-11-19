@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"time"
@@ -34,13 +35,20 @@ const (
 	SentAsUserMost    = 200
 )
 
-var ErrSentRecordConflict = errors.New("sent ledger message reference is ambiguous or has different contents")
+var (
+	ErrSentRecordConflict = errors.New("sent ledger message reference is ambiguous or has different contents")
+	ErrSentRecordPruned   = errors.New("sent ledger entry has been pruned")
+)
 
 const insertSentAsUser = `INSERT INTO sent_as_user (at, connector, action, target, text, summary, origin, let_through, message_ref)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
 
 // RecordSentAsUser adds a row (At: now when zero) and returns its id. An empty JSON field is an empty object.
+// Legacy extension records still append unless the exact RPC has claimed their reference.
 func (d *DB) RecordSentAsUser(ctx context.Context, s SentAsUser) (int64, error) {
+	if s.Action == "sent.record" && s.MessageRef != "" {
+		return d.recordExtensionSent(ctx, s, sentRecordLegacy)
+	}
 	return insertSent(ctx, d.pool, s)
 }
 
@@ -58,21 +66,56 @@ func insertSent(ctx context.Context, q interface {
 }
 
 // RecordSentAsUserOnce reuses a retained ledger row only when the reference is
-// unambiguous and the normalized contents match. Lookup-only calls never insert.
-// The transaction lock serializes concurrent calls using this contract.
+// unambiguous and the normalized contents match. The guard survives ledger pruning.
+// Lookup-only calls use a read-only snapshot and never establish a guard.
 func (d *DB) RecordSentAsUserOnce(ctx context.Context, s SentAsUser, lookupOnly bool) (int64, error) {
 	if s.MessageRef == "" {
 		return 0, errors.New("sent record requires a message reference")
 	}
-	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if lookupOnly {
+		return d.recordExtensionSent(ctx, s, sentRecordLookup)
+	}
+	return d.recordExtensionSent(ctx, s, sentRecordExact)
+}
+
+type sentRecordMode uint8
+
+const (
+	sentRecordLegacy sentRecordMode = iota
+	sentRecordExact
+	sentRecordLookup
+)
+
+func (d *DB) recordExtensionSent(ctx context.Context, s SentAsUser, mode sentRecordMode) (int64, error) {
+	opts := pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
+	if mode == sentRecordLookup {
+		opts = pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}
+	}
+	tx, err := d.pool.BeginTx(ctx, opts)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('sent.record_once:' || $1), hashtext($2))`,
-		s.Connector, s.MessageRef); err != nil {
+	if mode != sentRecordLookup {
+		// Both RPCs take the same lock before reading so writers see the preceding commit.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('sent.record_once:' || $1), hashtext($2))`,
+			s.Connector, s.MessageRef); err != nil {
+			return 0, err
+		}
+	}
+	key := sha256.Sum256([]byte(s.Connector + "\x00" + s.Action + "\x00" + s.MessageRef))
+	var guarded bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sent_record_guards WHERE key = $1)`, key[:]).Scan(&guarded); err != nil {
 		return 0, err
 	}
+	if mode == sentRecordLegacy && !guarded {
+		id, err := insertSent(ctx, tx, s)
+		if err != nil {
+			return 0, err
+		}
+		return id, tx.Commit(ctx)
+	}
+
 	rows, err := tx.Query(ctx, `SELECT id, target = $4::jsonb AND text = $5 AND summary = $6 AND origin = $7::jsonb AND let_through = $8::jsonb
 		FROM sent_as_user WHERE connector = $1 AND action = $2 AND message_ref = $3 LIMIT 2`,
 		s.Connector, s.Action, s.MessageRef, objectOrEmpty(s.Target), s.Text, s.Summary, objectOrEmpty(s.Origin), objectOrEmpty(s.LetThrough))
@@ -96,9 +139,20 @@ func (d *DB) RecordSentAsUserOnce(ctx context.Context, s SentAsUser, lookupOnly 
 		id = matches[0].id
 	case len(matches) != 0:
 		return 0, ErrSentRecordConflict
-	case !lookupOnly:
+	default:
+		if guarded {
+			return 0, ErrSentRecordPruned
+		}
+		if mode == sentRecordLookup {
+			return 0, tx.Commit(ctx)
+		}
 		id, err = insertSent(ctx, tx, s)
 		if err != nil {
+			return 0, err
+		}
+	}
+	if mode == sentRecordExact && !guarded {
+		if _, err := tx.Exec(ctx, `INSERT INTO sent_record_guards (key) VALUES ($1)`, key[:]); err != nil {
 			return 0, err
 		}
 	}
