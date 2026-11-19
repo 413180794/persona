@@ -6,7 +6,7 @@
 - **Settings › Model Settings**: configures six default-model categories: main chat, Agents, information processing, information screening, question delegation and translation. Each selects a provider, specific model, and supported thinking effort. Their purposes follow them, with opt-in exceptions: translation has its own setting and starts from information screening's provider/model, using a cheap Haiku model for Claude Messages connections; the Inbox's **AI twin** and **Lark /agent** can each override Agents and can be reset to follow it, and **Meeting minutes** and the **In-meeting conversation** can each override their category (Information processing, Main chat) the same way (#7980, "Meeting minutes and the in-meeting conversation (#7980)" below). Named [model profiles](model-profiles.md) switch the category bindings and launcher model fields together; `agent_start` and `task_plan` can select a profile tier or explicit model override. The assistant's default launcher / model is selected only under “Main Chat” here; a chat switched to another model in the chat keeps that until it is reset (“A conversation's own model”).
 - **Settings › Assistant**: Persona itself: proactive work (scheduled tasks, run history), understanding you (about me, memory), Skills, the machine it runs on, and its working directory. It neither displays nor configures models (#1291): the “Assistant” row on the settings home page has no launcher name, and the page has no “Chat model” entry. This is consistent across iOS, Mac, web, and Android. Switching one chat's model from the chat itself is not configuration either: the pick stays with that chat (“A conversation's own model”).
 
-The home page has six category rows and separate **AI twin runs** and **Lark /agent** rows, each showing whether it is separately configured or follows Agents, and the **Meeting minutes** and **In-meeting conversation** rows, each showing whether it is separately configured or follows its category. “Applies To” remains read-only and collapsed by default; those rows open their own editors rather than a category. The manager supplies the catalog and descriptions (forwarded by hub; see “Who owns models” below). Model names take priority; provider details live in the editor. “Unverified” is not repeated across the home page, but real errors and rate limits still appear.
+The home page has six category rows and separate **AI twin runs** and **Lark /agent** rows, each showing whether it is separately configured or follows Agents, and the **Meeting minutes** and **In-meeting conversation** rows, each showing whether it is separately configured or follows its category. A model-enabled Lark Context extension takes over the Lark row as described under “Lark Context v3 binding” below. “Applies To” remains read-only and collapsed by default; those rows open their own editors rather than a category. The manager supplies the catalog and descriptions (forwarded by hub; see “Who owns models” below). Model names take priority; provider details live in the editor. “Unverified” is not repeated across the home page, but real errors and rate limits still appear.
 
 | Category | Preserved configuration ID | Scope |
 | --- | --- | --- |
@@ -91,6 +91,38 @@ interactive Agents use the target computer's terminal host environment and launc
 direct API purposes use provider connections/credentials and no terminal or Claude/Codex profile;
 plugins use their own environment, configuration and credentials.
 **Unverified** means launcher execution on the target computer has not been confirmed, not that a paid model request succeeded or failed.
+
+### Lark Context v3 binding
+
+When Lark Context is enabled and explicitly granted `models`, Model configuration lists `extension.lark-context`
+with Main chat as its parent and category. Its empty binding follows the current Main chat provider, model and
+effort. Its editor saves an independent revision and can reset the binding to following. The native `/agent`
+conversation API still accepts `lark.agent` and uses that same binding for new conversations. Existing conversations
+keep the settings they started with. Other extension text purposes retain their Information processing defaults.
+
+The v3 binding starts in `model_config.overrides.v1.extension.lark-context`. The previous extension direct-API
+record in `model_config.extension.lark-context`, the native override in `model_config.overrides.v1.lark.agent`,
+and the retired native record in `model_config.lark.agent` are preserved. V3 starts with the Main chat binding even
+when one or both former editors had saved choices. An owner who wants to keep a previous explicit choice can review
+the intended provider, model and effort for the action and save them in the canonical editor. When the extension
+is disabled, removed or loses `models`, the native editor returns and uses its prior override or follows Agents.
+Rolling back to the earlier assistant binary also makes the prior extension record available to that binary.
+
+| Configured provider | Native Lark `/agent` start | Direct completion capability |
+| --- | --- | --- |
+| Claude Code launcher | Claude Code headless on the selected computer | An eligible Messages gateway or a Claude Code model run, as resolved by `apiConfig` |
+| Codex launcher | Codex app-server for a supported node launcher. The existing main-chat eligibility rules apply to managed wrappers | Requires a separate direct API connection unless the launcher itself exposes an eligible Messages gateway |
+| AGY launcher | Connected runtime with the assistant capability. An ordinary CLI or a same-name shell override can lack that capability | A launcher without an eligible Messages gateway requires a separate direct API connection |
+| TraeX launcher | The ordinary CLI is available to interactive Agent execution. The native assistant start requires a launcher with a supported backend | A launcher without an eligible Messages gateway requires a separate direct API connection |
+| Managed Messages API | Node launches Claude Code on the provider's gateway. The launch needs a Claude-compatible model ID and native thinking level | `/v1/messages` |
+| Managed Responses API | Native start returns a protocol error before sending to the node | `/v1/responses` |
+| Managed Chat Completions API | Native start returns a protocol error before sending to the node | `/v1/chat/completions` |
+| Legacy direct API connection | A native start needs a node launcher | HTTP via the connection's configured protocol |
+
+The model-configuration API exposes provider, model and effort for the canonical row. The shipped editors vary in
+which direct API effort controls they display. The web editor hides effort for Chat Completions, and the Android
+editor hides direct API effort for protocols other than Responses under this parent. The unmodified native start
+retains its existing machine, runtime, model and effort checks. Guest starts retain their Claude Code requirement.
 
 ### Testing background Direct API drafts on the web
 

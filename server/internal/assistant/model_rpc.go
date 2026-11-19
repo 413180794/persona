@@ -45,7 +45,7 @@ func (s *Service) modelExtensions(ctx context.Context) []assistantwire.ModelExte
 	return res.Extensions
 }
 
-// extensionPurposeDef is extension.<id>'s purpose: an API use of its own under "Knowledge base", inheriting it.
+// extensionPurposeDef describes the purpose of an extension with the models grant.
 func (s *Service) extensionPurposeDef(ctx context.Context, id string) (ModelPurpose, bool) {
 	ext, ok := strings.CutPrefix(id, assistantwire.ExtensionPurposePrefix)
 	if !ok {
@@ -54,6 +54,10 @@ func (s *Service) extensionPurposeDef(ctx context.Context, id string) (ModelPurp
 	for _, x := range s.modelExtensions(ctx) {
 		if x.StorageKey() == ext {
 			l := s.requestCtxLang(ctx)
+			if id == larkContextModelPurposeID {
+				return ModelPurpose{ID: id, CategoryID: "assistant", Name: x.Name, Group: mc(l, "group_extensions"),
+					Kind: "launcher", Parent: "assistant", MachineID: s.settings(ctx).MachineID}, true
+			}
 			return ModelPurpose{ID: id, CategoryID: "kb", Name: x.Name, Group: mc(l, "group_extensions"), Kind: "api", Parent: "kb"}, true
 		}
 	}
