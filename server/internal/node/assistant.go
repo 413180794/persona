@@ -117,7 +117,7 @@ type assistantProc struct {
 	compactIdleAt int
 	compacting    bool     // an idle compaction is running (compactIdle)
 	compacted     bool     // compactIdle ran in this process: it is let go when idle again
-	manual        bool     // the compaction running is the user's (assistant_compact.go): its end is reported
+	manual        bool     // an explicit /compact (manual or idle-aware delivery): its end is reported
 	requested     bool     // its first request was logged
 	stderrTail    []string // its last assistantStderrTail stderr lines (watchAssistantStderr)
 	claudeVersion string   // the Claude Code its system/init named (claude_code_version), "" before it
@@ -126,6 +126,10 @@ type assistantProc struct {
 	// model of the conversation's last reply. compactIdleAt follows the window Claude Code reports for it (followWindow).
 	declaredWindow int
 	replyModel     string
+	// toolSearch: what its start did about Claude Code's tool search, and endpoint where its requests go, "" Anthropic's
+	// own API (assistant_tool_search.go). Set at the start, never changed.
+	toolSearch toolSearchStart
+	endpoint   string
 	// repliedAt: when replyModel last answered (assistant_recovery.go: a transient "model does not exist" on it).
 	repliedAt time.Time
 
@@ -657,7 +661,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if proto.IsExternalLauncher(launcher) && p != nil && p.alive() && !otherTools && !restartForRecovery && !p.needsRestartFor(want) && !p.instructionsStale() {
 		execution = pinExternalExecution(p, launcher, execution)
 	}
-	if p != nil && (!p.alive() || p.launcher != launcher || p.fingerprint != n.executionFingerprint(launcher, execution) || p.needsRestartFor(want) || p.instructionsStale() || otherTools) {
+	if p != nil && (!p.alive() || p.launcher != launcher || p.fingerprint != n.executionFingerprint(launcher, execution) || p.needsRestartFor(want) || p.instructionsStale() || otherTools || n.toolSearchStale(p)) {
 		p.mu.Lock()
 		active := p.busy || len(p.tasks) > 0
 		if proto.IsExternalLauncher(p.launcher) || proto.IsExternalLauncher(launcher) {
@@ -772,6 +776,9 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		}
 		awaitList(n.notifySessionsSoon())
 		return id, nil
+	}
+	if err := n.idleCompactBeforeInput(ctx, p); err != nil {
+		return "", err
 	}
 	n.noteAssistantRecoveryProcess(ctx, p)
 	if !hasInput && p.agent == "codex" {
@@ -1100,6 +1107,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				manual := p.manual
 				p.manual = false
 				p.mu.Unlock()
+				n.recordIdleCompactionContext(p.id, ev.Compact.Post)
 				n.contextCompacted(p.id)
 				if manual {
 					n.compactionEnded(p.id, "")
@@ -1209,6 +1217,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			}
 			p.mu.Lock()
 			manual := p.manual
+			contextTokens := p.context
 			p.manual = false
 			window := reportedWindow(ev.ModelUsage, p.replyModel)
 			changed, idleAt := p.followWindow(window), p.compactIdleAt
@@ -1225,10 +1234,13 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			p.lastActive = time.Now()
 			p.partial.Reset()
 			p.mu.Unlock()
+			if contextTokens > 0 {
+				n.recordIdleCompactionContext(p.id, contextTokens)
+			}
 			if changed {
 				n.logger.Printf("assistant %s: the model's window is %d tokens, idle compaction at %d", p.id[:8], window, idleAt)
 			}
-			if manual { // the user's /compact ended without a boundary: it did not compact
+			if manual { // an explicit /compact ended without a boundary: it did not compact
 				n.compactionEnded(p.id, compactFailure(ev.IsError, ev.Result))
 			}
 			if f, err := n.file(p.id); err == nil {
