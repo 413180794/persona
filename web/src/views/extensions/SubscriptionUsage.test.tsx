@@ -55,6 +55,20 @@ describe("subscription usage cards", () => {
     expect(html).not.toContain("采样于");
   });
 
+  it("explains a weekly-only Codex Pro account and keeps an explicitly measured five-hour window", () => {
+    const account = claude([{ label: "7d", window_minutes: 10080, used_percent: 57 }], {
+      id: "codex", provider: "codex", name: "Codex Pro", plan: "pro",
+    });
+    const card = (a: UsageAccount) => cards([a]).split("</article>")[0];
+    expect(card(account)).toContain("Codex Pro 当前按周计算额度。");
+    expect(card(account)).not.toContain(">5h<");
+    expect(card(account)).toContain("57%");
+    const both = card({ ...account, windows: [window5(12), ...account.windows] });
+    expect(both).toContain(">5h<");
+    expect(both).not.toContain("当前按周计算额度");
+    expect(card({ ...account, name: "Codex Plus", plan: "plus" })).toContain(">5h<");
+  });
+
   it("uses the shared legacy AGY observation, keeps model groups and marks stale values", () => {
     const account = claude([window5(20.38511, { model: "Gemini" }), window5(0, { model: "Claude / GPT-OSS" })], {
       id: "agy", provider: "agy", name: "AGY", plan: "Google AI Ultra", sources: ["AGY local"], stale_at: "2026-11-20T07:19:00Z",
@@ -69,6 +83,24 @@ describe("subscription usage cards", () => {
     expect(html).toMatch(/bg-green[^>]*width:20.4%/);
     expect(cards([{ ...account, sample_time_estimated: true }])).not.toContain("采样于");
     expect(cards([{ ...account, sources: ["Another source"] }])).not.toContain("采样于");
+    expect(html).toContain("暂未收到周额度读数。");
+    const weekly = { label: "7d", window_minutes: 10080, model: "Gemini", used_percent: 66.9 };
+    const withWeek = cards([{ ...account, windows: [...account.windows, weekly] }]);
+    expect(withWeek).toContain("7d · Gemini");
+    expect(withWeek).toContain("66.9%");
+    expect(withWeek).not.toContain("暂未收到周额度读数。");
+  });
+
+  it("labels a legacy Claude account's record time separately from a measured window", () => {
+    const account = claude([window5(28)]);
+    const legacy = cards([account]);
+    expect(legacy).toMatch(/用量记录更新于 5\s*分钟前/);
+    expect(legacy).toContain("来源未提供采样时间。");
+    expect(legacy).not.toContain("采样于");
+    const measured = cards([claude([window5(28, { sampled_at: "2026-11-20T07:18:00Z" })])]);
+    expect(measured).toMatch(/采样于 2\s*分钟前/);
+    expect(measured).not.toContain("用量记录更新于");
+    expect(cards([{ ...account, sample_time_estimated: true }])).not.toContain("用量记录更新于");
   });
 
   it("shows the retained reading when the source failed and omits an implausible future sample", () => {

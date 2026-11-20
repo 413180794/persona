@@ -12,5 +12,8 @@
   "sample_unknown": "使用量を取得した時刻が報告されていません。",
   "reset_unknown": "リセット時刻が報告されていません。",
   "devices": "端末 · {names}",
-  "sources": "登録元 · {names}"
+  "sources": "登録元 · {names}",
+  "codex_pro_weekly": "現在、Codex Pro の使用量は週ごとの上限で集計されます。",
+  "agy_weekly_pending": "週ごとの使用量はまだ届いていません。",
+  "recorded": "使用量の記録を{age}に更新"
 }

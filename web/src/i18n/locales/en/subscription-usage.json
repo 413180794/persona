@@ -12,5 +12,8 @@
   "sample_unknown": "The source didn’t report a sample time.",
   "reset_unknown": "The source didn’t report a reset time.",
   "devices": "Devices · {names}",
-  "sources": "Registered sources · {names}"
+  "sources": "Registered sources · {names}",
+  "codex_pro_weekly": "Codex Pro usage currently counts toward a weekly limit.",
+  "agy_weekly_pending": "Weekly usage hasn’t been reported yet.",
+  "recorded": "Usage record updated {age}"
 }

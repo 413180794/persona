@@ -2250,6 +2250,9 @@ When the subscription usage extension registers its sidebar page, Web draws each
 shows a bar for each measured window, the time until reset alongside the Beijing clock time, and the age of the individual
 sample. Missing, stale and expired readings have quiet explanations. When the page has a measured window, the bottom strip
 and its popover are removed across Web. Both surfaces use the same read-only poll, and the page's refresh button also uses it.
+Codex Pro with a weekly reading and no measured five-hour window shows a plan note in place of the empty window.
+The development site's Antigravity source adds the CLI's explicit weekly and five-hour quota buckets to this same feed.
+Older Claude records can supply an account-level update time. Window sample ages use their own timestamps.
 
 Code: `lib/usage-windows.ts`, `views/UsageBars.tsx` and `views/extensions/SubscriptionUsage.tsx`; the mock hub has
 `MOCK_USAGE=none` to simulate no data and `MOCK_USAGE=gateways` to simulate a mix of computer and gateway accounts.

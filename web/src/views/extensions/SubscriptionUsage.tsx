@@ -4,7 +4,7 @@ import {
   isWarn, measuredUsage, planNote, sampleAge, useUsageWindows, useUsageWindowsStatus,
   windowKey, windowMinutes, type UsageAccount, type UsageWindow,
 } from "../../lib/usage-windows";
-import { Loading } from "../../ui/atoms";
+import { cx, Loading } from "../../ui/atoms";
 import { Meter } from "../UsageBars";
 
 const TIME_ZONE = "Asia/Shanghai";
@@ -48,10 +48,15 @@ function resetText(time: number, now: number): string {
   return t("subscription-usage.reset", { countdown, clock });
 }
 
-function accountWindows(account: UsageAccount): UsageWindow[] {
-  const windows = [...(account.windows ?? [])];
+function hasPlanWindow(account: UsageAccount, minutes: number): boolean {
+  return account.windows?.some((w) => !w.model && windowMinutes(w) === minutes && measuredUsage(account, w) !== undefined) ?? false;
+}
+
+function accountWindows(account: UsageAccount, omitFiveHour: boolean): UsageWindow[] {
+  const windows = (account.windows ?? []).filter((w) => !omitFiveHour || w.model || windowMinutes(w) !== 300);
   if (account.provider === "codex" || account.provider === "claude") {
     for (const expected of PLAN_WINDOWS) {
+      if (omitFiveHour && expected.window_minutes === 300) continue;
       if (!windows.some((w) => !w.model && windowMinutes(w) === expected.window_minutes)) windows.push(expected);
     }
   }
@@ -110,13 +115,21 @@ function UsageWindowRow({ account, window: w, now }: { account: UsageAccount; wi
 }
 
 function AccountCard({ account, now }: { account: UsageAccount; now: number }) {
-  const windows = accountWindows(account);
+  const codexPro = account.provider === "codex" && (account.plan?.trim().toLowerCase() === "pro" || account.name.trim().toLowerCase() === "codex pro");
+  const omitFiveHour = codexPro && !hasPlanWindow(account, 300);
+  const windows = accountWindows(account, omitFiveHour);
   const provider = PROVIDERS.find((p) => p.provider === account.provider)?.name;
   const name = account.name || provider || account.provider;
   const title = provider && !name.toLowerCase().includes(provider.toLowerCase()) ? provider : name;
   const subtitle = [title !== name ? name : "", planNote({ ...account, name: `${title} ${name}` })].filter(Boolean).join(" · ");
   const machines = account.machines?.length ? account.machines : account.local ? [t("usage.source_local")] : [];
   const sources = account.sources ?? [];
+  // Legacy Claude sources merge windows before reporting the account's record time.
+  const recorded = !account.sample_time_estimated && account.provider === "claude" &&
+    windows.some((w) => measuredUsage(account, w) !== undefined && sampleDetails(account, w, now).sampled === undefined)
+    ? timestamp(account.sampled_at) : undefined;
+  const waitingForWeek = account.provider === "agy" && windows.length > 0 &&
+    !windows.some((w) => windowMinutes(w) === 10080 && measuredUsage(account, w) !== undefined);
   return (
     <article className="min-w-0 rounded-card bg-surface p-4 shadow-card sm:p-5" data-subscription-account>
       <header className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -125,13 +138,16 @@ function AccountCard({ account, now }: { account: UsageAccount; now: number }) {
       </header>
       {windows.length ? (
         <div className="@container">
-          <div className="grid gap-2 @min-[32rem]:grid-cols-2">
+          <div className={cx("grid gap-2", windows.length > 1 && "@min-[32rem]:grid-cols-2")}>
             {windows.map((w) => <UsageWindowRow key={windowKey(w)} account={account} window={w} now={now} />)}
           </div>
         </div>
       ) : <p className="rounded-control bg-inset p-3 text-label text-ink-3">{t("subscription-usage.pending")}</p>}
-      {(machines.length > 0 || sources.length > 0) && (
+      {omitFiveHour && <p className="mt-3 text-label text-ink-3">{t("subscription-usage.codex_pro_weekly")}</p>}
+      {waitingForWeek && <p className="mt-3 text-label text-ink-3">{t("subscription-usage.agy_weekly_pending")}</p>}
+      {(machines.length > 0 || sources.length > 0 || (recorded !== undefined && recorded <= now)) && (
         <footer className="mt-3 flex flex-wrap gap-x-4 gap-y-1 wrap-anywhere text-label text-ink-3">
+          {recorded !== undefined && recorded <= now && <time dateTime={account.sampled_at}>{t("subscription-usage.recorded", { age: sampleAge(account.sampled_at, now) })}</time>}
           {machines.length > 0 && <span>{t("subscription-usage.devices", { names: machines.join(" · ") })}</span>}
           {sources.length > 0 && <span>{t("subscription-usage.sources", { names: sources.join(" · ") })}</span>}
         </footer>

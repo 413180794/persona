@@ -12,5 +12,8 @@
   "sample_unknown": "来源未提供采样时间。",
   "reset_unknown": "来源未提供重置时间。",
   "devices": "设备 · {names}",
-  "sources": "注册来源 · {names}"
+  "sources": "注册来源 · {names}",
+  "codex_pro_weekly": "Codex Pro 当前按周计算额度。",
+  "agy_weekly_pending": "暂未收到周额度读数。",
+  "recorded": "用量记录更新于 {age}"
 }
