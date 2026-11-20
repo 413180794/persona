@@ -43,7 +43,7 @@ func (s *Service) askAcceptanceRound(t Todo, machine, session, reply string, aga
 	} else if old != nil {
 		// asked before the task's latest reopen, or a conclusion (conclusion.go): the new round gets its own card, the old
 		// ones stay dead
-		earlier = lastOf(slices.Concat(old.Earlier, old.Messages), acceptEarlierMost)
+		earlier = lastOf(slices.Concat(old.Earlier, askCardIDs(*old)), acceptEarlierMost)
 		delete(b.asks, t.ID)
 	}
 	b.asks[t.ID] = &acceptAsk{Earlier: earlier} // claimed: a second turn ending meanwhile does not ask twice

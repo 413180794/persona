@@ -243,7 +243,7 @@ func (s *Service) askConclusion(ctx context.Context, t Todo, in conclusionInput)
 			b.mu.Unlock()
 			return false
 		}
-		earlier = lastOf(slices.Concat(old.Earlier, old.Messages), acceptEarlierMost)
+		earlier = lastOf(slices.Concat(old.Earlier, askCardIDs(*old)), acceptEarlierMost)
 	}
 	b.asks[t.ID] = &acceptAsk{Earlier: earlier} // claimed, as askAcceptance does
 	b.mu.Unlock()

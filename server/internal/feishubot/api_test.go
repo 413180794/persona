@@ -41,6 +41,41 @@ func botInfoOK(w http.ResponseWriter) {
 }
 func callOnce(c *Client) error { _, err := c.BotInfo(context.Background()); return err }
 
+func TestUpdateCardReturnsFeishuReceiptForTheOriginalMessage(t *testing.T) {
+	card := NewCard("Answered", Blue, "").Note("Received")
+	for _, tc := range []struct {
+		name   string
+		status int
+		code   int
+	}{
+		{"accepted", http.StatusOK, 0},
+		{"locked during interaction", http.StatusBadRequest, 230099},
+		{"non-success HTTP status", http.StatusForbidden, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _, _ := retryAPIClient(t, func(w http.ResponseWriter, r *http.Request, _ *atomic.Int32) {
+				var in struct {
+					Content string `json:"content"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Content != card.JSON() {
+					t.Errorf("unexpected PATCH body: %+v, %v", in, err)
+				}
+				if r.Method != http.MethodPatch || r.URL.Path != "/open-apis/im/v1/messages/om_original" ||
+					r.Header.Get("Authorization") != "Bearer tok" {
+					t.Errorf("request did not target the original message as its bot: %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(tc.status)
+				okJSON(w, map[string]any{"code": tc.code, "error": map[string]string{"log_id": "sample-request"}})
+			})
+			receipt, err := c.UpdateCard(context.Background(), "om_original", card.JSON())
+			if (err != nil) != (tc.status != http.StatusOK) ||
+				receipt != (CardUpdateReceipt{HTTPStatus: tc.status, Code: tc.code, RequestID: "sample-request"}) {
+				t.Fatalf("receipt = %+v, err = %v", receipt, err)
+			}
+		})
+	}
+}
+
 // Transient answers are retried until the third attempt; waits/tokens give the expected backoff waits and token fetches (a token-gone refresh spends no slot, and must not refresh again for later blips).
 func TestCallRetriesTransientAnswers(t *testing.T) {
 	cases := []struct {
@@ -412,7 +447,10 @@ func TestPerChatLimitRetriedOnKeyedSends(t *testing.T) {
 			_, err := c.Send(ctx, "chat_id", "oc_example", TypeText, TextContent("hi"), "")
 			return err
 		}, 1},
-		{"card update", func(c *Client) error { return c.UpdateCard(ctx, "om_example", `{"elements":[]}`) }, 1},
+		{"card update", func(c *Client) error {
+			_, err := c.UpdateCard(ctx, "om_example", `{"elements":[]}`)
+			return err
+		}, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _, hits, _ := retryAPIClient(t, func(w http.ResponseWriter, _ *http.Request, n *atomic.Int32) {
@@ -448,7 +486,10 @@ func TestPerChatLimitRetriedOnKeyedSends(t *testing.T) {
 func TestMessageUpdatesDoNotWaitOutTheReset(t *testing.T) {
 	ctx := context.Background()
 	for op, do := range map[string]func(*Client) error{
-		"card update": func(c *Client) error { return c.UpdateCard(ctx, "om_example", `{"elements":[]}`) },
+		"card update": func(c *Client) error {
+			_, err := c.UpdateCard(ctx, "om_example", `{"elements":[]}`)
+			return err
+		},
 		"cot append": func(c *Client) error {
 			return c.CotAppend(ctx, "cot_example", "om_example", CotParagraph("p1", "working"))
 		},

@@ -197,11 +197,18 @@ func (s *Service) decisionFormAction(ctx context.Context, l i18n.Lang, a *feishu
 	go func() {
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 		defer cancel()
-		result, err := s.answerDecisionInWords(rctx, id, round, card, text)
-		done <- acceptActionToast(l, result, err, i18n.T(l, "assistant-reports.decision_input_received"))
+		result, err := s.answerDecisionInWords(rctx, id, round, card, text, true)
+		response := acceptActionToast(l, result, err, i18n.T(l, "assistant-reports.decision_input_received"))
+		if result.taken {
+			response.Card = s.answeredDecisionCard(rctx, id, round, card)
+		}
+		done <- response
 	}()
 	select {
 	case response := <-done:
+		if response.Card != nil {
+			s.logf("task %s: decision card: round=%s message=%s returning replacement in callback", id, round, card)
+		}
 		return response
 	case <-time.After(cardAnswerWait):
 		go func() {

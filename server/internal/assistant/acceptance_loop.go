@@ -29,8 +29,9 @@ func (s *Service) acceptLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-due.C:
-			s.goSweepDecisionDeadlines(time.Now())
+		case now := <-due.C:
+			s.goSweepDecisionDeadlines(now)
+			s.retryDecisionCardRedraws(ctx, now)
 		case <-deploys.C:
 			s.sweepDeploys(time.Now()) // held tasks whose deploy landed (deploy_check.go)
 		case <-tick.C:

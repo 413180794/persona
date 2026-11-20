@@ -466,29 +466,31 @@ func (s *Service) answerDecisionTextLocked(ctx context.Context, st todoStore, t 
 // press on an earlier round's card answers nothing (#4853).
 func (s *Service) askCardNow(id, card string) bool {
 	a, ok := s.askCopy(id)
-	return ok && (card == "" || card == a.MessageID || slices.Contains(a.Messages, card))
+	return ok && (card == "" || a.hasCard(card))
 }
 
 // endAsk marks task id's decision asked at as answered (response: the fixed answer it got, or chosen: the option
 // taken that was not the recommended one), and redraws its cards.
 func (s *Service) endAsk(ctx context.Context, id string, asked time.Time, response, chosen string) {
-	s.endAskWithAnswer(ctx, id, asked, response, chosen, false)
+	if a, ok := s.markAskAnswered(ctx, id, asked, response, chosen, false); ok {
+		s.updateAskCards(ctx, id, a)
+	}
 }
 
-func (s *Service) endAskWithAnswer(ctx context.Context, id string, asked time.Time, response, chosen string, custom bool) {
+func (s *Service) markAskAnswered(ctx context.Context, id string, asked time.Time, response, chosen string, custom bool) (acceptAsk, bool) {
 	b := &s.accept
 	b.mu.Lock()
 	a := b.asks[id]
 	if a == nil || !a.AskedAt.Equal(asked) {
 		b.mu.Unlock()
-		return
+		return acceptAsk{}, false
 	}
 	a.AcceptedAt, a.Response, a.Chosen, a.Custom = time.Now().UTC(), response, chosen, custom
 	s.saveAcceptLocked(ctx)
 	cp := *a
 	b.mu.Unlock()
 	s.askChanged(ctx)
-	s.updateAskCards(ctx, id, cp)
+	return cp, true
 }
 
 // ownerCannotAnswer: the owner answered task id's decision (asked: its round) with one of ownerResponses instead of an

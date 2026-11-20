@@ -84,6 +84,8 @@ type acceptAsk struct {
 	// Chosen: an alternative option or the owner's own instruction (Custom).
 	Chosen string `json:"chosen,omitempty"`
 	Custom bool   `json:"custom,omitempty"`
+	// DecisionCardsRedrawn records confirmed PATCHes, so an answered card can be redrawn after a restart.
+	DecisionCardsRedrawn []string `json:"decision_cards_redrawn,omitempty"`
 	// ForBriefing: a decision that can wait (#4930, decision_wait.go), raised without a push and without a card, while
 	// it waits for a briefing to bring it to the owner; cleared once one did, or once it was pushed after all, at
 	// PushedAt: its card is due from then (retryAcceptance).
@@ -124,6 +126,10 @@ type acceptBook struct {
 	mu     sync.Mutex
 	loaded bool
 	asks   map[string]*acceptAsk // by todo id
+}
+
+func (a acceptAsk) hasCard(mid string) bool {
+	return mid != "" && (mid == a.MessageID || slices.Contains(a.Messages, mid))
 }
 
 // loadAcceptLocked reads the asks once and reports whether they are in memory; s.accept.mu is held. A failed read
@@ -213,7 +219,7 @@ func (s *Service) acceptFor(ids ...string) (todo string, earlier bool) {
 	}
 	for todo, a := range b.asks {
 		for _, id := range ids {
-			if id != "" && slices.Contains(a.Messages, id) {
+			if a.hasCard(id) {
 				return todo, false
 			}
 		}

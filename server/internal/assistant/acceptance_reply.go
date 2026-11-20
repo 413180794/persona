@@ -43,7 +43,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 	}
 	t, ok := s.todoNow(id)
 	ask, _ := s.askCopy(id)
-	parent := slices.IndexFunc(ids, func(mid string) bool { return mid != "" && slices.Contains(ask.Messages, mid) })
+	parent := slices.IndexFunc(ids, ask.hasCard)
 	if parent < 0 { // superseded between looking up the reply and reading the round
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
 		return true
@@ -84,7 +84,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 		return true
 	}
 	if decideAsk(&ask) {
-		result, err := s.answerDecisionInWords(ctx, id, ask.AskedAt.Format(timeKeyLayout), ids[parent], text)
+		result, err := s.answerDecisionInWords(ctx, id, ask.AskedAt.Format(timeKeyLayout), ids[parent], text, false)
 		note := i18n.T(l, "assistant-reports.accept_sent")
 		switch {
 		case err != nil:
@@ -142,7 +142,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, media
 
 // answerDecisionInWords handles both Feishu text replies and form submissions. The task's action lock
 // serializes them with option buttons and default decisions, and the round owns one decision row.
-func (s *Service) answerDecisionInWords(ctx context.Context, id, round, card, text string) (acceptResult, error) {
+func (s *Service) answerDecisionInWords(ctx context.Context, id, round, card, text string, fromForm bool) (acceptResult, error) {
 	s.reviewDismissals.actions.acquire(id)
 	defer s.reviewDismissals.actions.release(id)
 	if card == "" || round == "" {
@@ -152,7 +152,7 @@ func (s *Service) answerDecisionInWords(ctx context.Context, id, round, card, te
 	if err != nil || a == nil {
 		return acceptResult{}, err
 	}
-	if card != a.MessageID && !slices.Contains(a.Messages, card) {
+	if !a.hasCard(card) {
 		return acceptResult{}, nil
 	}
 	t, _ := s.todoNow(id)
@@ -173,11 +173,19 @@ func (s *Service) answerDecisionInWords(ctx context.Context, id, round, card, te
 		s.decisionsChanged(ctx, id, at)
 	}
 	s.deadlineAnswered(ctx, id, a.AskedAt)
+	// Save the answered round before agent delivery can cause a new review. Its card can then be
+	// redrawn independently of that delivery and even after a restart.
+	markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	_, marked := s.markAskAnswered(markCtx, id, a.AskedAt, "", choice, true)
+	cancelMark()
+	if !marked {
+		s.logf("task %s: decision card: round=%s message=%s answered round no longer current", id, round, card)
+	}
 	msg := i18n.T(l, "assistant-reports.verdict_decided_to_agent", i18n.Args{"decision": choice})
 	_, sendErr := s.relayToTask(ctx, t.Origin, id, msg, func(cur Todo) bool {
 		return !acceptAskStale(a, cur) && !acceptAskEnded(a, cur)
 	})
-	// Agent delivery can outlive its caller. The recorded answer still has to finish and redraw.
+	// Agent delivery can outlive its caller. Finish processing the recorded answer.
 	finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
 	defer cancel()
 	result := acceptSucceeded()
@@ -187,8 +195,10 @@ func (s *Service) answerDecisionInWords(ctx context.Context, id, round, card, te
 	} else {
 		s.userDecided(finish, id)
 	}
-	s.endAskWithAnswer(finish, id, a.AskedAt, "", choice, true)
 	completeDismissal()
+	if marked && !fromForm {
+		s.redrawDecisionCards(finish, id, a.AskedAt)
+	}
 	return result, nil
 }
 
@@ -255,7 +265,7 @@ func (s *Service) acceptTryAsDismissalLocked(ctx context.Context, id, card strin
 		return acceptResult{}, errAcceptStore
 	}
 	a, ok := b.asks[id]
-	if !ok || a.AskedAt.IsZero() || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) || (card != "" && card != a.MessageID && !slices.Contains(a.Messages, card)) ||
+	if !ok || a.AskedAt.IsZero() || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) || (card != "" && !a.hasCard(card)) ||
 		decideAsk(a) && (a.Recommend == "" || todoOK && acceptAskEnded(a, t) || !a.RecheckAt.IsZero() || todoOK && ownerDecisionReturned(t.Supervision)) ||
 		byDefault && !(decideAsk(a) && a.Reversible && !a.Deadline.IsZero() && a.DueAt.IsZero() && !time.Now().Before(a.Deadline)) {
 		b.mu.Unlock()
@@ -331,7 +341,7 @@ func (s *Service) updateAskCards(ctx context.Context, id string, a acceptAsk) {
 	if !ok {
 		return
 	}
-	for _, mid := range a.Messages {
+	for _, mid := range askCardIDs(a) {
 		if err := s.botUpdateCard(ctx, mid, s.acceptCard(ctx, t, a, false)); err != nil {
 			s.logf("task %s: acceptance card: %v", id, err)
 		}

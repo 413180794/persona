@@ -3,11 +3,14 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
@@ -49,7 +52,7 @@ func TestDecisionPromptUsesEverydayLanguage(t *testing.T) {
 }
 
 func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
-	for _, method := range []string{"form", "reply", "concurrent"} {
+	for _, method := range []string{"form", "slow form", "reply", "concurrent", "legacy primary only with retry"} {
 		t.Run(method, func(t *testing.T) {
 			database := todoTestDB(t)
 			s, f, todo, posts, _ := conclusionServiceOn(t, database, true)
@@ -57,6 +60,13 @@ func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
 			waitsForReview(t, s, f, todo.ID, "Please check the two options.")
 			reviewTask(t, s, todo.ID, dropTableDecision())
 			ask := askOf(s, todo.ID)
+			legacy := method == "legacy primary only with retry"
+			if legacy {
+				s.accept.mu.Lock()
+				s.accept.asks[todo.ID].Messages = nil
+				s.saveAcceptLocked(ctx)
+				s.accept.mu.Unlock()
+			}
 			l := s.botLang(ctx)
 			cards := posts()
 			if len(cards) != 1 {
@@ -69,13 +79,17 @@ func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
 				}
 			}
 			updates := make(chan map[string]string, 4)
+			failUpdate := legacy
 			f.answerApp(AppFeishu, FeishuUpdateCard, func(p json.RawMessage) (any, error) {
 				var fields map[string]string
 				err := json.Unmarshal(p, &fields)
 				updates <- fields
+				if failUpdate {
+					return nil, errors.New("card action is lock")
+				}
 				return map[string]any{}, err
 			})
-			form := func(round, card, text string) string {
+			form := func(round, card, text string) *feishubot.CardResponse {
 				raw, err := json.Marshal(map[string]any{
 					"action": map[string]any{
 						"value":      map[string]string{"a": "accept", "id": todo.ID, "asked_at": round, "free": "1"},
@@ -85,21 +99,21 @@ func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
 				})
 				if err != nil {
 					t.Error(err)
-					return ""
+					return &feishubot.CardResponse{Toast: &feishubot.Toast{}}
 				}
 				response, err := s.FeishuAction(ctx, FeishuAction{Event: raw})
 				if err != nil || response == nil || response.Toast == nil {
 					t.Errorf("Feishu callback = %+v, %v", response, err)
-					return ""
+					return &feishubot.CardResponse{Toast: &feishubot.Toast{}}
 				}
-				return response.Toast.Type
+				return response
 			}
 			before := len(sentToAgent(f))
 			round := ask.AskedAt.Format(timeKeyLayout)
 			const instruction = "只给同事看一份草稿"
-			if form(round, ask.MessageID, "  ") != "warning" ||
-				form(ask.AskedAt.Add(-time.Second).Format(timeKeyLayout), ask.MessageID, instruction) != "info" ||
-				form(round, "om_forwarded", instruction) != "info" ||
+			if form(round, ask.MessageID, "  ").Toast.Type != "warning" ||
+				form(ask.AskedAt.Add(-time.Second).Format(timeKeyLayout), ask.MessageID, instruction).Toast.Type != "info" ||
+				form(round, "om_forwarded", instruction).Toast.Type != "info" ||
 				!askOf(s, todo.ID).AcceptedAt.IsZero() || len(sentToAgent(f)) != before {
 				t.Fatal("a blank or stale callback consumed the decision")
 			}
@@ -108,11 +122,47 @@ func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
 					t.Error("reply not recognized")
 				}
 			}
-			switch method {
-			case "form":
-				if got := form(round, ask.MessageID, "  "+instruction+"  "); got != "success" {
-					t.Fatalf("submit: %q", got)
+			checkCard := func(card string) {
+				t.Helper()
+				if !strings.Contains(card, i18n.T(l, "assistant-reports.decision_custom_noted", i18n.Args{"instruction": instruction})) {
+					t.Errorf("answered card is missing the instruction: %s", card)
 				}
+				for _, absent := range []string{`"tag":"input"`, i18n.T(l, "assistant-reports.verdict_decide"),
+					i18n.T(l, "assistant-reports.decision_never_default"), ask.CostOfWaiting, ask.Options[0].LeadsTo} {
+					if strings.Contains(card, absent) {
+						t.Errorf("answered card still shows %q", absent)
+					}
+				}
+			}
+			switch method {
+			case "form", "legacy primary only with retry":
+				got := form(round, ask.MessageID, "  "+instruction+"  ")
+				if got.Toast.Type != "success" || got.Card == nil || got.Card.Type != "raw" {
+					t.Fatalf("submit: %+v", got)
+				}
+				card, ok := got.Card.Data.(*feishubot.Card)
+				if !ok || card.Schema != "2.0" {
+					t.Fatalf("callback replacement: %+v", got.Card)
+				}
+				checkCard(card.JSON())
+				s.retryDecisionCardRedraws(ctx, askOf(s, todo.ID).AcceptedAt)
+				if len(updates) != 0 {
+					t.Fatal("PATCH ran before the callback window had elapsed")
+				}
+			case "slow form":
+				wait := cardAnswerWait
+				cardAnswerWait = 50 * time.Millisecond
+				defer func() { cardAnswerWait = wait }()
+				hold, release := heldAnswer(t)
+				f.mu.Lock()
+				f.onSend = func(*fakeHub, map[string]any) { hold() }
+				f.mu.Unlock()
+				got := form(round, ask.MessageID, instruction)
+				release()
+				if got.Toast.Type != "info" || got.Card != nil || len(updates) != 0 {
+					t.Fatalf("slow submit's initial callback: %+v", got)
+				}
+				waitFor(t, "the answer saved for redraw", func() bool { return askOf(s, todo.ID).Custom })
 			case "reply":
 				reply()
 			case "concurrent":
@@ -121,22 +171,33 @@ func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
 				wg.Go(func() { form(round, ask.MessageID, instruction) })
 				wg.Wait()
 			}
+			sweepAt := askOf(s, todo.ID).AcceptedAt.Add(decisionCardCallbackWindow)
+			s.retryDecisionCardRedraws(ctx, sweepAt)
+			if legacy {
+				select {
+				case <-updates: // Feishu refused the first PATCH.
+				case <-time.After(3 * time.Second):
+					t.Fatal("primary-only card was not selected for redraw")
+				}
+				if len(askOf(s, todo.ID).DecisionCardsRedrawn) != 0 {
+					t.Fatal("a failed PATCH was recorded as successful")
+				}
+				failUpdate = false
+				s.accept.mu.Lock()
+				s.accept.asks, s.accept.loaded = nil, false // reload the persisted answer as on restart
+				s.accept.mu.Unlock()
+				s.retryDecisionCardRedraws(ctx, sweepAt)
+			}
 			select {
 			case update := <-updates:
-				card := update["card"]
-				if update["message_id"] != ask.MessageID || !strings.Contains(card, i18n.T(l, "assistant-reports.decision_custom_noted", i18n.Args{"instruction": instruction})) {
+				if update["message_id"] != ask.MessageID {
 					t.Fatalf("unexpected card update: %v", update)
 				}
-				for _, absent := range []string{`"tag":"input"`, i18n.T(l, "assistant-reports.verdict_decide"),
-					i18n.T(l, "assistant-reports.decision_never_default"), ask.CostOfWaiting, ask.Options[0].LeadsTo} {
-					if strings.Contains(card, absent) {
-						t.Errorf("answered card still shows %q", absent)
-					}
-				}
+				checkCard(update["card"])
 			case <-time.After(3 * time.Second):
 				t.Fatal("original card was not updated")
 			}
-			if form(round, ask.MessageID, "different text") != "info" {
+			if form(round, ask.MessageID, "different text").Toast.Type != "info" {
 				t.Fatal("duplicate submission was accepted")
 			}
 			reply()
@@ -147,11 +208,24 @@ func TestFeishuDecisionInWordsRedrawsOriginalCard(t *testing.T) {
 			if err != nil || len(rows) != 1 || rows[0].Choice != instruction {
 				t.Fatalf("expected one saved choice, got %v, %v", rows, err)
 			}
-			if got := askOf(s, todo.ID); got.AcceptedAt.IsZero() || !got.Custom || got.Chosen != instruction {
+			if got := askOf(s, todo.ID); got.AcceptedAt.IsZero() || !got.Custom || got.Chosen != instruction ||
+				!slices.Equal(got.DecisionCardsRedrawn, []string{ask.MessageID}) {
 				t.Fatalf("ask = %+v", got)
 			}
+			s.retryDecisionCardRedraws(ctx, sweepAt)
 			if len(updates) != 0 {
 				t.Fatal("duplicate card redraw")
+			}
+			s.accept.mu.Lock()
+			next := s.accept.asks[todo.ID]
+			next.AskedAt = next.AskedAt.Add(time.Second)
+			next.MessageID, next.Messages, next.DecisionCardsRedrawn = "om_new", []string{"om_new"}, nil
+			s.accept.mu.Unlock()
+			s.reviewDismissals.actions.acquire(todo.ID)
+			s.redrawDecisionCards(ctx, todo.ID, ask.AskedAt)
+			s.reviewDismissals.actions.release(todo.ID)
+			if len(updates) != 0 {
+				t.Fatal("a retry for the old round redrew the new round's card")
 			}
 		})
 	}

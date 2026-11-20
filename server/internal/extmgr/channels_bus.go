@@ -229,7 +229,12 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		}
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuUpdateCard:
-		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)
+		receipt, err := api.UpdateCard(ctx, a.MessageID, a.Card)
+		if err != nil {
+			data, _ := json.Marshal(receipt)
+			return nil, &rpc.Error{Code: assistantwire.CodeFeishuAPI, Message: err.Error(), Data: data}
+		}
+		return receipt, nil
 	case assistantwire.FeishuPin:
 		if err := checkOwnDMMessage(ctx, api, set, a.MessageID, ""); err != nil {
 			return nil, err

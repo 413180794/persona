@@ -139,10 +139,10 @@ func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out
 	if in != nil {
 		payload, _ = json.Marshal(in)
 	}
-	return c.callBody(ctx, op, method, path, payload, "application/json; charset=utf-8", out, idempotent)
+	return c.callBody(ctx, op, method, path, payload, "application/json; charset=utf-8", out, idempotent, nil)
 }
 
-func (c *Client) callBody(ctx context.Context, op, method, path string, payload []byte, contentType string, out any, idempotent bool) error {
+func (c *Client) callBody(ctx context.Context, op, method, path string, payload []byte, contentType string, out any, idempotent bool, receipt *CardUpdateReceipt) error {
 	var lastErr error
 	giveUp := func() error {
 		if e := ctx.Err(); e != nil {
@@ -184,6 +184,9 @@ func (c *Client) callBody(ctx context.Context, op, method, path string, payload 
 			}
 			lastErr, retry = err, true
 		default:
+			if receipt != nil {
+				*receipt = CardUpdateReceipt{HTTPStatus: resp.StatusCode, RequestID: resp.Header.Get("X-Tt-Logid")}
+			}
 			after = retryWait(resp.Header, resp.StatusCode, 0)
 			raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 			resp.Body.Close()
@@ -195,11 +198,20 @@ func (c *Client) callBody(ctx context.Context, op, method, path string, payload 
 				lastErr, retry = readErr, true
 			default:
 				var env struct {
-					Code int             `json:"code"`
-					Msg  string          `json:"msg"`
-					Data json.RawMessage `json:"data"`
+					Code  int             `json:"code"`
+					Msg   string          `json:"msg"`
+					Data  json.RawMessage `json:"data"`
+					Error struct {
+						LogID string `json:"log_id"`
+					} `json:"error"`
 				}
 				jerr := json.Unmarshal(raw, &env)
+				if receipt != nil && jerr == nil {
+					receipt.Code = env.Code
+					if receipt.RequestID == "" {
+						receipt.RequestID = env.Error.LogID
+					}
+				}
 				after = retryWait(resp.Header, resp.StatusCode, env.Code)
 				switch {
 				case jerr != nil: // a gateway's HTML page on 429/5xx is transient; other non-JSON answers fail at once
@@ -221,6 +233,8 @@ func (c *Client) callBody(ctx context.Context, op, method, path string, payload 
 					// The per-chat limit is waited out only on a POST that gets here idempotent: a send or reply with a uuid,
 					// which lands once. A card update that meets it is its caller's to slow down (it sends a newer card).
 					retry = env.Code == codeRateLimited || env.Code == codeChatRateLimited && method == http.MethodPost
+				case receipt != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300):
+					return fmt.Errorf("feishu %s: HTTP %d", op, resp.StatusCode)
 				case out == nil:
 					return nil
 				case len(env.Data) > 0 && string(env.Data) != "null":
@@ -431,9 +445,20 @@ func (c *Client) Recall(ctx context.Context, messageID string) error {
 	return c.call(ctx, "recall", http.MethodDelete, "/open-apis/im/v1/messages/"+url.PathEscape(messageID), nil, nil)
 }
 
+// CardUpdateReceipt contains the Open Platform's status without access tokens or card content.
+type CardUpdateReceipt struct {
+	HTTPStatus int    `json:"http_status"`
+	Code       int    `json:"code"`
+	RequestID  string `json:"request_id,omitempty"`
+}
+
 // UpdateCard replaces a card the bot sent (shared cards: update_multi).
-func (c *Client) UpdateCard(ctx context.Context, messageID, card string) error {
-	return c.call(ctx, "update card", http.MethodPatch, "/open-apis/im/v1/messages/"+url.PathEscape(messageID), map[string]any{"content": card}, nil)
+func (c *Client) UpdateCard(ctx context.Context, messageID, card string) (CardUpdateReceipt, error) {
+	payload, _ := json.Marshal(map[string]string{"content": card})
+	var receipt CardUpdateReceipt
+	err := c.callBody(ctx, "update card", http.MethodPatch, "/open-apis/im/v1/messages/"+url.PathEscape(messageID),
+		payload, "application/json; charset=utf-8", nil, true, &receipt)
+	return receipt, err
 }
 
 // Item is a message read back (GET /open-apis/im/v1/messages/:id): a quoted message, or a merged forward and the

@@ -97,7 +97,7 @@ const (
 	// is refused as ever. With full_answer, the owner must enable full replies, a parent is required, and the
 	// answer is sent as literal rich text, or as a text attachment when too large for inline delivery.
 	FeishuText = "feishu.text"
-	// FeishuUpdateCard: {message_id, card} → {}.
+	// FeishuUpdateCard: {message_id, card} → {http_status, code, request_id}.
 	FeishuUpdateCard = "feishu.update_card"
 	// FeishuPin: {message_id, exclusive?} → {}: one of the bot's messages in the owner's private chat pinned there;
 	// exclusive takes off the other pins the bot made in that chat (never the owner's own) (#1961, the workbench).

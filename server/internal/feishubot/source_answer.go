@@ -62,7 +62,7 @@ func (c *Client) AnswerContent(ctx context.Context, text string) (msgType, conte
 	var out struct {
 		Key string `json:"file_key"`
 	}
-	if err := c.callBody(ctx, "upload answer", http.MethodPost, "/open-apis/im/v1/files", body.Bytes(), form.FormDataContentType(), &out, false); err != nil {
+	if err := c.callBody(ctx, "upload answer", http.MethodPost, "/open-apis/im/v1/files", body.Bytes(), form.FormDataContentType(), &out, false, nil); err != nil {
 		return "", "", err
 	}
 	if out.Key == "" {
