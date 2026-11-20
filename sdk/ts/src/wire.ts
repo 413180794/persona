@@ -4637,8 +4637,10 @@ export interface ConnectorGhTokenParams {
  * permission_denied. The hub sets the row's origin (the extension; session_id and machine_id are kept beside it) and
  * how it was let through (kind auto, with setting) itself. Errors: permission_denied, invalid_params, rate_limited
  * (data {retry_after} in seconds: 60 calls at once per extension, then one a second, whether or not they were
- * allowed), and no_database on a hub without a database; a ledger that cannot be written is an error with a message
- * and no code. Recording is best effort: it never undoes the send.
+ * allowed), no_database on a hub without a database, and admission_closed / admission_unavailable while write
+ * admission is paused or unavailable, and conflict when a reference already guarded by sent.record_once cannot be
+ * confirmed; a ledger that cannot be written is an error with a message and no code. Recording is best effort: it
+ * never undoes the send.
  */
 export interface ConnectorSentRecordParams {
   contribution: string;
@@ -4677,6 +4679,62 @@ export interface ConnectorSentRecordParams {
    * The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
    */
   setting?: string;
+}
+
+/**
+ * sent.record_guarded / sent.record_once: a connector that declares sends_as_user records one entry for an exact
+ * message_ref or strictly reads it with lookup_only. Errors: permission_denied, invalid_params, rate_limited (data
+ * {retry_after} in seconds), no_database, conflict (ambiguous retained rows or mismatched contents), and
+ * admission_closed / admission_unavailable for write mode. On older hubs the call may return unknown_method.
+ */
+export interface ConnectorSentRecordOnceParams {
+  contribution: string;
+  /**
+   * Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
+   * value that is not a string, a number, a boolean or a list of up to 10 strings is dropped, and so is an empty
+   * string. The hub keeps 20 keys at most, in key order, each name cut to 64 characters. Anything but an object is
+   * invalid_params.
+   */
+  target: Record<string, unknown>;
+  /**
+   * What it said; may be empty, but it must be there (else invalid_params). The hub keeps the first 4000 characters.
+   */
+  text: string;
+  /**
+   * One line saying what it was: the first line is kept, cut to 300 characters. Without it the hub makes one from the
+   * connector and the target.
+   */
+  summary?: string;
+  /**
+   * The Persona conversation that asked for the send, when one did. The extension's own word, which the hub cannot
+   * check; cut to 200 characters.
+   */
+  session_id?: string;
+  /**
+   * The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check;
+   * cut to 200 characters.
+   */
+  machine_id?: string;
+  /** The stable external message reference exactly as the hub will store it. */
+  message_ref: string;
+  /**
+   * The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
+   */
+  setting?: string;
+  /**
+   * True only reads the retained entry or its pruning guard, without admitting or performing a write. Omission or
+   * false is write mode.
+   */
+  lookup_only?: boolean;
+}
+
+export interface ConnectorSentRecordOnceResult {
+  message_ref: string;
+  /**
+   * recorded: a retained row matches exactly. missing: lookup-only found no row or guard. pruned: the durable guard
+   * exists but the ledger contents are gone, so no write or exact confirmation is possible.
+   */
+  status: string;
 }
 
 export interface ConnectorGhToken {
@@ -5547,7 +5605,8 @@ export interface LeaderReportEvent {
 /**
  * error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params; assistant_offline
  * (the manager is away: try again); model_unavailable (nothing to call for this extension: the user picks a model for
- * it in Settings › Model configuration); model_paused (the connection is held for quota or load, nothing was sent;
+ * it in Settings › Model configuration); model_local_launcher_required (Lark Context: data.binding carries the local
+ * launcher selection and no credentials); model_paused (the connection is held for quota or load, nothing was sent;
  * data ModelPause: try again after until); model_failed (the upstream failed the request: an error status or a
  * dropped connection); model_refused (the model declined to answer this input, a refusal or a content filter: sending
  * it again unchanged gets the same answer, so split it, drop a part or report it; data ModelRefusal); timeout (past
@@ -5555,8 +5614,8 @@ export interface LeaderReportEvent {
  * data ModelInvalidOutput); model_candidates_failed (with two or more candidates, every one failed; data
  * ModelCandidatesFailed names how each did; a single candidate that fails answers with its own code and data).
  */
-export type ModelErrorCode = "invalid_params" | "assistant_offline" | "model_unavailable" | "model_paused" | "model_failed" | "model_refused" | "timeout" | "invalid_output" | "model_candidates_failed" | (string & {});
-export const MODEL_ERROR_CODES = ["invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"] as const;
+export type ModelErrorCode = "invalid_params" | "assistant_offline" | "model_unavailable" | "model_local_launcher_required" | "model_paused" | "model_failed" | "model_refused" | "timeout" | "invalid_output" | "model_candidates_failed" | (string & {});
+export const MODEL_ERROR_CODES = ["invalid_params", "assistant_offline", "model_unavailable", "model_local_launcher_required", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"] as const;
 
 /**
  * One turn of the conversation: the user's, or the model's earlier answer.
@@ -5589,6 +5648,11 @@ export interface ModelCompleteParams {
   timeout_seconds?: number;
   /** What the call is for (daily, weekly…): it goes in the hub's log line with the usage. */
   label?: string;
+  /**
+   * Lark Context opts into the shared binding before submitting a model call. Older hubs reject this field before
+   * inference.
+   */
+  model_binding?: "extension.lark-context";
   /**
    * Candidate model ids, tried in order (#10398): one that fails (model_failed, model_refused, model_paused), runs
    * past timeout_seconds, answers with no text (model_failed) or, with json_schema, still does not match it after its
@@ -5623,6 +5687,10 @@ export interface ModelCompleteResult {
   json?: unknown;
   /** The model that answered. */
   model: string;
+  /** The resolved provider on direct Lark Context calls. */
+  provider?: string;
+  /** The resolved effort on direct Lark Context calls, when set. */
+  effort?: string;
   /** end_turn, or max_tokens when the answer was cut off. */
   stop_reason: string;
   /** What the call spent; with models, every attempt's requests together. */
@@ -6627,6 +6695,8 @@ export const CALLS: Record<string, Call> = {
   "connector.archive.chats": { from: "program", params: "ConnectorArchiveChatsParams", result: "ConnectorArchivedChats" },
   "connector.credentials.gh_token": { from: "program", params: "ConnectorGhTokenParams", result: "ConnectorGhToken" },
   "sent.record": { from: "program", params: "ConnectorSentRecordParams", result: "Empty" },
+  "sent.record_once": { from: "program", params: "ConnectorSentRecordOnceParams", result: "ConnectorSentRecordOnceResult" },
+  "sent.record_guarded": { from: "program", params: "ConnectorSentRecordOnceParams", result: "ConnectorSentRecordOnceResult" },
   "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
   "channel.receive": { from: "program", params: "ChannelReceiveParams", result: "Empty" },
   "channel.receive_notice": { from: "program", params: "ChannelNoticeParams", result: "ChannelNoticeResult" },

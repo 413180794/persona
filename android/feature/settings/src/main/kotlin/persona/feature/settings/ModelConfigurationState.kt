@@ -29,12 +29,20 @@ internal fun summaryWords(res: Resources, purpose: ModelPurpose, providers: List
 internal fun agentsOverride(purpose: ModelPurpose): Boolean =
     purpose.parent == "agent.new" && purpose.fields.orEmpty().any { it == "provider" || it == "model" || it == "effort" }
 
+internal fun isLarkContext(purpose: ModelPurpose): Boolean =
+    purpose.id == "extension.lark-context" && purpose.parent == "assistant" && purpose.categoryId == "assistant" &&
+        purpose.fields.orEmpty().any { it == "provider" || it == "model" || it == "effort" }
+
 /** A model-only or effort-only selection is also an explicit override, even when its provider is inherited. */
-internal fun agentsOverrideMode(res: Resources, purpose: ModelPurpose): String? =
-    if (!agentsOverride(purpose)) null else res.getString(
-        if (listOf(purpose.override.provider, purpose.override.model, purpose.override.effort).any { !it.isNullOrBlank() })
-            R.string.settings_src_model_agents_separate else R.string.settings_src_model_agents_follow
-    )
+internal fun modelOverrideMode(res: Resources, purpose: ModelPurpose): String? {
+    val follow = when {
+        isLarkContext(purpose) -> R.string.settings_src_model_main_chat_follow
+        agentsOverride(purpose) -> R.string.settings_src_model_agents_follow
+        else -> return null
+    }
+    val overridden = listOf(purpose.override.provider, purpose.override.model, purpose.override.effort).any { !it.isNullOrBlank() }
+    return res.getString(if (overridden) R.string.settings_src_model_agents_separate else follow)
+}
 
 /** How many lines a purpose's row may take: three for what is in effect, and room for what it is for when the hub says so. */
 internal fun purposeSubtitleLines(purpose: ModelPurpose): Int = if (purpose.about != null) 6 else 3
@@ -44,8 +52,8 @@ internal fun purposeSubtitle(res: Resources, purpose: ModelPurpose, catalog: Mod
     purpose.about,
     summaryWords(res, purpose, catalog.providers).joinToString(res.getString(R.string.settings_src_model_summary_separator))
         .ifEmpty { res.getString(R.string.settings_src_state_not_configured) },
-    agentsOverrideMode(res, purpose),
-    purpose.status?.takeIf { it.isNotBlank() } ?: purpose.inheritedFrom?.takeIf { it.isNotBlank() && !agentsOverride(purpose) }?.let { from ->
+    modelOverrideMode(res, purpose),
+    purpose.status?.takeIf { it.isNotBlank() } ?: purpose.inheritedFrom?.takeIf { it.isNotBlank() && !agentsOverride(purpose) && !isLarkContext(purpose) }?.let { from ->
         res.getString(R.string.settings_src_model_follows, catalog.purposes.firstOrNull { it.id == from }?.displayName ?: from)
     },
 ).joinToString("\n")
@@ -55,15 +63,16 @@ internal data class ProviderOption(val id: String, val label: String)
 /** "Use default", then the providers the purpose can use (hidden ones marked), and a reference the hub no longer offers. */
 internal fun providerOptions(res: Resources, purpose: ModelPurpose, providers: List<ModelProvider>, chosen: String): List<ProviderOption> {
     val candidates = purpose.providersFrom(providers)
-    return listOf(ProviderOption("", res.getString(R.string.settings_src_model_follow_default))) +
+    val follow = if (isLarkContext(purpose)) R.string.settings_src_model_main_chat_follow else R.string.settings_src_model_follow_default
+    return listOf(ProviderOption("", res.getString(follow))) +
         candidates.map { ProviderOption(it.id, if (it.hidden) res.getString(R.string.settings_src_model_provider_hidden, it.displayName) else it.displayName) } +
         listOfNotNull(ProviderOption(chosen, res.getString(R.string.settings_src_model_provider_unavailable, chosen))
             .takeIf { chosen.isNotEmpty() && candidates.none { it.id == chosen } })
 }
 
-/** Effort is a field of launchers and of Responses APIs; a Messages API provider has none to set. */
+/** Lark Context advertises effort in its fields. Legacy uses keep their launcher and Responses API rules. */
 internal fun showsEffort(purpose: ModelPurpose, provider: ModelProvider?): Boolean =
-    purpose.supports("effort") && (agentsOverride(purpose) || !(provider?.kind == "api" && provider.api != "responses"))
+    purpose.supports("effort") && (isLarkContext(purpose) || agentsOverride(purpose) || !(provider?.kind == "api" && provider.api != "responses"))
 
 internal data class ModelCatalogState(
     val catalog: ModelCatalog? = null,

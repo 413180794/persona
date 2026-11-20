@@ -115,16 +115,16 @@ func TestRegistrySnapshotKeepsProcessState(t *testing.T) {
 	}
 }
 
-// A token of every scope has every scope but agents.permission_mode and assistant.start_defaults, which the install
-// screen still lists: an extension gets them only by name.
+// Named-only scopes appear on the install screen and require a separate grant.
 func TestEveryScopeLeavesOutThePermissionMode(t *testing.T) {
 	every := EveryScope()
-	for _, named := range []string{ScopeAgentsPermissionMode, ScopeAssistantStartDefaults} {
+	namedOnly := []string{ScopeAgentsPermissionMode, ScopeAssistantStartDefaults, ScopeChannelNotice}
+	for _, named := range namedOnly {
 		if slices.Contains(every, named) || !slices.Contains(HubScopes, named) || InEveryScope(named) {
 			t.Fatalf("every scope has %s: %v", named, every)
 		}
 	}
-	if len(every) != len(HubScopes)-2 || !InEveryScope(ScopeAgentsControl) || !InEveryScope(ScopeAssistantDispatchPolicy) {
+	if len(every) != len(HubScopes)-len(namedOnly) || !InEveryScope(ScopeAgentsControl) || !InEveryScope(ScopeAssistantDispatchPolicy) {
 		t.Fatalf("every scope: %v", every)
 	}
 	every[0] = "x"

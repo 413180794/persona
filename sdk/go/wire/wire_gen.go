@@ -4354,8 +4354,10 @@ type ConnectorGhTokenParams struct {
 // own that declares it may: else permission_denied. The hub sets the row's origin (the extension; session_id and
 // machine_id are kept beside it) and how it was let through (kind auto, with setting) itself. Errors:
 // permission_denied, invalid_params, rate_limited (data {retry_after} in seconds: 60 calls at once per extension,
-// then one a second, whether or not they were allowed), and no_database on a hub without a database; a ledger that
-// cannot be written is an error with a message and no code. Recording is best effort: it never undoes the send.
+// then one a second, whether or not they were allowed), no_database on a hub without a database, and admission_closed
+// / admission_unavailable while write admission is paused or unavailable, and conflict when a reference already
+// guarded by sent.record_once cannot be confirmed; a ledger that cannot be written is an error with a message and no
+// code. Recording is best effort: it never undoes the send.
 type ConnectorSentRecordParams struct {
 	Contribution string `json:"contribution"`
 	// Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
@@ -4379,6 +4381,45 @@ type ConnectorSentRecordParams struct {
 	MessageRef string `json:"message_ref,omitempty"`
 	// The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
 	Setting string `json:"setting,omitempty"`
+}
+
+// ConnectorSentRecordOnceParams: sent.record_guarded / sent.record_once: a connector that declares sends_as_user
+// records one entry for an exact message_ref or strictly reads it with lookup_only. Errors: permission_denied,
+// invalid_params, rate_limited (data {retry_after} in seconds), no_database, conflict (ambiguous retained rows or
+// mismatched contents), and admission_closed / admission_unavailable for write mode. On older hubs the call may
+// return unknown_method.
+type ConnectorSentRecordOnceParams struct {
+	Contribution string `json:"contribution"`
+	// Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
+	// value that is not a string, a number, a boolean or a list of up to 10 strings is dropped, and so is an empty
+	// string. The hub keeps 20 keys at most, in key order, each name cut to 64 characters. Anything but an object is
+	// invalid_params.
+	Target map[string]json.RawMessage `json:"target"`
+	// What it said; may be empty, but it must be there (else invalid_params). The hub keeps the first 4000 characters.
+	Text string `json:"text"`
+	// One line saying what it was: the first line is kept, cut to 300 characters. Without it the hub makes one from the
+	// connector and the target.
+	Summary string `json:"summary,omitempty"`
+	// The Persona conversation that asked for the send, when one did. The extension's own word, which the hub cannot
+	// check; cut to 200 characters.
+	SessionID string `json:"session_id,omitempty"`
+	// The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check;
+	// cut to 200 characters.
+	MachineID string `json:"machine_id,omitempty"`
+	// The stable external message reference exactly as the hub will store it.
+	MessageRef string `json:"message_ref"`
+	// The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
+	Setting string `json:"setting,omitempty"`
+	// True only reads the retained entry or its pruning guard, without admitting or performing a write. Omission or
+	// false is write mode.
+	LookupOnly bool `json:"lookup_only,omitempty"`
+}
+
+type ConnectorSentRecordOnceResult struct {
+	MessageRef string `json:"message_ref"`
+	// recorded: a retained row matches exactly. missing: lookup-only found no row or guard. pruned: the durable guard
+	// exists but the ledger contents are gone, so no write or exact confirmation is possible.
+	Status string `json:"status"`
 }
 
 type ConnectorGhToken struct {
@@ -5162,7 +5203,8 @@ type LeaderReportEvent struct {
 
 // ModelErrorCode: error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params;
 // assistant_offline (the manager is away: try again); model_unavailable (nothing to call for this extension: the user
-// picks a model for it in Settings › Model configuration); model_paused (the connection is held for quota or load,
+// picks a model for it in Settings › Model configuration); model_local_launcher_required (Lark Context: data.binding
+// carries the local launcher selection and no credentials); model_paused (the connection is held for quota or load,
 // nothing was sent; data ModelPause: try again after until); model_failed (the upstream failed the request: an error
 // status or a dropped connection); model_refused (the model declined to answer this input, a refusal or a content
 // filter: sending it again unchanged gets the same answer, so split it, drop a part or report it; data ModelRefusal);
@@ -5170,19 +5212,20 @@ type LeaderReportEvent struct {
 // one more try; data ModelInvalidOutput); model_candidates_failed (with two or more candidates, every one failed;
 // data ModelCandidatesFailed names how each did; a single candidate that fails answers with its own code and data).
 const (
-	ModelErrorCodeInvalidParams         = "invalid_params"
-	ModelErrorCodeAssistantOffline      = "assistant_offline"
-	ModelErrorCodeModelUnavailable      = "model_unavailable"
-	ModelErrorCodeModelPaused           = "model_paused"
-	ModelErrorCodeModelFailed           = "model_failed"
-	ModelErrorCodeModelRefused          = "model_refused"
-	ModelErrorCodeTimeout               = "timeout"
-	ModelErrorCodeInvalidOutput         = "invalid_output"
-	ModelErrorCodeModelCandidatesFailed = "model_candidates_failed"
+	ModelErrorCodeInvalidParams              = "invalid_params"
+	ModelErrorCodeAssistantOffline           = "assistant_offline"
+	ModelErrorCodeModelUnavailable           = "model_unavailable"
+	ModelErrorCodeModelLocalLauncherRequired = "model_local_launcher_required"
+	ModelErrorCodeModelPaused                = "model_paused"
+	ModelErrorCodeModelFailed                = "model_failed"
+	ModelErrorCodeModelRefused               = "model_refused"
+	ModelErrorCodeTimeout                    = "timeout"
+	ModelErrorCodeInvalidOutput              = "invalid_output"
+	ModelErrorCodeModelCandidatesFailed      = "model_candidates_failed"
 )
 
 // ModelErrorCodes are the values of ModelErrorCode, in order.
-var ModelErrorCodes = []string{"invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"}
+var ModelErrorCodes = []string{"invalid_params", "assistant_offline", "model_unavailable", "model_local_launcher_required", "model_paused", "model_failed", "model_refused", "timeout", "invalid_output", "model_candidates_failed"}
 
 // ModelMessage: one turn of the conversation: the user's, or the model's earlier answer.
 type ModelMessage struct {
@@ -5215,6 +5258,9 @@ type ModelCompleteParams struct {
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
 	// What the call is for (daily, weekly…): it goes in the hub's log line with the usage.
 	Label string `json:"label,omitempty"`
+	// Lark Context opts into the shared binding before submitting a model call. Older hubs reject this field before
+	// inference.
+	ModelBinding string `json:"model_binding,omitempty"`
 	// Candidate model ids, tried in order (#10398): one that fails (model_failed, model_refused, model_paused), runs
 	// past timeout_seconds, answers with no text (model_failed) or, with json_schema, still does not match it after its
 	// second try (invalid_output) hands over to the next. Each runs on a provider the user configured in Settings ›
@@ -5245,6 +5291,10 @@ type ModelCompleteResult struct {
 	JSON json.RawMessage `json:"json,omitempty"`
 	// The model that answered.
 	Model string `json:"model"`
+	// The resolved provider on direct Lark Context calls.
+	Provider string `json:"provider,omitempty"`
+	// The resolved effort on direct Lark Context calls, when set.
+	Effort string `json:"effort,omitempty"`
 	// end_turn, or max_tokens when the answer was cut off.
 	StopReason string `json:"stop_reason"`
 	// What the call spent; with models, every attempt's requests together.
@@ -6822,6 +6872,8 @@ var newDef = map[string]func() any{
 	"ConnectorSecretSaveParams":     func() any { return new(ConnectorSecretSaveParams) },
 	"ConnectorGhTokenParams":        func() any { return new(ConnectorGhTokenParams) },
 	"ConnectorSentRecordParams":     func() any { return new(ConnectorSentRecordParams) },
+	"ConnectorSentRecordOnceParams": func() any { return new(ConnectorSentRecordOnceParams) },
+	"ConnectorSentRecordOnceResult": func() any { return new(ConnectorSentRecordOnceResult) },
 	"ConnectorGhToken":              func() any { return new(ConnectorGhToken) },
 	"ConnectorPostsPutParams":       func() any { return new(ConnectorPostsPutParams) },
 	"ConnectorPostPut":              func() any { return new(ConnectorPostPut) },
@@ -7026,6 +7078,8 @@ var Calls = map[string]Call{
 	"connector.archive.chats":        {Name: "connector.archive.chats", From: "program", Params: "ConnectorArchiveChatsParams", Result: "ConnectorArchivedChats"},
 	"connector.credentials.gh_token": {Name: "connector.credentials.gh_token", From: "program", Params: "ConnectorGhTokenParams", Result: "ConnectorGhToken"},
 	"sent.record":                    {Name: "sent.record", From: "program", Params: "ConnectorSentRecordParams", Result: "Empty"},
+	"sent.record_once":               {Name: "sent.record_once", From: "program", Params: "ConnectorSentRecordOnceParams", Result: "ConnectorSentRecordOnceResult"},
+	"sent.record_guarded":            {Name: "sent.record_guarded", From: "program", Params: "ConnectorSentRecordOnceParams", Result: "ConnectorSentRecordOnceResult"},
 	"connector.changed":              {Name: "connector.changed", From: "program", Params: "ConnectorChangedEvent", Result: "", Event: true},
 	"channel.receive":                {Name: "channel.receive", From: "program", Params: "ChannelReceiveParams", Result: "Empty"},
 	"channel.receive_notice":         {Name: "channel.receive_notice", From: "program", Params: "ChannelNoticeParams", Result: "ChannelNoticeResult"},

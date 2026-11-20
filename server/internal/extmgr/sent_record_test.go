@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/extension"
@@ -45,6 +46,59 @@ func sentExtensionSpec(t *testing.T, h *Manager, id, connectors string) host.Spe
 func sentRecord(spec host.Spec, params string) error {
 	_, err := spec.Handle(context.Background(), connector.MethodSentRecord, json.RawMessage(params))
 	return err
+}
+
+func TestSentRecordOnceRPC(t *testing.T) {
+	st := storagePostgres(t)
+	h := newTestManager(t)
+	h.store = st
+	spec := sentExtensionSpec(t, h, "record-once", `[
+		{"id":"exactrecord","name":"Exact Record","capabilities":["status"],"sends_as_user":true}]`)
+	params := `{"contribution":"exactrecord","target":{"chat":"private"},"text":"synthetic","message_ref":"exact-test-1"}`
+	lookup := strings.TrimSuffix(params, "}") + `,"lookup_only":true}`
+	call := func(fields string, want string) {
+		t.Helper()
+		result, err := spec.Handle(t.Context(), connector.MethodSentRecordOnce, json.RawMessage(fields))
+		got, ok := result.(connector.SentRecordOnceResult)
+		if err != nil || !ok || got.MessageRef != "exact-test-1" || got.Status != want {
+			t.Fatalf("expected %s, got %#v, %v", want, result, err)
+		}
+		raw, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := wire.ValidateResult(connector.MethodSentRecordOnce, raw); err != nil {
+			t.Fatalf("Hub returned %s: %v", raw, err)
+		}
+	}
+	call(lookup, "missing")
+	call(params, "recorded")
+	call(params, "recorded")
+	call(lookup, "recorded")
+	rows, _, err := st.SentAsUsers(t.Context(), 0, 10, "exactrecord")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ledger after replay: %d rows, %v", len(rows), err)
+	}
+	_, err = spec.Handle(t.Context(), connector.MethodSentRecordOnce,
+		json.RawMessage(strings.Replace(params, "synthetic", "mismatch", 1)))
+	wantRPCCode(t, "ref reuse with a different payload", err, "conflict")
+	_, err = spec.Handle(t.Context(), connector.MethodSentRecordOnce,
+		json.RawMessage(strings.Replace(params, "exactrecord", "other-connector", 1)))
+	wantRPCCode(t, "another connector", err, "permission_denied")
+	for _, value := range []string{`"true"`, "null", "1", "{}", "[]"} {
+		bad := strings.TrimSuffix(params, "}") + `,"lookup_only":` + value + "}"
+		_, err := spec.Handle(t.Context(), connector.MethodSentRecordOnce, json.RawMessage(bad))
+		wantRPCCode(t, "strict lookup_only "+value, err, "invalid_params")
+	}
+	if _, err := st.PruneSentAsUser(t.Context(), time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	call(lookup, "pruned")
+	call(params, "pruned")
+	rows, _, err = st.SentAsUsers(t.Context(), 0, 10, "exactrecord")
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("pruned entry was reinserted: %d rows, %v", len(rows), err)
+	}
 }
 
 func wantRPCCode(t *testing.T, what string, err error, code string) {

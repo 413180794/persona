@@ -219,10 +219,14 @@ struct ModelPurposeEditorView: View {
                         }
                     }
                     if page.allowsEffort {
+                        let usesAPI = page.larkContextUsesAPI
+                        let effortLevels = usesAPI ? SessionModes.codexEffortLevels : SessionModes.startEffortLevels
                         Picker("Thinking Effort", selection: optional(\.effort)) {
                             Text("Default [Model Configuration View a44f9f]").tag("")
-                            ForEach(SessionModes.startEffortLevels) { Text($0.title).tag($0.id) }
-                            if let effort = page.draft.effort, !SessionModes.startEffortLevels.contains(where: { $0.id == effort }) {
+                            if usesAPI { Text("Off").tag("off") }
+                            ForEach(effortLevels) { Text($0.title).tag($0.id) }
+                            if let effort = page.draft.effort, !(usesAPI && effort == "off"),
+                               !effortLevels.contains(where: { $0.id == effort }) {
                                 Text(effort).tag(effort)
                             }
                         }
@@ -244,10 +248,12 @@ struct ModelPurposeEditorView: View {
                     DisclosureGroup(isExpanded: $advancedExpanded) {
                         if purpose.supports("provider") { providerPicker }
                         if !page.runtimes.isEmpty { runtimePicker }
-                        if let source = purpose.inheritedFrom, !source.isEmpty {
+                        if !page.isLarkContext, let source = purpose.inheritedFrom, !source.isEmpty {
                             LabeledContent("Inherited From", value: page.isAgentsOverride ? String(localized: "Agents") : source)
                         }
-                        Text(advancedExplanation).font(Theme.Font.caption).foregroundStyle(.secondary)
+                        if !page.isLarkContext {
+                            Text(advancedExplanation).font(Theme.Font.caption).foregroundStyle(.secondary)
+                        }
                     } label: {
                         Text("Advanced").lineLimit(1)
                             .accessibilityIdentifier("model-config-advanced")

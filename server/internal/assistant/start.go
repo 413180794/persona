@@ -869,7 +869,7 @@ func requestOrigin(r *http.Request, purpose string) (origin, ref string) {
 		return OriginUser, ""
 	}
 	ext := r.Header.Get(ExtensionHeader)
-	if purpose == purposeLarkAgent {
+	if purpose == purposeLarkAgent || purpose == purposeLarkContextAgent {
 		return OriginLarkAgent, ext
 	}
 	return OriginExtension, ext

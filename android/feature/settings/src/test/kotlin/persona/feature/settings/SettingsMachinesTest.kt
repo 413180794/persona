@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import persona.core.contracts.DetectedEngine
+import persona.core.contracts.JsonCodec
 import persona.core.contracts.Machine
 import persona.core.contracts.api.*
 import persona.core.domain.engines.Engines
@@ -16,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -303,17 +305,47 @@ class ModelConfigurationStateTest {
     @Test fun agentsOverrideModeIncludesPartialOverrides() {
         for (id in agentsOverrides) {
             val child = agent.copy(id = id, parent = "agent.new", inheritedFrom = "Agents")
-            assertEquals("跟随 Agents", agentsOverrideMode(res, child))
+            assertEquals("跟随 Agents", modelOverrideMode(res, child))
             assertTrue(purposeSubtitle(res, child.copy(status = "offline"), catalog).contains("跟随 Agents"))
             for (override in listOf(ModelBinding("launcher.old"), ModelBinding(model = "custom"), ModelBinding(effort = "high"))) {
-                assertEquals("单独设置", agentsOverrideMode(res, child.copy(override = override)))
+                assertEquals("单独设置", modelOverrideMode(res, child.copy(override = override)))
             }
             assertTrue(showsEffort(child, providers[2]))
             // An older hub leaves it without fields: read-only, following Agents as any other use.
-            assertNull(agentsOverrideMode(res, child.copy(fields = emptyList())))
+            assertNull(modelOverrideMode(res, child.copy(fields = emptyList())))
         }
-        assertNull(agentsOverrideMode(res, agent))
-        assertNull(agentsOverrideMode(res, triage.copy(id = "inbox.judge", parent = "inbox.triage", fields = listOf("provider", "model"))))
+        assertNull(modelOverrideMode(res, agent))
+        assertNull(modelOverrideMode(res, triage.copy(id = "inbox.judge", parent = "inbox.triage", fields = listOf("provider", "model"))))
+    }
+
+    @Test fun larkContextShowsMainChatAndUsesTheAdvertisedProvidersAndEffort() {
+        val lark = JsonCodec.decodeFromString<ModelPurpose>("""{
+            "id":"extension.lark-context","name":"Lark Context","group":"Extensions","kind":"launcher","launch":"headless",
+            "parent":"assistant","category_id":"assistant","machine_id":"server","revision":7,"override":{},
+            "effective":{"provider":"launcher.claude","model":"model-chat","effort":"high"},"inherited_from":"主对话",
+            "fields":["provider","model","effort"],"provider_ids":["launcher.claude","launcher.fixture-api"]
+        }""")
+        val unified = catalog.copy(purposes = catalog.purposes + lark)
+        assertEquals(chat.effective, lark.effective)
+        assertEquals(listOf(lark), modelPurposeGroups(res, unified.purposes, providers, "Lark").single().second)
+        assertTrue(purposeSubtitle(res, lark, unified).contains("model-chat"))
+        assertEquals("跟随主对话", purposeSubtitle(res, lark, unified).lines().last())
+        assertEquals("单独设置", modelOverrideMode(res, lark.copy(override = ModelBinding(effort = "low"))))
+        for (api in listOf("messages", "responses", "chat")) {
+            val direct = ModelProvider("launcher.fixture-api", "Direct API", kind = "api", api = api)
+            val options = providerOptions(res, lark, providers + direct, "")
+            assertEquals(listOf("", "launcher.claude", direct.id), options.map { it.id })
+            assertEquals("跟随主对话", options.first().label)
+            assertTrue(showsEffort(lark, direct))
+            assertFalse(showsEffort(lark.copy(fields = listOf("model", "provider")), direct))
+            val edit = ModelConfigurationDraft().choosingProvider(direct.id).copy(model = "lark-model", effort = "off")
+            assertEquals(JsonPrimitive("off"), edit.patch(lark)["effort"])
+        }
+        val legacy = lark.copy(kind = "api", parent = "kb", categoryId = "kb")
+        assertNull(modelOverrideMode(res, legacy))
+        assertFalse(showsEffort(legacy, providers.last()))
+        assertEquals(Json.parseToJsonElement("""{"revision":7,"provider":null,"model":null,"effort":null}"""),
+            ModelConfigurationDraft.Restore.patch(lark))
     }
 
     @Test fun agentsOverrideEditorSavesOwnRevisionAndRestoresFollowing() = runBlocking {
@@ -340,9 +372,9 @@ class ModelConfigurationStateTest {
             model.load()
             model.edit(ModelConfigurationDraft(provider = "launcher.old", model = "custom", effort = "high"))
             assertNotNull(model.save())
-            assertEquals("单独设置", agentsOverrideMode(res, requireNotNull(model.state.value.purpose)))
+            assertEquals("单独设置", modelOverrideMode(res, requireNotNull(model.state.value.purpose)))
             assertNotNull(model.save(restore = true))
-            assertEquals("跟随 Agents", agentsOverrideMode(res, requireNotNull(model.state.value.purpose)))
+            assertEquals("跟随 Agents", modelOverrideMode(res, requireNotNull(model.state.value.purpose)))
             assertEquals(listOf(purposeId), ids)
             assertEquals(listOf(0L, 1L), revisions)
         }

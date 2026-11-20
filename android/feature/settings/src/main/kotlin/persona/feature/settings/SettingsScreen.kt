@@ -652,7 +652,7 @@ private fun SettingsPageContent(
         "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
             // The model of the current assistant's agent there, as the page's connector is that one's.
             onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent", owner)) ?: run { purposeManager = owner; purpose = "lark.agent"; page = "models" }
-        })
+        }, models = mine.models.takeUnless { services.demo })
         // "Messages" has its own page, as on iOS: "Hand to Persona", its steps on the Mac, "Conversations" (MessagesConnector.kt).
         else -> if (page == "connector/imessage") {
             MessagesConnectorPage(connectorsService, onBack = back)

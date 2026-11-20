@@ -248,6 +248,7 @@
     <string name="settings_src_model_follows">Follows %1$s</string>
     <string name="settings_src_model_agents_separate">Separately configured</string>
     <string name="settings_src_model_agents_follow">Follow Agents</string>
+    <string name="settings_src_model_main_chat_follow">Follow Main chat</string>
     <string name="settings_src_model_follow_default">Use default</string>
     <string name="settings_src_model_provider_hidden">%1$s (hidden)</string>
     <string name="settings_src_model_provider_unavailable">%1$s (no longer available)</string>

@@ -149,6 +149,57 @@ class ModelConfigurationScreenTest {
         advancedReads(false)
     }
 
+    @Test fun larkContextRendersItsInheritedModelAndDirectApiEditor() {
+        val launcher = ModelProvider("launcher.main", "Main launcher")
+        val direct = ModelProvider("launcher.fixture-api", "Chat connection", kind = "api", api = "chat")
+        val main = purposes.first().copy(effective = ModelBinding(launcher.id, "main-model", "medium"))
+        val lark = ModelPurpose("extension.lark-context", "Lark Context", "Extensions", kind = "launcher",
+            parent = "assistant", categoryId = "assistant", effective = main.effective,
+            fields = listOf("provider", "model", "effort"), providerIds = listOf(launcher.id, direct.id))
+        val binding = ModelBinding(direct.id, "lark-model", "off")
+        val api = object : ModelConfiguration {
+            override suspend fun catalog() = ModelCatalog(listOf(main, lark), listOf(launcher, direct))
+            override suspend fun purpose(id: String): ModelPurposeDetail {
+                if (id != lark.id) throw ModelPurposeNotFound(id)
+                return ModelPurposeDetail(lark.copy(override = binding, effective = binding), listOf(launcher, direct))
+            }
+            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = error("No edit")
+            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
+        }
+        var editing by mutableStateOf(false)
+        var dark by mutableStateOf(false)
+        rule.setContent {
+            CompositionLocalProvider(LocalManagerRoster provides roster) {
+                PersonaTheme(darkTheme = dark, reduceMotion = true) {
+                    Box(Modifier.testTag("lark-context-shot").width(400.dp).height(1200.dp).background(PersonaTheme.palette.background)) {
+                        if (editing) ModelPurposePage(api, lark.id, onBack = { editing = false })
+                        else ModelConfigurationPage(api, onBack = {}, onPurpose = { _, _ -> editing = true })
+                    }
+                }
+            }
+        }
+        for (night in listOf(false, true)) {
+            rule.runOnIdle { dark = night; editing = false }
+            rule.onAllNodesWithText("Lark Context").assertCountEquals(1)
+            rule.onNodeWithText("Lark /agent").assertDoesNotExist()
+            rule.onNodeWithText("Follow Main chat", substring = true).assertIsDisplayed()
+            captureLarkContext("catalog", night)
+            rule.onNodeWithText("Lark Context").performClick()
+            assertTrue(rule.onAllNodesWithText("Chat connection").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(rule.onAllNodesWithText("lark-model").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(rule.onAllNodesWithText("off").fetchSemanticsNodes().isNotEmpty())
+            rule.onNodeWithText("Follow Main chat").assertHasClickAction()
+            captureLarkContext("editor", night)
+        }
+    }
+
+    private fun captureLarkContext(page: String, dark: Boolean) {
+        val mode = if (dark) "dark" else "light"
+        File(out(), "lark-context-$page-$mode.png").outputStream().use {
+            assertTrue(rule.onNodeWithTag("lark-context-shot").captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
+        }
+    }
+
     /**
      * #5086 and #5806: the hub's sentence for a purpose is under its name in the list and on its own page; the listed
      * background supervisor is drawn once, after the last use of its group, and is not asked for by id.

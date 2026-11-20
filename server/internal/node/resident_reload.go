@@ -14,11 +14,13 @@ import (
 // ResidentReload drains work while Attach is still serving. Only the final exec closes existing connections;
 // idle conversations that need the SIGKILL fallback are reaped before that transport gap begins.
 type ResidentReload struct {
-	mu     sync.Mutex
-	active int
-	paused bool
-	idle   chan struct{}
-	peers  map[*rpc.Peer]func()
+	mu                 sync.Mutex
+	active             int
+	paused             bool
+	checkpoint         chan struct{}
+	checkpointReadBusy bool
+	idle               chan struct{}
+	peers              map[*rpc.Peer]func()
 }
 
 func (r *ResidentReload) enter() (func(), error) {
@@ -27,7 +29,7 @@ func (r *ResidentReload) enter() (func(), error) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.paused {
+	if r.paused || r.checkpoint != nil {
 		return nil, &rpc.Error{Code: nodeproto.CodeRestarting, Message: nodeproto.CodeRestarting}
 	}
 	if r.active == 0 {
@@ -75,6 +77,15 @@ func (r *ResidentReload) Prepare(ctx context.Context) error {
 			return err
 		}
 		r.mu.Lock()
+		if end := r.checkpoint; end != nil {
+			r.mu.Unlock()
+			select {
+			case <-end:
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
 		idle, ready := r.idle, r.active == 0
 		if ready {
 			r.paused = true

@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
@@ -35,6 +36,7 @@ import (
 
 // BusOptions are where the hub is and how to reach it.
 type BusOptions struct {
+	Admission *admission.Gate
 	// ID is the manager it connects as, the one its token is for (manager.hello); "" is the assistant the hub starts.
 	ID         string
 	Hub        string // the hub's base URL (http(s)://host:port)
@@ -499,6 +501,21 @@ func (b *BusHub) httpHandler(s *Service) http.Handler {
 	return b.httpH
 }
 
+func (b *BusHub) admittedHTTP(s *Service) http.Handler {
+	next := b.httpHandler(s)
+	if b.opts.Admission == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		done, ok := b.opts.Admission.HTTP("manager-http", w)
+		if !ok {
+			return
+		}
+		defer done()
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (b *BusHub) request(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	b.waitHello(ctx)
 	s := b.service()
@@ -515,7 +532,7 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		defer memtrim.AfterLarge(len(p.Body)) // a large upload's buffers go back to the system after it
-		return serveHTTP(ctx, b.httpHandler(s), p, s.lang)
+		return serveHTTP(ctx, b.admittedHTTP(s), p, s.lang)
 	case assistantwire.MethodHTTPStreamed: // http.request with its body on a relay of its own (bus_body.go)
 		var p assistantwire.HTTPRequest
 		if err := decode(&p); err != nil {
@@ -527,7 +544,7 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		}
 		p.Body, p.BodyStream = body, nil
 		defer memtrim.AfterLarge(len(p.Body))
-		return serveHTTP(ctx, b.httpHandler(s), p, s.lang)
+		return serveHTTP(ctx, b.admittedHTTP(s), p, s.lang)
 	case assistantwire.MethodTools:
 		return map[string]any{"tools": s.Tools(ctx)}, nil
 	case assistantwire.MethodTool:
@@ -634,6 +651,12 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		return map[string]any{}, s.FeishuMessage(ctx, p)
+	case assistantwire.MethodFeishuRecall:
+		var p FeishuRecalled
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"stored": true}, s.acceptFeishuRecall(ctx, p)
 	case assistantwire.MethodFeishuAction:
 		var p FeishuAction
 		if err := decode(&p); err != nil {

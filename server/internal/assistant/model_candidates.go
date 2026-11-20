@@ -387,7 +387,7 @@ func candidateView(c modelCandidate) CandidateView {
 // patchCandidates reads PATCH's candidates: null goes back to the extension's lists, an object is a mode and, for
 // custom, the user's list; each provider one of p's, each model a model id or empty for the provider's default.
 func (s *Service) patchCandidates(ctx context.Context, p ModelPurpose, raw json.RawMessage) (*candidateSetting, error) {
-	if !isExtensionPurpose(p.ID) {
+	if !isExtensionPurpose(p.ID) || p.ID == larkContextModelPurposeID {
 		return nil, i18n.Err("assistant-models.err_candidates_extension_only")
 	}
 	if string(raw) == "null" {

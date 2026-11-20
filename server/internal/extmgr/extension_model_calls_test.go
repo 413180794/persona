@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +13,45 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
+
+func TestExtensionModelCallTransportsLocalLauncherBinding(t *testing.T) {
+	h := newTestManager(t)
+	const installedID = "current-context"
+	program := kbExtensionSpec(t, h, installedID, extension.Permissions{Hub: []string{extension.ScopeModels}})
+	h.extensions.reg.GetExact(installedID).Record.StorageID = "lark-context"
+	const data = `{"binding":{"provider":"launcher.work-codex","runtime":"codex","model":"gpt-5.6-sol","effort":"xhigh"}}`
+	const params = `{"messages":[{"role":"user","content":"Summarize this."}]}`
+	h.opts.Assistant = func(_ context.Context, method string, raw json.RawMessage) (json.RawMessage, error) {
+		switch method {
+		case assistantwire.MethodExtensionIdentity:
+			return json.RawMessage(`{"supported":true}`), nil
+		case assistantwire.MethodModelsExtensionComplete:
+			var env assistantwire.ExtensionComplete
+			if err := json.Unmarshal(raw, &env); err != nil || env.Extension != installedID || env.StorageKey() != "lark-context" || string(env.Params) != params {
+				t.Errorf("assistant received the wrong envelope: %s (%v)", raw, err)
+			}
+			return nil, &rpc.Error{Code: assistantwire.CodeModelLocalLauncherRequired, Message: "requires its local launcher", Data: json.RawMessage(data)}
+		default:
+			t.Errorf("unexpected assistant method: %s", method)
+			return nil, errors.New("unexpected assistant method")
+		}
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	client, manager := rpc.New("program", a), rpc.New("manager", b)
+	manager.OnRequest = program.Handle
+	go func() { _ = client.Serve(ctx, a) }()
+	go func() { _ = manager.Serve(ctx, b) }()
+	var out json.RawMessage
+	err := client.Call(ctx, assistantwire.MethodModelComplete, json.RawMessage(params), &out)
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != assistantwire.CodeModelLocalLauncherRequired || string(re.Data) != data || len(out) != 0 {
+		t.Fatalf("program got reply %s, error %+v", out, re)
+	}
+}
 
 func TestExtensionIdentityAssistantCapabilityAndRegisteredStorageOwner(t *testing.T) {
 	h := newTestManager(t)

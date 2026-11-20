@@ -163,3 +163,58 @@ func TestFeishuRecallAfterTheAnswerChangesNothing(t *testing.T) {
 		t.Fatalf("posts %v, reacts %v, unreacts %v, interrupted %v", (*posts)[n:], *reacts, *unreacts, f.interrupted())
 	}
 }
+
+func TestGuardedFoldedRecallStoresOnlyAcknowledgedOriginal(t *testing.T) {
+	for _, loseCard := range []bool{false, true} {
+		name := "acks"
+		if loseCard {
+			name = "lost-card"
+		}
+		t.Run(name, func(t *testing.T) {
+			g, control := receiptGate(t)
+			s, f, r, _, _, _, unreacts := recallHub(t)
+			s.maintenanceGate = g
+			const attempt = "guarded-recall-attempt"
+			event := FeishuRecalled{MessageID: "om_m0", AdmissionEventID: "ev_folded_0"}
+			s.chans.mu.Lock()
+			r.Folded = []channel.Folded{{ReplyTo: event.MessageID, Ext: map[string]string{"reaction": "r_old", "card": "om_card0"}}}
+			r.MsgIDs = []string{channel.ClientMsgID(channel.Feishu, event.MessageID), channel.ClientMsgID(channel.Feishu, "om_m1")}
+			s.chans.mu.Unlock()
+			if loseCard {
+				f.answerApp(AppFeishu, FeishuUpdateCard, func(json.RawMessage) (any, error) {
+					return nil, context.DeadlineExceeded
+				})
+			}
+			parent, err := g.AdmitExclusivePayload("feishu-recall", event.AdmissionEventID, []byte("fixture"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			control("close", attempt)
+			err = s.acceptFeishuRecall(t.Context(), event)
+			if (err != nil) != loseCard {
+				t.Fatalf("guarded callback result: %v", err)
+			}
+			if !loseCard {
+				// Retain the original outer ticket as if its response was lost.
+				// The persisted exact terminal allows a readback without another card effect.
+				if err := s.acceptFeishuRecall(t.Context(), event); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if len(*unreacts) != 1 || (*unreacts)[0]["reaction_id"] != "r_old" {
+				t.Fatalf("reaction was repeated or changed: %v", *unreacts)
+			}
+			parent()
+			state := control("check", attempt)
+			if loseCard && state.Active["feishu-recall-apply"] != 1 || !loseCard && state.Phase != "drained" {
+				t.Fatalf("wrong acknowledgement boundary: %+v", state)
+			}
+			s.fbot.mu.Lock()
+			defer s.fbot.mu.Unlock()
+			terminal := s.fbot.st.RecallSettled[event.AdmissionEventID]
+			if (!loseCard && terminal.MessageID != event.MessageID) || (loseCard && terminal.MessageID != "") {
+				t.Fatalf("unexpected exact terminal: %+v", terminal)
+			}
+		})
+	}
+}

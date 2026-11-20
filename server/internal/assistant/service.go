@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistant/repository"
 	"github.com/nwverse/persona/server/internal/assistant/saved"
@@ -63,7 +64,8 @@ type Options struct {
 // Service is the assistant. It implements Handler.
 type Service struct {
 	// agentDirs keeps each computer's hidden Agent folders (hidden_agent_dirs.go); nil: none.
-	agentDirs AgentDirs
+	agentDirs       AgentDirs
+	maintenanceGate *admission.Gate
 	// remoteImages fetches the pictures replies name by address for the apps (remote_image.go).
 	remoteImages *remoteimage.Fetcher
 	// inboxExt is what the extensions wrote for the Inbox, read at most once a minute (extension_context.go).

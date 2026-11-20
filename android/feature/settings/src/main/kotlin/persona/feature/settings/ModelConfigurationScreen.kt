@@ -236,10 +236,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.effective(res: Resour
     itemsIndexed(rows, key = { _, it -> "effective-${it.first}" }) { index, (label, value) ->
         JGroupItem(GroupPosition.of(index, rows.size)) { JRow(stringResource(label), value = value) }
     }
-    agentsOverrideMode(res, purpose)?.let { mode ->
-        item("agents-override-mode") { SettingsCaption(mode, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
+    modelOverrideMode(res, purpose)?.let { mode ->
+        item("override-mode") { SettingsCaption(mode, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
     }
-    purpose.inheritedFrom?.takeIf { it.isNotBlank() }?.let { from ->
+    purpose.inheritedFrom?.takeIf { it.isNotBlank() && !isLarkContext(purpose) }?.let { from ->
         item("effective-note") { SettingsCaption(stringResource(R.string.settings_src_model_inherited_from, from), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
     }
 }
@@ -298,7 +298,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.form(
     if (purpose.kind == "plugin") item("plugin") { JNotice(stringResource(R.string.settings_src_model_plugin_note), title = stringResource(R.string.settings_src_model_plugin_title)) }
     item("restore") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-            JRow(stringResource(R.string.settings_src_model_restore), leadingIcon = PhIcons.ArrowUUpLeft, enabled = editable && !state.conflict, chevron = false, onClick = onRestore)
+            val label = if (isLarkContext(purpose)) R.string.settings_src_model_main_chat_follow else R.string.settings_src_model_restore
+            JRow(stringResource(label), leadingIcon = PhIcons.ArrowUUpLeft, enabled = editable && !state.conflict, chevron = false, onClick = onRestore)
         }
     }
 }

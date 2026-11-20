@@ -76,6 +76,11 @@ func (s *Service) modelProviderCompatible(p ModelPurpose, v ModelProvider, store
 	if externalProvider(v.ID) {
 		return false // a persisted main-chat pick is not a purpose configuration
 	}
+	larkContext := p.ID == larkContextModelPurposeID
+	if larkContext && v.Kind == "api" {
+		// Direct completion is independent of the provider's scope for native launches on computers.
+		return messagesAPI(v.API) || v.API == "responses" || v.API == "chat"
+	}
 	compatible := v.Kind == p.Kind
 	if p.Kind == "launcher" && v.Kind == "api" { // a direct Messages API provider starts Claude on its gateway (#2455)
 		compatible = messagesAPI(v.API)
@@ -95,11 +100,11 @@ func (s *Service) modelProviderCompatible(p ModelPurpose, v ModelProvider, store
 		compatible = v.ID == p.ID
 	}
 	if compatible && p.CategoryID == "assistant" && v.Kind == "launcher" {
-		compatible = slices.Contains([]string{"", "claude", "codex", "agy", "omp"}, v.Agent)
+		compatible = slices.Contains([]string{"", "claude", "codex", "agy", "omp"}, v.Agent) || larkContext && v.Agent == "traex"
 		// A managed Codex launcher runs through `personad launch`, which execs codex itself, past the `app-server`
 		// wrapper the assistant puts around a launcher's codex (node codexShell): the main chat would wait on an
 		// interactive Codex that never answers.
-		if v.Agent == "codex" && slices.ContainsFunc(stored, func(l storedLauncher) bool { return v.ID == "launcher."+l.Name && l.Kind != "api" }) {
+		if !larkContext && v.Agent == "codex" && slices.ContainsFunc(stored, func(l storedLauncher) bool { return v.ID == "launcher."+l.Name && l.Kind != "api" }) {
 			compatible = false
 		}
 	}
@@ -171,7 +176,8 @@ func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBind
 	if p.ID == purposeMeetingRoom && !s.roomClaudeCode(ctx, p.MachineID, b.Provider, providers) {
 		return errMeetingRoomClaudeOnly // before anything else: Codex, a runtime, a Responses or Chat connection
 	}
-	if p.Kind == "launcher" && p.CategoryID == "assistant" && p.MachineID != "" {
+	larkContext := p.ID == larkContextModelPurposeID
+	if p.Kind == "launcher" && p.CategoryID == "assistant" && p.MachineID != "" && !larkContext {
 		// Model settings and the picker share the current machine's merged launchers, not the global discovery cache.
 		name := strings.TrimPrefix(b.Provider, "launcher.")
 		if provider == nil {
@@ -196,8 +202,26 @@ func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBind
 			return i18n.Err("assistant-models.err_provider_unsupported")
 		}
 	}
-	if b.Effort != "" && !slices.Contains(effortLevelsForKind(p.Kind), b.Effort) {
+	levels := effortLevelsForKind(p.Kind)
+	if larkContext {
+		switch {
+		case provider.Kind == "api":
+			levels = append(slices.Clone(proto.EffortWords), "off")
+		case provider.Agent == "codex" || provider.Agent == "traex":
+			levels = proto.CodexEffortLevels
+		}
+	}
+	if b.Effort != "" && !slices.Contains(levels, b.Effort) {
 		return i18n.Err("assistant-models.err_effort_unsupported")
+	}
+	if larkContext && (provider.Kind == "launcher" || strings.HasPrefix(b.Provider, "launcher.") && messagesAPI(provider.API)) {
+		if err := checkModelID(b.Model); err != nil {
+			return err
+		}
+	}
+	if larkContext && provider.Kind == "api" {
+		_, err := s.apiConfig(ctx, b)
+		return err
 	}
 	if p.Kind == "api" {
 		c, err := s.apiConfig(ctx, b)
@@ -263,11 +287,7 @@ func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBind
 // processing's explicit one while it follows it, an automatic selection there being no use as for the category.
 func (s *Service) providerModelUses(ctx context.Context, provider string) ([]string, error) {
 	uses := []string{}
-	ids := slices.Clone(modelConfigIDs)
-	for _, x := range s.modelExtensions(ctx) {
-		ids = append(ids, assistantwire.ExtensionPurposePrefix+x.StorageKey())
-	}
-	for _, id := range ids {
+	for _, id := range s.modelSettingsIDs(ctx) {
 		p, err := s.modelPurposeDef(ctx, id)
 		if err != nil {
 			return nil, err

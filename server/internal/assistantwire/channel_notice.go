@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -48,7 +49,7 @@ type NoticeResult struct {
 	Status string `json:"status"`
 }
 
-var noticeID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,96}$`)
+var noticeID = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_-]{1,96}$`) })
 
 func (n Notice) Validate() error {
 	switch n.Kind {
@@ -56,7 +57,7 @@ func (n Notice) Validate() error {
 	default:
 		return errors.New("invalid notice kind")
 	}
-	if !noticeID.MatchString(n.ID) || !noticeText(n.Text, 2400) || !noticeText(n.Forward, 3600) || !noticeLink(n.SourceURL) {
+	if !noticeID().MatchString(n.ID) || !noticeText(n.Text, 2400) || !noticeText(n.Forward, 3600) || !noticeLink(n.SourceURL) {
 		return errors.New("invalid notice fields")
 	}
 	return nil

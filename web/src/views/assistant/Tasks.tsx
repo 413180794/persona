@@ -3,7 +3,6 @@
 // #8237), the "Today" card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
-import { ChannelNotice } from "./ChannelNotice";
 import { lazy, memo, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { taskMeter, type TaskCardMetadata } from "../../lib/task-cards";
 import { agentRowKey, agentRowLabel, agentRowMark, agentRowTone, todoChipLabel, todoChipState } from "../../lib/task-row-status";
@@ -52,7 +51,7 @@ import type { AgentState, Interaction, Machine, Session } from "../../lib/types"
 import { Button, Collapse, cx, IconButton, Loading, Menu, toast, useNow } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
 import { Icon, type IconName } from "../../ui/icons";
-import { AcceptRow, BriefCard } from "./Brief";
+import { AcceptRow } from "./Brief";
 
 // A plan task's brief (#3822) comes with the first plan card that has one, as the decision row does.
 const PlanBrief = lazy(() => import("./TaskBrief").then((m) => ({ default: m.PlanBrief })));
@@ -485,7 +484,7 @@ export const FeedLineView = memo(function FeedLineView({ item, simplified = fals
     case "today":
       return <TodayCard body={item.body as unknown as TodayBody} conversation={item.conversation} />;
     case "brief":
-      return <BriefCard item={item} />;
+      return <Suspense fallback={null}><LazyBriefCard item={item} /></Suspense>;
     case "message":
       return item.ref && !isLater ? <MessageCard item={item} /> : null;
     case "inbox_suggestion":
@@ -494,7 +493,7 @@ export const FeedLineView = memo(function FeedLineView({ item, simplified = fals
       // an urgent call (docs/assistant/urgent-call.md): its row, loaded with the first one
       return <Suspense fallback={null}><LazyUrgentCallLine item={item} /></Suspense>;
     case "channel_notice":
-      return <ChannelNotice item={item} />;
+      return <Suspense fallback={null}><LazyChannelNotice item={item} /></Suspense>;
     case "notice": {
       // a line the hub wrote (#4305): small and centered, as the chat's own notices
       const text = feedNotice(item);
@@ -676,6 +675,8 @@ function useSayToPersona(conversation: string) {
 // ── message cards ──
 
 const LazyMessageDraft = lazy(() => import("./MessageDraft"));
+const LazyChannelNotice = lazy(() => import("./ChannelNotice").then((m) => ({ default: m.ChannelNotice })));
+const LazyBriefCard = lazy(() => import("./BriefCard").then((m) => ({ default: m.BriefCard })));
 // a hand-off conversation's write-back (#5932): loaded with the first such card
 const LazyHandoffCard = lazy(() => import("./HandoffCard").then((m) => ({ default: m.HandoffCard })));
 const LazyUrgentCallLine = lazy(() => import("./UrgentCallLine").then((m) => ({ default: m.UrgentCallLine })));

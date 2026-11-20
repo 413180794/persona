@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	approvalops "github.com/nwverse/persona/server/internal/approval"
 	"github.com/nwverse/persona/server/internal/assistant/repositorystore"
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -58,6 +60,16 @@ type MainHooks struct {
 
 // MainWith is Main with h.
 func MainWith(ctx context.Context, build update.Build, stdin io.Reader, h MainHooks) error {
+	gate, err := admission.FromEnv()
+	if err != nil {
+		return err
+	}
+	booted, err := gate.Startup(ctx, "manager-startup")
+	if err != nil {
+		return err
+	}
+	booted = sync.OnceFunc(booted)
+	defer booted()
 	errs := newErrorTee(build) // its log's error lines become error reports (docs/extensions/extensions.md "Error reports")
 	logger := log.New(errs, "assistant: ", log.LstdFlags)
 	cfg, err := readHubConfig()
@@ -129,6 +141,7 @@ func MainWith(ctx context.Context, build update.Build, stdin io.Reader, h MainHo
 	// itself again): nothing of it runs next to the one that has the token (manager.RunBuiltin waits for a new one).
 	o.Fingerprint, o.StopWhenRevoked, o.TokenFirst = fingerprint, deploy == DeployService, deploy == DeployService
 	o.RotateSecretKey = true
+	o.Admission, o.StartupDone = gate, booted
 	o.Logf, o.ExtConfig, o.Ready = logger.Printf, ext, h.Ready
 	// Its own database, its data moved there once (owndb.go); the hub's while that cannot be yet.
 	if o.DatabaseURL, o.OnHubDatabase, err = builtinDatabase(ctx, home, cfg.DatabaseURL, provisionOwn, logger.Printf); err != nil {
@@ -258,7 +271,9 @@ type runOptions struct {
 	// Ready is given the manager's Idle once its service is made (MainHooks.Ready); nil: nobody asks.
 	Ready func(Idle)
 	// Errors is the process's log writer that reports its error lines (newErrorTee); nil: run makes one.
-	Errors *errorTee
+	Errors      *errorTee
+	Admission   *admission.Gate
+	StartupDone func()
 }
 
 // run is a manager's process: its database, the computers, the extensions and the assistant itself on the hub's
@@ -315,6 +330,15 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer database.Close()
+	if o.Admission != nil {
+		authority, err := database.LedgerAuthority(ctx)
+		if err != nil {
+			return fmt.Errorf("read ledger writer database identity: %w", err)
+		}
+		if err := o.Admission.BindLedgerWriter(authority); err != nil {
+			return fmt.Errorf("bind ledger writer database: %w", err)
+		}
+	}
 	// Its own secret.key (keyrotate.go), before anything of it reads a secret; the old key's watcher, if any, stops
 	// before the database closes.
 	keyDone := make(chan struct{})
@@ -343,7 +367,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	var svc *Service
 	var ext *extmgr.Manager
 	// ConfigFile: its usage section (the account-pool gateways and their keys) is the devices', read and written there.
-	devs := devices.New(devices.Options{Store: database, ConfigFile: o.ConfigFile, TailcatKey: o.TailcatKey, ManagerID: o.ID,
+	devs := devices.New(devices.Options{Store: database, Admission: o.Admission, ConfigFile: o.ConfigFile, TailcatKey: o.TailcatKey, ManagerID: o.ID,
 		Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if !waitsOnPerson(method) && method != "mcp.tools" { // discovery watches reconnect after restart; actual tool calls hold idle
@@ -382,7 +406,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	// The extensions, connectors and bots (internal/extmgr): the data directory here, its own sections in manager.json
 	// (as moveConfig read and checked them) and its own secret.key.
 	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, Config: o.ExtConfig, SecretKey: o.SecretKey,
-		Store: database, Build: build, ManagerID: o.ID, HubURL: hub, HubClient: httpClient, HubProofKey: extwire.ProofKey(token),
+		Store: database, Build: build, ManagerID: o.ID, Admission: o.Admission, HubURL: hub, HubClient: httpClient, HubProofKey: extwire.ProofKey(token),
 		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{c: func() *bus.Client { return bh.Client() }, b: func() *BusHub { return bh }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
@@ -418,7 +442,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		Timezone: func() string { return svc.userTZ() }})
 	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
-		ConfigFile: o.ConfigFile, Outbox: database,
+		ConfigFile: o.ConfigFile, Outbox: database, Admission: o.Admission,
 		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked, StopWhenRejected: o.TokenFirst})
 	// The knowledge base in its directory, kept as its manager.json's kb section says (over the hub's hello). The model
 	// providers' keys are sealed with its own secret.key.
@@ -427,6 +451,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		KB: &KBOptions{Dir: o.KBDir, KeyDir: o.HandlesDir}, SecretKey: o.SecretKey,
 		Trust: devs, AgentDirs: devs, ID: o.ID, Build: version, RepositoryConfig: o.ConfigFile,
 		RemoteImageCache: filepath.Join(home, "cache", "remote-images")})
+	svc.maintenanceGate = o.Admission
 	svc.SetExtensions(ext) // the connectors', Cua's and ego's tools, in this process (fleet_tools.go)
 	// When the north star's recording began (north_star.go).
 	go svc.northStarStarted(ctx)
@@ -444,6 +469,15 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		defer close(extDone)
 		_ = ext.Run(ctx) // after ctx: stops the extensions' programs (they are the manager's children)
 	}()
+	if o.StartupDone != nil {
+		go func() {
+			select {
+			case <-ext.Started():
+				o.StartupDone()
+			case <-ctx.Done():
+			}
+		}()
+	}
 	if o.ID != "assistant" {
 		go func() {
 			if err := bh.Wait(ctx); err == nil {

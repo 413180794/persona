@@ -36,7 +36,7 @@ type channelProgress interface {
 // channelRecall is a sink that marks a message the owner recalled: one taken out of a run that answers others too
 // (channel.Run.Unfold) loses its own marks (the reaction on it, its folded progress message).
 type channelRecall interface {
-	recalled(ctx context.Context, m channel.Folded)
+	recalled(ctx context.Context, m channel.Folded) error
 }
 
 // channelTyping is a sink that shows "typing" while a run goes on.

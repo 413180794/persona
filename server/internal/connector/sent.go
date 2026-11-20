@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -51,6 +52,12 @@ const SentTextMost = 4000
 // MethodSentRecord is the call an extension's connector makes to put a send of its own in the ledger.
 const MethodSentRecord = "sent.record"
 
+// MethodSentRecordOnce records or verifies one retained ledger row for a stable message reference.
+const MethodSentRecordOnce = "sent.record_once"
+
+// MethodSentRecordGuarded requires a receiver with durable reference guards.
+const MethodSentRecordGuarded = "sent.record_guarded"
+
 // SentRecordParams are sent.record's params (schema/extension/connector.schema.json ConnectorSentRecordParams): an
 // extension's connector that declares sends_as_user tells the hub about a message it sent in the user's name outside
 // the write gate. Where it came from and how it was let through are the hub's to say, not these.
@@ -63,6 +70,44 @@ type SentRecordParams struct {
 	MachineID    string         `json:"machine_id,omitempty"`  // the computer it ran on, when it names one (the extension's word)
 	MessageRef   string         `json:"message_ref,omitempty"` // the sent message's id on the other side
 	Setting      string         `json:"setting,omitempty"`     // the extension's setting that let it send without asking
+}
+
+// SentRecordOnceParams adds an exact reference and a read-only lookup mode.
+type SentRecordOnceParams struct {
+	SentRecordParams
+	MessageRef string `json:"message_ref"`
+	LookupOnly bool   `json:"lookup_only,omitempty"`
+}
+
+func (p *SentRecordOnceParams) UnmarshalJSON(raw []byte) error {
+	type plain SentRecordOnceParams
+	fields := struct {
+		*plain
+		LookupOnly json.RawMessage `json:"lookup_only"`
+	}{plain: (*plain)(p)}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	switch string(fields.LookupOnly) {
+	case "", "false":
+		p.LookupOnly = false
+	case "true":
+		p.LookupOnly = true
+	default:
+		return errors.New("lookup_only must be a boolean")
+	}
+	return nil
+}
+
+const (
+	SentRecordRecorded = "recorded"
+	SentRecordMissing  = "missing"
+	SentRecordPruned   = "pruned"
+)
+
+type SentRecordOnceResult struct {
+	MessageRef string `json:"message_ref"`
+	Status     string `json:"status"`
 }
 
 // writtenText is the words a write puts out, as its arguments say them (proto.WrittenText, which the node's gate

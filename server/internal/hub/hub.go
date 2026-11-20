@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/admission"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/hubedge"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -29,6 +30,8 @@ type Hub struct {
 	deployCtx     context.Context // canceled with the hub; node updates finish before the database closes
 	nodeWorkers   sync.WaitGroup
 	shutdown      *shutdownBudget
+	admission     *admission.Gate
+	startupDone   func()
 	wsStopping    bool // guarded by mu; prevents new WaitGroup additions during shutdown
 	wsHandlers    sync.WaitGroup
 	wsConnections map[*client]struct{} // includes connections still registering their device session
@@ -240,6 +243,16 @@ type Store interface {
 
 func Run(ctx context.Context, b update.Build) error {
 	claimInherited() // before anything can start a process: runHub starts the manager before it listens (listen.go)
+	gate, err := admission.FromEnv()
+	if err != nil {
+		return err
+	}
+	booted, err := gate.Startup(ctx, "hub-startup")
+	if err != nil {
+		return err
+	}
+	booted = sync.OnceFunc(booted)
+	defer booted()
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	// An update that keeps failing goes back before anything else can fail, the config included (selfupdate.go).
 	updating, err := newUpdater(&Hub{build: b, version: b.Version, logger: logger}).boot()
@@ -250,20 +263,20 @@ func Run(ctx context.Context, b update.Build) error {
 	if err != nil {
 		return err
 	}
-	return runConfigured(ctx, b, cfg, updating, nil)
+	return runConfigured(ctx, b, cfg, updating, nil, gate, booted)
 }
 
 // runConfigured runs the hub until ctx ends; updating: an update is under way, this process confirms it. slot: the
 // edge started it (nil: it listens itself).
-func runConfigured(ctx context.Context, b update.Build, cfg *Config, updating bool, slot *hubedge.Slot) error {
+func runConfigured(ctx context.Context, b update.Build, cfg *Config, updating bool, slot *hubedge.Slot, gate *admission.Gate, booted func()) error {
 	budget := newShutdownBudget(cfg)
 	defer budget.close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	return budget.run(ctx, func() error { return runHub(ctx, b, cfg, budget, updating, slot) })
+	return budget.run(ctx, func() error { return runHub(ctx, b, cfg, budget, updating, slot, gate, booted) })
 }
 
-func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBudget, updating bool, slot *hubedge.Slot) error {
+func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBudget, updating bool, slot *hubedge.Slot, gate *admission.Gate, booted func()) error {
 	// The stop asked for (stop) begins with beginStop, before anything sees its context end (restart.go).
 	stop := ctx
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
@@ -273,7 +286,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		deployCtx: ctx,
 		shutdown:  budget, cfg: cfg, version: b.Version, build: b, logger: slotLogger(slot),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, calls: map[string]chan proto.ToolResult{},
-		slot: slot,
+		slot: slot, admission: gate, startupDone: booted,
 	}
 	defer func() { h.flushTraffic(time.Now(), true) }()
 	h.extLost.started = time.Now() // managers' extensions may call before their managers are back (extensions_proof.go)
@@ -321,7 +334,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.push.userLang = h.userLang
 	h.push.userLoc = h.userLocation
 	h.push.devicesChanged = func() { go h.fleetClientsChanged() } // a phone that takes MCP forms by push (fleet_link.go)
-	go h.push.maintenanceLoop(ctx)
+	go h.push.maintenanceLoop(ctx, gate)
 	// The machines are the manager's to connect (devices_link.go); until it reports them they show as before a
 	// restart (what it handed over), before the assistant's process starts and takes that hand-over.
 	h.loadMachineTrust(ctx) // before the manager connects them and the assistant asks (machine_trust.go)

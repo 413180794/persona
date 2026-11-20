@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -109,6 +110,11 @@ func (s *Service) admissionQueueLoop(ctx context.Context) {
 // sweepAdmissionQueue runs one pass: due retries start again, over-bounds waits fail for good, and tasks whose todo
 // ended while queued simply drop their queue.
 func (s *Service) sweepAdmissionQueue(ctx context.Context) {
+	finish, err := s.maintenanceGate.AdmitPayload("manager-queue-scan", "queue-scan", nil)
+	if err != nil {
+		return
+	}
+	defer finish()
 	cctx, cancel := context.WithTimeout(ctx, taskFailTimeout)
 	defer cancel()
 	if err := s.ensureTodosLoaded(cctx); err != nil {
@@ -160,17 +166,30 @@ func queueExpired(q *TaskQueue, now time.Time) bool {
 // so the sweep cannot start it twice while this attempt is in flight: success clears it in runPlanTaskStart, another
 // refusal parks it again with the attempt counted on.
 func (s *Service) retryQueuedStart(ctx context.Context, p *TaskPlan, i int, pt PlanTask) {
+	payload, err := json.Marshal(struct {
+		Plan string `json:"plan_id"`
+		Todo string `json:"todo_id"`
+	}{p.ID, pt.TodoID})
+	if err != nil {
+		return
+	}
+	finish, err := s.maintenanceGate.ContinuePayload("manager-queue-scan", "manager-queue-start", "queue-scan", payload)
+	if err != nil {
+		return
+	}
 	if err := s.patchPlanTask(ctx, p.ID, i, func(t *PlanTask) {
 		if t.Queue != nil {
 			t.Queue.NextAt = time.Now().Add(admissionQueueMaxWait)
 		}
 	}); err != nil {
+		// The write may have committed despite a lost response. Keep its
+		// original operation until the stored plan can be checked.
 		s.logf("task %s: admission queue: mark retry in flight: %v", pt.TodoID, err)
 		return
 	}
 	s.logf("task %s: admission queue: retrying start on %s", pt.TodoID, pt.Machine)
 	// The same kind of start the gate refused: a first start that now fails past the gate is told as one (#8092).
-	s.startPlanTaskAsync(p.ID, p.Conversation, i, pt, pt.Queue != nil && pt.Queue.Retry, nil)
+	s.startPlanTaskAsync(p.ID, p.Conversation, i, pt, pt.Queue != nil && pt.Queue.Retry, finish)
 }
 
 // clearAdmissionQueue drops a task's queue marker once a retry got past the gate: its agent started for good, or its

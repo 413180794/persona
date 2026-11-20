@@ -15,8 +15,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation3.runtime.NavKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -77,7 +79,7 @@ class SettingsAssistantEntriesTest {
         override suspend fun larkAccounts(): LarkAccounts? = null
     }
 
-    private fun services() = SettingsServices(
+    private fun services(models: ModelConfiguration? = null) = SettingsServices(
         pairing = object : PairingService {
             override val isPaired = MutableStateFlow(true)
             override suspend fun pair(request: PairingRequest) = error("not used")
@@ -98,11 +100,12 @@ class SettingsAssistantEntriesTest {
         managers = FakeManagers(),
         channels = channels,
         connectors = connectors,
+        models = models,
     )
 
-    private fun show(page: String) {
+    private fun show(page: String, models: ModelConfiguration? = null) {
         AssistantManagerChoice.choose("hub", work, "assistant")
-        val services = services()
+        val services = services(models)
         rule.setContent {
             PersonaTheme(reduceMotion = true) {
                 CompositionLocalProvider(LocalManagerRoster provides roster) {
@@ -142,9 +145,32 @@ class SettingsAssistantEntriesTest {
     }
 
     @Test fun theLarkAgentsModelIsTheCurrentAssistants() {
-        show("feishu")
+        val old = ModelPurpose("lark.agent", "Lark /agent", "Agents", parent = "agent.new", categoryId = "agent.new",
+            fields = listOf("provider", "model", "effort"))
+        val extension = old.copy(id = "extension.lark-context", kind = "api", parent = "kb", categoryId = "kb")
+        show("feishu", modelCatalog(listOf(old, extension)))
         tap("/agent 模型")
         assertEquals(ModelPurposeRoute("lark.agent", work), opened.last())
+    }
+
+    @Test fun theUnifiedCatalogHidesTheOldModelLinkForTheCurrentAssistant() {
+        val reads = mutableListOf<String?>()
+        val unified = ModelPurpose("extension.lark-context", "Lark Context", "Extensions", kind = "launcher",
+            parent = "assistant", categoryId = "assistant", fields = listOf("provider", "model", "effort"))
+        show("feishu", modelCatalog(listOf(unified)) { reads += it })
+        rule.onNode(hasScrollAction()).performScrollToNode(hasText("/agent"))
+        rule.onNodeWithText("/agent 模型").assertDoesNotExist()
+        assertEquals(listOf(work), reads)
+    }
+
+    private fun modelCatalog(purposes: List<ModelPurpose>, read: (String?) -> Unit = {}) = object : ModelConfiguration {
+        override suspend fun catalog(): ModelCatalog {
+            read(currentCoroutineContext()[RequestManager]?.id)
+            return ModelCatalog(purposes)
+        }
+        override suspend fun purpose(id: String): ModelPurposeDetail = error("The connector only needs the catalog")
+        override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
+        override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = error("No edit")
     }
 
     /** The shell's own path (Root.kt): the sheet's stack and each tab's lose the first group's pages on a switch, not before. */

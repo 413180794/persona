@@ -121,6 +121,21 @@ var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage", 
 // assignment and model profiles must not write them.
 var modelConfigIDs = append(slices.Clone(modelCategoryIDs), purposeAgent, purposeLarkAgent, purposeSupervise, purposeMeetingRoom, purposeMeetingMinutes)
 
+const larkContextModelPurposeID = "extension.lark-context"
+
+// modelSettingsIDs lists each configurable record once. The native Lark Agent ID remains usable for starts.
+func (s *Service) modelSettingsIDs(ctx context.Context) []string {
+	ids := slices.Clone(modelConfigIDs)
+	for _, x := range s.modelExtensions(ctx) {
+		id := assistantwire.ExtensionPurposePrefix + x.StorageKey()
+		if id == larkContextModelPurposeID {
+			ids = slices.DeleteFunc(ids, func(id string) bool { return id == purposeLarkAgent })
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // agentsOverride: a use of Agents the user may set apart, the AI twin (#4232) or Lark /agent. With nothing saved it
 // follows Agents; every other use follows its category only.
 func agentsOverride(id string) bool { return id == purposeAgent || id == purposeLarkAgent }
@@ -243,11 +258,10 @@ const (
 
 func modelKey(id string) string { return modelKeyPrefix + id }
 
-// The AI twin, Lark /agent and a task's own use were retired with category-only settings. A fresh namespace keeps
-// dormant records (model_config.inbox.agent, model_config.lark.agent, model_config.task.<id>) inert, including their
-// revisions. Only a new user save creates such a record.
+// The override namespace keeps earlier records and their revisions intact. Lark Context uses it to keep its
+// previous Information processing override dormant when the new binding starts following Main chat.
 func modelRecordKey(id string) string {
-	if agentsOverride(id) || isTaskPurpose(id) {
+	if agentsOverride(id) || isTaskPurpose(id) || id == larkContextModelPurposeID {
 		return modelOverrideKeyPrefix + id
 	}
 	return modelKey(id)
@@ -359,6 +373,11 @@ func (s *Service) saveModel(ctx context.Context, id string, r modelRecord) error
 }
 
 func (s *Service) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
+	if id == purposeLarkAgent || id == purposeLarkContextAgent {
+		if p, ok := s.extensionPurposeDef(ctx, larkContextModelPurposeID); ok {
+			return p, nil
+		}
+	}
 	l := s.requestCtxLang(ctx)
 	for _, p := range modelPurposes {
 		if p.ID == id {

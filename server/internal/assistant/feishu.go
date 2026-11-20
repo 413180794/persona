@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -51,13 +52,20 @@ type botThread struct {
 	At     time.Time `json:"at"`
 }
 
+type feishuRecallReceipt struct {
+	MessageID string    `json:"message_id"`
+	At        time.Time `json:"at"`
+}
+
 // botState is the chat's state (botStateKey).
 type botState struct {
 	Current botTarget             `json:"current"`
 	Threads map[string]*botThread `json:"threads,omitempty"`
 	// Runs are an older hub's turns being answered: moved to the channels' runs (takeLegacyBotRuns).
-	Runs []*botRun `json:"runs,omitempty"`
-	Seen []string  `json:"seen,omitempty"`
+	Runs          []*botRun                      `json:"runs,omitempty"`
+	Seen          []string                       `json:"seen,omitempty"`
+	Recalled      map[string]time.Time           `json:"recalled,omitempty"`
+	RecallSettled map[string]feishuRecallReceipt `json:"recall_settled,omitempty"`
 	// Cards are the cards asking what is asked that are still open in the chat, by interaction id: only where each
 	// is and what it answers (never what it says), so a card answered elsewhere after a restart is still closed.
 	Cards map[string]*botCardRef `json:"cards,omitempty"`
@@ -154,6 +162,8 @@ type feishuBook struct {
 // it and a few minutes for its downloads.
 const feishuRecalledKeep = 10 * time.Minute
 
+const feishuRecallReceiptKeep = 48 * time.Hour
+
 // FeishuRecalled is feishu.recalled: the owner recalled a message in the bot's chat. One not in its conversation yet
 // is not sent; one being answered stops its turn (recallChannelRun).
 func (s *Service) FeishuRecalled(p FeishuRecalled) {
@@ -164,11 +174,85 @@ func (s *Service) FeishuRecalled(p FeishuRecalled) {
 	go s.recallChannelRun(channel.Feishu, p.MessageID, channel.ClientMsgID(channel.Feishu, p.MessageID))
 }
 
+// An action that can have changed a running turn remains pending even if
+// its recall marker was stored. A remote card update/interrupt has its own outcome.
+func (s *Service) acceptFeishuRecall(ctx context.Context, p FeishuRecalled) error {
+	if s.maintenanceGate == nil || s.store() == nil || p.MessageID == "" || p.AdmissionEventID == "" {
+		return errors.New("durable Feishu recall is unavailable")
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	done, err := s.maintenanceGate.ContinueExclusivePayload("feishu-recall", "feishu-recall-apply", p.AdmissionEventID, data)
+	if err != nil {
+		return err
+	}
+	b := &s.fbot
+	b.mu.Lock()
+	s.loadBotLocked(ctx)
+	if !b.loaded {
+		b.mu.Unlock()
+		return errors.New("Feishu recall state could not be read")
+	}
+	now := b.clock()
+	if terminal, ok := b.st.RecallSettled[p.AdmissionEventID]; ok && now.Sub(terminal.At) <= feishuRecallReceiptKeep {
+		b.mu.Unlock()
+		if terminal.MessageID != p.MessageID {
+			return errors.New("Feishu recall event ID is bound to another original")
+		}
+		done()
+		return nil
+	}
+	b.noteRecalledLocked(p.MessageID)
+	if b.st.Recalled == nil {
+		b.st.Recalled = map[string]time.Time{}
+	}
+	for id, at := range b.st.Recalled {
+		if now.Sub(at) > feishuRecalledKeep {
+			delete(b.st.Recalled, id)
+		}
+	}
+	b.st.Recalled[p.MessageID] = now
+	err = s.saveBotStateLocked()
+	b.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if s.recallChannelRun(channel.Feishu, p.MessageID, channel.ClientMsgID(channel.Feishu, p.MessageID)) {
+		return errors.New("Feishu recall external effects need reconciliation")
+	}
+	b.mu.Lock()
+	if b.st.RecallSettled == nil {
+		b.st.RecallSettled = map[string]feishuRecallReceipt{}
+	}
+	for id, receipt := range b.st.RecallSettled {
+		if now.Sub(receipt.At) > feishuRecallReceiptKeep {
+			delete(b.st.RecallSettled, id)
+		}
+	}
+	b.st.RecallSettled[p.AdmissionEventID] = feishuRecallReceipt{MessageID: p.MessageID, At: now}
+	err = s.saveBotStateLocked()
+	if err != nil {
+		delete(b.st.RecallSettled, p.AdmissionEventID)
+	}
+	b.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	done()
+	return nil
+}
+
 // noteRecalled remembers that the owner recalled message id, for feishuRecalledKeep.
 func (s *Service) noteRecalled(id string) {
 	b := &s.fbot
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.noteRecalledLocked(id)
+}
+
+func (b *feishuBook) noteRecalledLocked(id string) {
 	now := b.clock()
 	for id, at := range b.recalled {
 		if now.Sub(at) > feishuRecalledKeep {
@@ -186,8 +270,15 @@ func (s *Service) botRecalled(id string) bool {
 	b := &s.fbot
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	_, ok := b.recalled[id]
-	return ok
+	if _, ok := b.recalled[id]; ok {
+		return true
+	}
+	if s.maintenanceGate != nil {
+		s.loadBotLocked(context.Background())
+		at := b.st.Recalled[id]
+		return !at.IsZero() && b.clock().Sub(at) <= feishuRecalledKeep
+	}
+	return false
 }
 
 // feishuTurnWait is how long a message waits for the one before it to go into its conversation. Most get there in a
@@ -345,10 +436,10 @@ func (s *Service) keepBotCardLocked(id string, card *botCard) {
 
 // saveBotStateLocked writes the chat's state, once it was read: what is in memory after a failed read would be
 // written over the stored target, threads and pairing.
-func (s *Service) saveBotStateLocked() {
+func (s *Service) saveBotStateLocked() error {
 	b := &s.fbot
 	if !b.loaded {
-		return
+		return nil
 	}
 	if len(b.st.Seen) > botSeenKeep {
 		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
@@ -358,13 +449,15 @@ func (s *Service) saveBotStateLocked() {
 	s.trimBotCardsLocked()
 	st := s.store()
 	if st == nil {
-		return
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := st.PutSetting(ctx, botStateKey, b.st); err != nil {
 		s.logf("bots: save state: %v", err)
+		return err
 	}
+	return nil
 }
 
 // pruneBotThreads drops the threads older than botThreadsKeepFor, then the oldest beyond botThreadsKeep. A thread
@@ -472,8 +565,12 @@ func (s *Service) claimBotMessage(id string) (bool, error) {
 	if id == "" || slices.Contains(b.st.Seen, id) {
 		return false, nil
 	}
+	previous := b.st.Seen
 	b.st.Seen = append(b.st.Seen, id)
-	s.saveBotStateLocked()
+	if err := s.saveBotStateLocked(); err != nil && s.maintenanceGate != nil {
+		b.st.Seen = previous
+		return false, err
+	}
 	return true, nil
 }
 

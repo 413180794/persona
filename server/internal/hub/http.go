@@ -1336,6 +1336,12 @@ func (h *Hub) phoneClient(tool ...string) *client {
 }
 
 func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
+	registered, ok := h.admission.HTTP("app-handshake", w)
+	if !ok {
+		return
+	}
+	registered = sync.OnceFunc(registered)
+	defer registered()
 	h.mu.Lock()
 	if h.wsStopping {
 		h.mu.Unlock()
@@ -1425,6 +1431,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		h.helloLocked(c, hello, stream, after, resuming)
 	}
 	h.mu.Unlock()
+	registered()
 	go h.fleetClientsChanged() // an app that takes elicitations (fleet_link.go)
 
 	writerDone = make(chan struct{})
@@ -1518,6 +1525,11 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	}
 	if c.role == roleScoped && !scopedSocketCommand(msg.Type) {
 		return
+	}
+	if done, ok := h.admitClientFrame(c, msg.Type); !ok {
+		return
+	} else if done != nil {
+		defer done()
 	}
 	h.mu.Lock()
 	c.activeAt = time.Now()

@@ -179,6 +179,11 @@ func (h *Manager) assistantSocket(w http.ResponseWriter, r *http.Request) {
 // ServeHTTP serves one request the hub relayed: who asked is in the hub's headers (principalFrom); the extensions'
 // parts of the API (extension_api.go) come before the rest, as at the hub.
 func (h *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	done, ok := h.opts.Admission.HTTP("extension-http", w)
+	if !ok {
+		return
+	}
+	defer done()
 	if !isAssistantSocket(r) {
 		h.serving.Add(1)
 		defer h.serving.Add(-1)

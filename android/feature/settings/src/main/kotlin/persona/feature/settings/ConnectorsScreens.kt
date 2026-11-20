@@ -454,6 +454,7 @@ internal fun FeishuConnectorPage(
     connectors: ConnectorsManagement?,
     onBack: () -> Unit,
     onAgentModel: () -> Unit,
+    models: ModelConfiguration? = null,
 ) {
     val scope = rememberCoroutineScope()
     val res = LocalResources.current
@@ -461,6 +462,7 @@ internal fun FeishuConnectorPage(
     var accounts by remember { mutableStateOf<LarkAccounts?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showsAgentModel by remember(models) { mutableStateOf(models == null) }
     var displayPage by remember { mutableStateOf(false) }
     if (displayPage) { LarkMessageDisplayPage(connectors, onBack = { displayPage = false }); return }
 
@@ -486,6 +488,13 @@ internal fun FeishuConnectorPage(
     }
 
     LaunchedEffect(connectors) { load() }
+    LaunchedEffect(models) {
+        if (models != null) {
+            showsAgentModel = try { models.catalog().purposes.none(::isLarkContext) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { true }
+        }
+    }
     BackHandler(onBack = onBack)
 
     val st = status
@@ -570,29 +579,30 @@ internal fun FeishuConnectorPage(
                 JRow(stringResource(R.string.settings_src_display_title), leadingIcon = PhIcons.Eye, onClick = { displayPage = true })
             }
         }
+        val useCount = if (showsAgentModel) 5 else 4
         item("uses-header") { JSectionHeader(stringResource(R.string.settings_src_lark_uses_header)) }
         item("use-inbox") {
-            JGroupItem(GroupPosition.of(0, 5)) {
+            JGroupItem(GroupPosition.of(0, useCount)) {
                 JRow(stringResource(R.string.settings_src_lark_use_inbox), subtitle = stringResource(R.string.settings_src_lark_use_inbox_detail), leadingIcon = PhIcons.EnvelopeSimple)
             }
         }
         item("use-kb") {
-            JGroupItem(GroupPosition.of(1, 5)) {
+            JGroupItem(GroupPosition.of(1, useCount)) {
                 JRow(stringResource(R.string.settings_src_lark_use_kb), subtitle = stringResource(R.string.settings_src_lark_use_kb_detail), leadingIcon = PhIcons.BookOpen)
             }
         }
         item("use-assistant") {
-            JGroupItem(GroupPosition.of(2, 5)) {
+            JGroupItem(GroupPosition.of(2, useCount)) {
                 JRow(stringResource(R.string.settings_src_lark_use_assistant), subtitle = stringResource(R.string.settings_src_lark_use_assistant_detail), leadingIcon = PhIcons.Sparkle)
             }
         }
         item("use-agent") {
-            JGroupItem(GroupPosition.of(3, 5)) {
+            JGroupItem(GroupPosition.of(3, useCount)) {
                 JRow("/agent", subtitle = stringResource(R.string.settings_src_lark_use_agent_detail), leadingIcon = PhIcons.Robot)
             }
         }
-        item("use-model") {
-            JGroupItem(GroupPosition.of(4, 5)) {
+        if (showsAgentModel) item("use-model") {
+            JGroupItem(GroupPosition.of(4, useCount)) {
                 JRow(stringResource(R.string.settings_src_lark_agent_model), subtitle = stringResource(R.string.settings_src_lark_agent_model_detail), leadingIcon = PhIcons.Brain, onClick = onAgentModel)
             }
         }

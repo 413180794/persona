@@ -10,7 +10,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/apierr"
-	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
@@ -27,11 +26,11 @@ func (s *Service) modelPurpose(ctx context.Context, id string, providers []Model
 		return p, err
 	}
 	p.Override, p.Revision = r.Binding, r.Revision
-	readOnly := recordID != id
+	readOnly := recordID != p.ID
 	if readOnly {
 		p.Override = ModelBinding{}
 	}
-	p.Effective, err = s.resolveModel(ctx, id)
+	p.Effective, err = s.resolveModel(ctx, p.ID)
 	if err != nil {
 		return p, err
 	}
@@ -40,7 +39,7 @@ func (s *Service) modelPurpose(ctx context.Context, id string, providers []Model
 		return p, err
 	}
 	p.InheritedFrom = inheritedLabel(s.requestCtxLang(ctx), p, base, from, providers)
-	if isExtensionPurpose(p.ID) && !readOnly {
+	if isExtensionPurpose(p.ID) && p.ID != larkContextModelPurposeID && !readOnly {
 		p.Candidates = s.purposeCandidates(ctx, p.ID, r.Candidates, p.Effective)
 	}
 	if p.Kind == "api" {
@@ -142,17 +141,8 @@ func (s *Service) modelConfigRoutes() {
 		ctx := withSettingsMemo(r.Context())
 		providers := s.modelProviders(ctx)
 		purposes := []ModelPurpose{}
-		for _, id := range modelConfigIDs {
+		for _, id := range s.modelSettingsIDs(ctx) {
 			p, err := s.modelPurpose(ctx, id, providers)
-			if err != nil {
-				apierr.Write(w, 500, err)
-				return
-			}
-			purposes = append(purposes, p)
-		}
-		// The extensions' own (model_rpc.go), after the categories: each with its own record, like Lark /agent.
-		for _, x := range s.modelExtensions(ctx) {
-			p, err := s.modelPurpose(ctx, assistantwire.ExtensionPurposePrefix+x.StorageKey(), providers)
 			if err != nil {
 				apierr.Write(w, 500, err)
 				return
@@ -162,11 +152,18 @@ func (s *Service) modelConfigRoutes() {
 		s.addModelUsage(ctx, purposes)
 		apierr.WriteJSON(w, map[string]any{"purposes": purposes, "providers": providers})
 	})
+	settingsPurpose := func(ctx context.Context, id string, providers []ModelProvider) (ModelPurpose, error) {
+		p, err := s.modelPurpose(ctx, id, providers)
+		if err == nil && p.ID != id {
+			return ModelPurpose{}, errModelPurposeNotFound // runtime aliases have no editor
+		}
+		return p, err
+	}
 	detail := func(w http.ResponseWriter, r *http.Request) {
 		// Read-only, also after update's write: a memo of its own, made after the write.
 		ctx := withSettingsMemo(r.Context())
 		providers := s.modelProviders(ctx)
-		p, err := s.modelPurpose(ctx, r.PathValue("id"), providers)
+		p, err := settingsPurpose(ctx, r.PathValue("id"), providers)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, errModelPurposeNotFound) {
@@ -196,7 +193,7 @@ func (s *Service) modelConfigRoutes() {
 		defer s.models.mu.Unlock()
 		ctx, id := r.Context(), r.PathValue("id")
 		providers := s.modelProviders(ctx)
-		p, err := s.modelPurpose(ctx, id, providers)
+		p, err := settingsPurpose(ctx, id, providers)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, errModelPurposeNotFound) {
@@ -229,7 +226,7 @@ func (s *Service) modelConfigRoutes() {
 				return
 			}
 		}
-		if p.Kind == "launcher" { // passed to an agent as --model: a model id (#1644)
+		if p.Kind == "launcher" && p.ID != larkContextModelPurposeID { // passed to an agent as --model: a model id (#1644)
 			if err := checkModelID(b.Model); err != nil {
 				apierr.Write(w, 400, err)
 				return

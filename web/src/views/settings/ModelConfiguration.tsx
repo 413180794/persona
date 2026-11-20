@@ -6,8 +6,8 @@ import {
   type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelProvider, type ModelPurpose, type ModelPurposeBody,
 } from "../../lib/model-config";
 import {
-  agentsOverride, catalogLists, chooseProvider, claudeCodeOnly, configDirChoices, configDirLabel, draftFor, effortOffered, executionForm, followedCategory, modelConfiguration, modelPatch, overridden,
-  ownRecord, parentCategory, providersFor, purposeDescription, purposeGroups, purposeLaunch, resetPatch, runtimeChoices, saveModelPurpose, supportsField, withPurposeAfter,
+  agentsOverride, catalogLists, chooseProvider, claudeCodeOnly, configDirChoices, configDirLabel, draftFor, effortOffered, executionForm, executionKind, followedCategory, isLarkContext, modelConfiguration, modelPatch, overridden,
+  ownRecord, parentCategory, providersFor, purposeDescription, purposeGroups, resetPatch, runtimeChoices, saveModelPurpose, supportsField, withPurposeAfter,
   withUsesAfterCategories,
 } from "../../lib/model-config-execution";
 import { ASSISTANT_MODEL_PICK_FEATURE, mainChatAgentMismatch } from "../../lib/assistant-models";
@@ -39,13 +39,14 @@ function agentsOverrideStatus(binding: ModelBinding): string {
     : t("settings-modelconfiguration.follow_agents");
 }
 
-/** A use set apart from its category (#7980): **Separately configured** with anything of its own, else **Follows <the
- *  category>**, the words the background supervisor's row has, with the category's name from the catalog. */
-function categoryStatus(binding: ModelBinding, category: ModelPurpose): string {
+/** A use set apart from its category (#7980) shows its inheritance until it has an override. */
+function categoryStatus(binding: ModelBinding, inherited: string): string {
   return overridden(binding)
     ? t("settings-modelconfiguration.separately_configured")
-    : t("settings-modelconfiguration.follows", { name: category.name });
+    : inherited;
 }
+
+const followMainChat = () => t("settings-modelconfiguration.follow_category", { name: t("sidebar.main_chat") });
 
 export function ModelConfiguration({ open, onOpen, onProviders }: { open: string | null; onOpen: (id: string | null) => void; onProviders: () => void }) {
   return <ConfigurationManager>{(manager) => <ModelConfigurationForManager manager={manager} open={open} onOpen={onOpen} onProviders={onProviders} />}</ConfigurationManager>;
@@ -117,7 +118,9 @@ function ModelConfigurationForManager({ manager, open, onOpen, onProviders }: { 
 function PurposeRow({ purpose: p, providers, sourceName, category, onOpen }: { purpose: ModelPurpose; providers: ModelProvider[]; sourceName: (id?: string) => string | undefined; category?: ModelPurpose; onOpen: () => void }) {
   const machines = useStore((s) => s.machines);
   const form = executionForm(p, providers, machines);
-  const directAPI = p.kind === "api" && !ownRecord(p) && providers.find((v) => v.id === p.effective.provider)?.kind === "api";
+  const effectiveProvider = providers.find((v) => v.id === p.effective.provider);
+  const kind = executionKind(p, effectiveProvider);
+  const directAPI = kind === "api" && (!ownRecord(p) || isLarkContext(p)) && effectiveProvider?.kind === "api";
   const status = directAPI && p.status === UNVERIFIED_STATUS ? "" : p.status;
   const [help, setHelp] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -132,7 +135,8 @@ function PurposeRow({ purpose: p, providers, sourceName, category, onOpen }: { p
     return () => document.removeEventListener("pointerdown", close);
   }, [help]);
   const inheritance = agentsOverride(p) ? (overridden(p.override) ? agentsOverrideStatus(p.override) : t("settings-modelconfiguration.lark_headless_inheritance"))
-    : category ? categoryStatus(p.override, category)
+    : isLarkContext(p) ? categoryStatus(p.override, followMainChat())
+    : category ? categoryStatus(p.override, t("settings-modelconfiguration.follows", { name: category.name }))
     : p.inherited_from ? t("settings-modelconfiguration.follows", { name: sourceName(p.inherited_from) ?? "" })
     : !p.status ? t("settings-modelconfiguration.custom") : "";
   const description = purposeDescription(p);
@@ -170,9 +174,9 @@ function PurposeRow({ purpose: p, providers, sourceName, category, onOpen }: { p
     </div>
     {help && <div id={helpID} role="region" aria-label={t("settings-modelconfiguration.execution_help", { name: p.name })}
       className="border-t border-line bg-inset px-4 py-3 text-[12px] leading-relaxed text-ink-2">
-      <p>{t(`settings-modelconfiguration.execution_${purposeLaunch(p) || p.kind}`)}</p>
+      <p>{t(`settings-modelconfiguration.execution_${kind}`)}</p>
       <p className="mt-2 font-medium">{t("settings-modelconfiguration.execution_current", { backend: form.backend, provider: providerName(p.effective?.provider, providers) ?? t("settings-modelconfiguration.not_configured") })}</p>
-      {p.kind === "launcher" && <p className="mt-2 text-ink-3">{t("settings-modelconfiguration.execution_unverified")}</p>}
+      {kind !== "api" && p.kind === "launcher" && <p className="mt-2 text-ink-3">{t("settings-modelconfiguration.execution_unverified")}</p>}
       {usage && <p className="mt-2">{usageDetail}</p>}
     </div>}
   </div>;
@@ -254,9 +258,12 @@ function PurposeEditor({ manager, id, sourceName, catalog, onClose, onSaved }: {
   const runsOn = draft.provider || (following ? parent?.effective?.provider : p?.effective?.provider);
   const chosen = data?.providers.find((v) => v.id === runsOn);
   const followsAgents = !!p && agentsOverride(p);
+  const larkContext = !!p && isLarkContext(p);
   // a use set apart from its category (#7980): follows it by name, and goes back to it
   const category = p && !followsAgents && catalog ? followedCategory(p, catalog) : undefined;
-  const follow = followsAgents ? t("settings-modelconfiguration.follow_agents") : category ? t("settings-modelconfiguration.follow_category", { name: category.name }) : "";
+  const follow = followsAgents ? t("settings-modelconfiguration.follow_agents") : larkContext ? followMainChat()
+    : category ? t("settings-modelconfiguration.follow_category", { name: category.name }) : "";
+  const follows = larkContext ? follow : category ? t("settings-modelconfiguration.follows", { name: category.name }) : "";
   const onlyClaudeID = useId();
   const writable = p && (["provider", "model", "effort"] as const).some((field) => supportsField(p, field));
   // The Direct API editor (model discovery, efforts by model, draft test: #6887) is for a direct API category's own
@@ -298,12 +305,14 @@ function PurposeEditor({ manager, id, sourceName, catalog, onClose, onSaved }: {
   const inheritedEffort = following
     ? sameParentProvider ? parent?.effective?.effort : undefined
     : sameEffectiveProvider && !p?.override.effort ? p?.effective?.effort : undefined;
-  const chatEffort = !directAPI && chosen?.kind === "api" && chosen.api === "chat"
+  const chatEffort = !larkContext && !directAPI && chosen?.kind === "api" && chosen.api === "chat"
     ? directEffortState(chosen, [], effortModel) : undefined;
-  const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
-    ? effortChoices(launcherList.list, draft.model, inherited) : (p?.id === "inbox.triage" || p?.kind === "api" ? ["off", "low", "medium", "high", "xhigh", "max"] : ["low", "medium", "high", "xhigh", "max"]);
   const effectiveAgent = providerAgent(effectiveProvider, p?.effective?.provider);
   const chosenAgent = (launcherList.provider === listProvider && launcherList.list?.agent) || providerAgent(chosen, runsOn);
+  const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
+    ? effortChoices(launcherList.list, draft.model, inherited)
+    : larkContext && chosen?.kind === "api" ? ["off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+    : p?.id === "inbox.triage" || p?.kind === "api" ? ["off", "low", "medium", "high", "xhigh", "max"] : ["low", "medium", "high", "xhigh", "max"];
   const mainDefaultProvider = draft.provider || p?.effective?.provider;
   const mainInfo: AssistantLaunchers = {
     launchers: (data?.providers ?? []).map((v) => ({ name: v.id, display_name: v.name, agent: providerAgent(v) })),
@@ -356,7 +365,7 @@ function PurposeEditor({ manager, id, sourceName, catalog, onClose, onSaved }: {
   </>;
   return (
     <Dialog open={id !== null} onClose={() => { if (!busy) onClose(); }} width={480} title={p?.name ?? t("settings-modelconfiguration.dialog_title")}
-      footer={category
+      footer={category || larkContext
         // "Follow Information processing" (#7980) is longer than "Inherit": where the three do not fit on one line (a
         // phone, Large text) the reset takes a line of its own above Cancel and Save, its words whole (labels never wrap)
         ? <div data-editor-footer className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{reset}<div className="ml-auto flex gap-2">{actions}</div></div>
@@ -365,13 +374,13 @@ function PurposeEditor({ manager, id, sourceName, catalog, onClose, onSaved }: {
       {!p && !error && <Loading />}
       {p && <div className="flex flex-col gap-4">
         {followsAgents && <p className="text-[12px] text-ink-3">{agentsOverrideStatus(p.override)}</p>}
-        {category && <p className="text-label text-ink-3">{categoryStatus(p.override, category)}</p>}
+        {follows && <p className="text-label text-ink-3">{categoryStatus(p.override, follows)}</p>}
         <Group title={t("settings-modelconfiguration.effective")} footer={p.inherited_from ? t("settings-modelconfiguration.inherited_from", { name: sourceName(p.inherited_from) ?? "" }) : t("settings-modelconfiguration.effective_footer")}>
           <Row label={t("settings-modelconfiguration.provider")} mono><span className="max-w-[220px] truncate">{providerName(p.effective?.provider, data?.providers) ?? t("settings-modelconfiguration.not_configured")}</span></Row>
           <Row label={t("settings-modelconfiguration.model")} mono><span className="max-w-[220px] truncate">{p.effective?.model || t("settings-modelconfiguration.provider_default")}</span></Row>
           {runtimes.length > 0 && <Row label={t("settings-modelconfiguration.runtime")}><span>{runtimeLabel(p.effective?.runtime, effectiveAgent)}</span></Row>}
           {configDirChoices(p, effectiveAgent).length > 0 && <Row label={t("settings-modelconfiguration.config_dir")}><span>{configDirLabel(p.effective?.config_dir)}</span></Row>}
-          {p.status && !(directAPI && p.status === UNVERIFIED_STATUS) && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
+          {p.status && !((directAPI || (larkContext && effectiveProvider?.kind === "api")) && p.status === UNVERIFIED_STATUS) && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
         </Group>
         {supportsField(p, "provider") && <div>
           <label className="block">

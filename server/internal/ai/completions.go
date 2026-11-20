@@ -53,7 +53,7 @@ func (c *Client) chatCompletions(ctx context.Context, hc *http.Client, key strin
 			resp.Body.Close()
 			// Recognized machine codes always win over compatibility wording: a limit or a model/context/endpoint
 			// failure must never trigger a modified request, even when its message names a rejected field.
-			if HasRecognizedErrorCode(raw) {
+			if c.singleRequest || HasRecognizedErrorCode(raw) {
 				return Reply{}, false, c.newHTTPError(resp, raw, key)
 			}
 			// Some models reject max_tokens and explicitly ask for the newer name, and strict compatible servers

@@ -45,7 +45,7 @@ func (s *Service) modelExtensions(ctx context.Context) []assistantwire.ModelExte
 	return res.Extensions
 }
 
-// extensionPurposeDef is extension.<id>'s purpose: an API use of its own under "Knowledge base", inheriting it.
+// extensionPurposeDef describes the purpose of an extension with the models grant.
 func (s *Service) extensionPurposeDef(ctx context.Context, id string) (ModelPurpose, bool) {
 	ext, ok := strings.CutPrefix(id, assistantwire.ExtensionPurposePrefix)
 	if !ok {
@@ -54,6 +54,10 @@ func (s *Service) extensionPurposeDef(ctx context.Context, id string) (ModelPurp
 	for _, x := range s.modelExtensions(ctx) {
 		if x.StorageKey() == ext {
 			l := s.requestCtxLang(ctx)
+			if id == larkContextModelPurposeID {
+				return ModelPurpose{ID: id, CategoryID: "assistant", Name: x.Name, Group: mc(l, "group_extensions"),
+					Kind: "launcher", Parent: "assistant", MachineID: s.settings(ctx).MachineID}, true
+			}
 			return ModelPurpose{ID: id, CategoryID: "kb", Name: x.Name, Group: mc(l, "group_extensions"), Kind: "api", Parent: "kb"}, true
 		}
 	}
@@ -87,7 +91,14 @@ func (s *Service) extensionComplete(ctx context.Context, raw json.RawMessage) (a
 	if err != nil {
 		return nil, err
 	}
-	purpose := assistantwire.ExtensionPurposePrefix + call.StorageKey()
+	storageKey := call.StorageKey()
+	if p.ModelBinding != "" && (storageKey != "lark-context" || p.ModelBinding != larkContextModelPurposeID) {
+		return nil, invalidModelParams("model_binding is reserved for Lark Context")
+	}
+	if storageKey == "lark-context" {
+		return s.completeLarkContextModel(ctx, "extension "+call.Extension, c)
+	}
+	purpose := assistantwire.ExtensionPurposePrefix + storageKey
 	if _, ok := s.extensionPurposeDef(ctx, purpose); !ok {
 		return nil, &rpc.Error{Code: assistantwire.CodeModelUnavailable, Message: "model.complete: the extension has no model purpose (is it on and granted models?)"}
 	}
@@ -108,6 +119,9 @@ func (s *Service) purposeComplete(ctx context.Context, raw json.RawMessage) (any
 	}
 	if !managerPurposes[call.Purpose] {
 		return nil, invalidModelParams("purpose %q is not one the manager calls", call.Purpose)
+	}
+	if call.Params.ModelBinding != "" {
+		return nil, invalidModelParams("model_binding is reserved for Lark Context")
 	}
 	c, err := checkModelCall(call.Params)
 	if err != nil {
@@ -210,16 +224,7 @@ func (s *Service) runModelCall(ctx context.Context, purpose, who, what string, c
 	if !config.Configured() {
 		return nil, &rpc.Error{Code: assistantwire.CodeModelUnavailable, Message: "model.complete: nothing to call for " + what + "; pick a model for it in Settings › Model configuration"}
 	}
-	var usage assistantwire.ModelUsage
-	started := time.Now()
-	out, outcome, err := s.attemptModel(ctx, s.countedClient(purpose, "", b.Provider, config), c, c.timeout, &usage)
-	s.logf("assistant: %s model call%s on %s: %s in %s, %d request(s), %d input + %d output tokens (cache read %d, written %d)",
-		who, labelPart(c.p.Label), config.Model, outcome, time.Since(started).Round(time.Millisecond), usage.Requests,
-		usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens, usage.CacheCreationInputTokens)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+	return s.runConfiguredModelCall(ctx, purpose, who, b.Provider, config, c, false)
 }
 
 // attemptModel makes c once on client within timeout, adding what it spends to usage: the answer, or the coded

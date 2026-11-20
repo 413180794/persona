@@ -61,18 +61,19 @@ func (s *Service) taskConversationChanged(t Task, ex TaskExecution, override Mod
 	return true
 }
 
-func (s *Service) failSourceTaskRun(ctx context.Context, t Task, run ScheduleRun, err error) (proto.Session, error) {
+func (s *Service) failSourceTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, work *scheduleWork) (proto.Session, error) {
 	// ErrNotSent retries this same source after the existing delay; it does not select another conversation.
-	return s.failTaskRun(ctx, t, run, err, !errors.Is(err, rpc.ErrNotSent))
+	return s.failTaskRun(ctx, t, run, err, !errors.Is(err, rpc.ErrNotSent), work)
 }
 
-func (s *Service) failTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, unknown bool) (proto.Session, error) {
+func (s *Service) failTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, unknown bool, work *scheduleWork) (proto.Session, error) {
 	run.Status, run.Error, run.DeliveryUnknown = runFailed, err.Error(), unknown
-	s.recordRun(run)
+	s.verifyScheduleReceipt(work, s.recordRun(run), runFailed)
 	if unknown {
+		work.retain()
 		s.oneOffFailed(ctx, t, run)
 	} else {
-		s.oneOffNotStarted(ctx, t, run)
+		s.oneOffNotStarted(ctx, t, run, work)
 	}
 	return proto.Session{}, err
 }

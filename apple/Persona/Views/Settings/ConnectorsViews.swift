@@ -533,6 +533,7 @@ struct FeishuConnectorView: View {
     @Bindable private var larkHome = LarkHomePreference.shared
     @State private var status: LarkStatus?
     @State private var accounts: APIClient.LarkAccounts?
+    @State private var showsAgentModel: Bool?
     @State private var loading = true
     @State private var failure: String?
     @State private var capturedAPI: APIClient?
@@ -617,7 +618,9 @@ struct FeishuConnectorView: View {
                 use(Theme.Icon.ai, String(localized: "Assistant"), String(localized: "Persona can search messages and read docs; sending messages and other changes ask you on your phone first"))
                 #endif
                 use(Theme.Icon.agents, "/agent", String(localized: "Start a message with /agent anywhere in Lark to have an agent handle it and reply for you"))
-                ModelConfigurationLink(title: String(localized: "/agent Model"), purposeID: "lark.agent", owner: modelOwner)
+                if showsAgentModel == true {
+                    ModelConfigurationLink(title: String(localized: "/agent Model"), purposeID: "lark.agent", owner: modelOwner)
+                }
             }
         }
         .themedPage()
@@ -693,10 +696,14 @@ struct FeishuConnectorView: View {
 
     private func load() async {
         if capturedAPI == nil { capturedAPI = manager.flatMap { model.api?.manager($0) } ?? model.api?.currentAssistantSettings() }
-        guard let api = capturedAPI else { return }
+        guard let api = capturedAPI else {
+            showsAgentModel = true
+            return
+        }
         loading = true
         defer { loading = false }
         async let list = try? await api.larkAccounts() // a hub from before several accounts: none
+        async let models = try? await api.modelConfiguration()
         do {
             status = try await api.larkStatus()
             failure = nil
@@ -710,6 +717,11 @@ struct FeishuConnectorView: View {
             failure = error.shown.map { String(localized: "Couldn't get Lark's status: \($0)") }
         }
         accounts = await list
+        if let catalog = await models {
+            showsAgentModel = !catalog.purposes.contains(where: ModelConfigurationModel.isLarkContext)
+        } else if !Task.isCancelled, showsAgentModel == nil {
+            showsAgentModel = true
+        }
     }
 }
 
