@@ -293,7 +293,7 @@ internal class AgentsViewModel(
         val knownMachines = machines + sessions.map { it.machineId }.distinct().filter { id -> machines.none { it.id == id } }
             .map { Machine(it) } // named by the list as not updated yet (AgentsScreen.kt)
         val admittedMachines = machines.mapTo(mutableSetOf()) { it.id }
-        val initialFolded = if (foldsGrouping == prefs.grouping || settings.query.isNotEmpty() || settings.folded.isNotEmpty())
+        val initialFolded = if (foldsLoaded || settings.query.isNotEmpty())
             settings.folded else localPrefs.folds[prefs.grouping].orEmpty()
         val requested = settings.copy(grouping = prefs.grouping, sort = prefs.sort, folded = initialFolded,
             workspaces = workspaces.filter { it.machineId in admittedMachines })
@@ -753,7 +753,9 @@ internal class AgentsViewModel(
         preferences.markSeen(rows.map { it.session })
     }
     /** The grouping whose stored folds [settings] holds; folds are read again only when it changes (#4338 A6). */
-    @Volatile private var foldsGrouping: AgentGrouping? = null
+    private var foldsGrouping: AgentGrouping? = null
+    /** True once [settings] holds an authoritative fold set (from the initial snapshot collector or an explicit fold tap). */
+    @Volatile private var foldsLoaded = false
     /** The list's folds while a search opens them ([query]). */
     private var stashedFolds: Set<String>? = null
 
@@ -765,6 +767,7 @@ internal class AgentsViewModel(
                 foldsGrouping = prefs.grouping
                 val stored = prefs.folds[prefs.grouping].orEmpty()
                 if (settings.value.query.isEmpty()) settings.update { it.copy(folded = stored) } else stashedFolds = stored
+                foldsLoaded = true
             }
         }
     }
@@ -778,6 +781,7 @@ internal class AgentsViewModel(
     }
 
     fun fold(group: AgentListGroup) {
+        foldsLoaded = true
         // Section fold and a quiet space (ChatsView.swift:1168, :2595, :3114, :3214, :3237).
         writeTap(ListTapMotionKind.State) { current ->
             if (group.parent == "quiet") current.copy(
@@ -798,11 +802,13 @@ internal class AgentsViewModel(
         saveFolds()
     }
     fun fold(machine: AgentMachineGroup) {
+        foldsLoaded = true
         // ChatsView.swift:1168, the computer's section
         writeTap(ListTapMotionKind.State) { it.copy(folded = if (machine.folded) it.folded - machine.id else it.folded + machine.id) }
         saveFolds()
     }
     fun foldAll(fold: Boolean) {
+        foldsLoaded = true
         // Collapse All / Expand All (AgentsMenus.swift:125, :128), Theme.Motion.standard.
         previous = null
         writeTap(ListTapMotionKind.State) { it.copy(
