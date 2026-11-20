@@ -2768,6 +2768,17 @@ group's. With one installed manager, or a hub without a roster, nothing below sh
   `.aPushIsThePagesOwnUnlessAnotherManagerSentIt`,
   `ExtensionOperationsTests.anotherManagersOperationIsKeptApart`, `MacAttentionTests.aManagerSwitchedOffHereRingsNoBanner`.
 
+## Starred messages (#11993)
+
+On iPhone and iPad, touch and hold a user message or reply in an Assistant or Agent conversation and choose **Star**.
+The same row shows the saved mark, and **Unstar** offers Undo. **Pages › Starred** searches the current assistant's
+snapshots by words, conversation title and speaker. The list is shared with the Web app through the existing Assistant
+manager API. Chats use compact references. The saved text is read while the Starred page is open.
+
+**Open Original** checks the exact transcript and highlights the saved message when it is still present. Positional
+messages also need a matching record fingerprint. A deleted conversation or original leaves the words available for
+Copy. A failed connection offers a retry. Older assistants that do not offer the API have no Starred entry or menu action.
+
 ## Saved prompts (#9436)
 
 The user's own `/` prompts (web #7329, `docs/web/web.md` "Saved prompts (#7329)"): the instructions they send again and

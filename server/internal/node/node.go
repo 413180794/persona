@@ -2209,8 +2209,11 @@ func (n *Node) handleMethod(ctx context.Context, method string, params json.RawM
 			if err := n.refreshExport(p.SessionID, f); err != nil {
 				return nil, err
 			}
-		} else {
-			n.refresh(p.SessionID, f)
+		} else if err := n.refresh(p.SessionID, f); err != nil && proto.PositionalItemID(a.ItemID) {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil, n.readErr(p.SessionID, noTranscript{p.SessionID})
+			}
+			return nil, err
 		}
 		it, err := f.Full(a.ItemID)
 		if errors.Is(err, transcript.ErrSourceChanged) {
