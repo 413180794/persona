@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -17,6 +18,10 @@ import (
 func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, string, error) {
 	l := s.requestCtxLang(ctx)
 	if p.Parent != "" {
+		if isTaskPurpose(p.ID) && p.Parent == "assistant" {
+			b, err := s.taskModelBaseline(ctx, p.MachineID)
+			return b, p.Parent, err
+		}
 		b, err := s.resolveModel(ctx, p.Parent)
 		return b, p.Parent, err
 	}
@@ -156,9 +161,7 @@ func messagesAPI(api string) bool { return api == "" || api == "messages" }
 // fallbackAPIProvider names the managed connection an unconfigured API use runs on: the first direct API provider,
 // else the first keyed launcher speaking Messages. Other launcher protocols cannot serve these uses. Hidden ones and
 // ones without an address, a default model or a key are skipped. "" when there is none.
-func (s *Service) fallbackAPIProvider(ctx context.Context) string {
-	stored := s.storedLaunchers(ctx)
-	hidden := s.hiddenLaunchers(ctx)
+func fallbackAPIProviderFrom(stored []storedLauncher, hidden []string) string {
 	usable := func(l storedLauncher) bool {
 		return !proto.IsExternalLauncher(l.Name) && !slices.Contains(hidden, l.Name) && l.BaseURL != "" && l.Model != "" && l.KeySealed != ""
 	}
@@ -173,6 +176,10 @@ func (s *Service) fallbackAPIProvider(ctx context.Context) string {
 		}
 	}
 	return ""
+}
+
+func (s *Service) fallbackAPIProvider(ctx context.Context) string {
+	return fallbackAPIProviderFrom(s.storedLaunchers(ctx), s.hiddenLaunchers(ctx))
 }
 
 // mergeModel puts over's choices on base: another provider starts from nothing (its model and effort are its own).
@@ -314,9 +321,21 @@ func (s *Service) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, err
 					if err != nil {
 						return c, i18n.Err("assistant-models_probe.err_open_headers")
 					}
+					if err := checkHeaders(headers); err != nil {
+						return c, err
+					}
+					if l.Kind != "api" && !l.CustomHeadersSupported() {
+						return c, errRuntimeHeaders
+					}
 					for _, header := range parseHeaders(headers) {
+						name := http.CanonicalHeaderKey(header[0])
+						if c.Headers == nil {
+							c.Headers = map[string]string{}
+						}
+						c.Headers[name] = header[1]
 						if strings.EqualFold(header[0], "User-Agent") {
-							c.UserAgent = &header[1]
+							value := header[1]
+							c.UserAgent = &value
 						}
 					}
 				}

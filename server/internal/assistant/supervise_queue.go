@@ -2,303 +2,159 @@ package assistant
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"maps"
 	"slices"
-	"strconv"
-	"strings"
-	"time"
 
-	"github.com/nwverse/persona/server/internal/lazyre"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Keep the facts as admitted: some signals (a worker report or an answered card)
-// cannot be reconstructed once queued. Text remains readable by older managers.
-type queuedSupervision struct {
-	Prompt  prompts.Supervise `json:"prompt"`
-	Owners  map[string]string `json:"owners"`
-	signals []superviseSignal // only live signals may merge or release their dedup reservations
+func encodeDigestSignals(list []superviseSignal) string {
+	raw, _ := json.Marshal(list)
+	return string(raw)
 }
 
-func setDigest(msg *relayMsg, role prompts.Supervise, entries []prompts.SuperviseEntry, signals []superviseSignal) {
-	d := &queuedSupervision{Prompt: role, Owners: map[string]string{}, signals: signals}
+// Keep the same rendering for initial dispatch and a queue that has waited while tasks changed.
+func (s *Service) renderQueuedDigest(ctx context.Context, to string, list []prompts.SuperviseEntry, originalFresh ...bool) string {
+	here := s.settings(ctx)
+	background := to != here.Main && to == here.BackgroundSupervisor
+	leader := background || to != here.Main && s.isLeader(ctx, to)
+	fresh := background && !backgroundKeepsContext(here)
+	if len(originalFresh) > 0 {
+		fresh = originalFresh[0]
+	}
+	return prompts.RenderSupervise(prompts.Supervise{Entries: sortEntries(list), Leader: leader, Background: background,
+		Fresh: fresh, Side: to != here.Main && !leader, Escalated: escalatedIn(list),
+		BackgroundEscalated: slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool { return e.Kind == sigEscalated && e.Background }),
+		LeaderStuck:         slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool { return e.Kind == sigLeaderStuck }),
+		Overdue:             slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool { return e.Kind == sigOverdue }),
+		ParkedDue:           slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool { return e.Kind == sigParkedDue }),
+		ParkDecided:         slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool { return e.Kind == sigParkDecided }),
+		Decisions: slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool {
+			return e.Kind == sigRecheck || e.Kind == sigUndecidable || e.Kind == sigOwnerCannot
+		}),
+		Inbox: slices.ContainsFunc(list, func(e prompts.SuperviseEntry) bool { return e.Kind == sigInbox }),
+		Asked: askedIn(list), AskMinutes: int(askHoldFor.Minutes()), LowDistraction: askedIn(list) && s.quietModeOn(ctx)})
+}
+
+// Recheck structured queue entries at the last delivery boundary. Unknown task state keeps the original queue.
+// Legacy text-only entries retain their behavior; their task facts cannot safely be reconstructed from prose.
+func (s *Service) recheckQueuedDigest(ctx context.Context, to string, msg relayMsg) (relayMsg, bool, bool) {
+	var signals []superviseSignal
+	if msg.Signals == "" {
+		return msg, false, false
+	}
+	if err := json.Unmarshal([]byte(msg.Signals), &signals); err != nil || len(signals) == 0 {
+		return msg, false, true
+	}
+	if err := s.ensureTodosLoaded(ctx); err != nil {
+		return msg, false, true
+	}
+	var retry []superviseSignal
+	ctx, signals, retry = s.allStoppedBatch(ctx, signals)
+	if len(retry) > 0 {
+		return msg, false, true
+	}
+	here, web := s.settings(ctx), s.webBase(ctx)
+	groups := map[string][]superviseSignal{}
+	entries := map[string][]prompts.SuperviseEntry{}
 	for _, g := range signals {
-		d.Owners[g.Todo] = g.owner
-	}
-	msg.Digest = d
-	d.Prompt.Entries = sortEntries(entries)
-	msg.Text = d.render()
-	msg.Urgent = anyDecision(signals)
-}
-
-func (d *queuedSupervision) render() string {
-	p := d.Prompt
-	entries := p.Entries
-	p.Asked = askedIn(entries)
-	p.Escalated = escalatedIn(entries)
-	for _, e := range entries {
-		switch e.Kind {
-		case sigEscalated:
-			p.BackgroundEscalated = p.BackgroundEscalated || e.Background
-		case sigLeaderStuck:
-			p.LeaderStuck = true
-		case sigOverdue:
-			p.Overdue = true
-		case sigParkedDue:
-			p.ParkedDue = true
-		case sigParkDecided:
-			p.ParkDecided = true
-		case sigRecheck, sigUndecidable, sigOwnerCannot:
-			p.Decisions = true
-		case sigInbox:
-			p.Inbox = true
-		}
-	}
-	return prompts.RenderSupervise(p)
-}
-
-func superviseTaskActionable(t Todo, kind string) bool {
-	if t.Supervision == nil || t.Cancelled() {
-		return false
-	}
-	// A start that failed can have done_at while its failure still awaits review.
-	return t.DoneAt == nil || kind == sigFailed && t.StartError != "" && t.DoneBy == "" && t.Supervision.state(t) != reviewAccepted
-}
-
-// The ledger owner may differ from the addressed conversation for an escalation,
-// a card routed up a rung, or a fallback when a leader is gone. Retain that route
-// while its owner still holds the task. Protected runtime reports follow #10338.
-func (s *Service) superviseEntryHolds(ctx context.Context, cfg Settings, to string, msg relayMsg, id, kind string) bool {
-	t, ok := s.todoNow(id)
-	if !ok || !superviseTaskActionable(t, kind) {
-		return false
-	}
-	owner := t.Supervision.Supervisor
-	if to == owner {
-		return true
-	}
-	if (owner == "" || owner == cfg.Main) && (to == cfg.Main || to == cfg.BackgroundSupervisor || msg.NeedsSupervisor) {
-		return true
-	}
-	if msg.Digest != nil && msg.Digest.Owners[id] == owner {
-		return true // same ledger owner as when the explicit route or fallback was chosen
-	}
-	g := superviseSignal{Todo: id, Kind: kind}
-	if s.agentSupervised(t) {
-		if kind != sigDecide {
-			return false
-		}
-		g.To, _ = s.supervisorAboveTask(ctx, t)
-	}
-	// A routed question may be at the main conversation above its leader.
-	if kind == sigAsk && to == cfg.Main && slices.Contains(cfg.Leaders, owner) {
-		return true
-	}
-	want := s.digestTo(cfg, g)
-	if want == to {
-		return true
-	}
-	if to != cfg.Main || msg.Digest != nil {
-		return false
-	}
-	// Without a recorded owner, a rendered digest at main may be the
-	// fallback for a missing side conversation. A listed current owner can
-	// take its own work. A missing listing does not disprove the fallback.
-	c, listed := s.session(ctx, cfg.MachineID, want)
-	return !listed || !c.Assistant
-}
-
-// filterSuperviseRelay requires a successfully loaded task ledger. An empty
-// result retires the message. Never mutate a queue snapshot held by a sender.
-func (s *Service) filterSuperviseRelay(ctx context.Context, cfg Settings, to string, msg relayMsg) relayMsg {
-	old := msg
-	d := msg.Digest
-	if d == nil {
-		msg = s.filterLegacyDigest(ctx, cfg, to, msg)
-	} else {
-		var entries []prompts.SuperviseEntry
-		owners := map[string]string{}
-		var urgent bool
-		for _, e := range d.Prompt.Entries {
-			if s.superviseEntryHolds(ctx, cfg, to, msg, e.ID, e.Kind) {
-				entries = append(entries, e)
-				owners[e.ID] = d.Owners[e.ID]
-				urgent = urgent || (superviseSignal{Kind: e.Kind, Report: e.Report}).waitsOnDecision()
+		if t, ok := s.todoNow(g.Todo); ok && t.DoneAt == nil && g.Kind == sigNeedsYou {
+			if _, known := s.taskNeedsRecheck(ctx, t); !known {
+				return msg, false, true
 			}
 		}
-		if len(entries) == 0 {
-			return relayMsg{}
-		}
-		if len(entries) == len(d.Prompt.Entries) {
-			return msg
-		}
-		next := &queuedSupervision{Prompt: d.Prompt, Owners: owners}
-		next.Prompt.Entries = entries
-		for _, g := range d.signals {
-			if _, ok := owners[g.Todo]; ok && s.superviseEntryHolds(ctx, cfg, to, msg, g.Todo, g.Kind) {
-				next.signals = append(next.signals, g)
+		if e, ok := s.digestEntry(ctx, g, web); ok {
+			// A worker reassigned to an Agent needs the ordinary dispatcher, not assistant.send to its old conversation.
+			if _, handled, _ := s.leaderRoute(g); handled {
+				return msg, false, true
 			}
+			target := s.digestTarget(ctx, here, g)
+			if target == "" {
+				return msg, false, true
+			}
+			groups[target] = append(groups[target], g)
+			entries[target] = append(entries[target], e)
 		}
-		msg.Digest, msg.Text, msg.Urgent = next, next.render(), urgent
 	}
-	if msg.Tool != "" && msg.Text != old.Text {
-		msg.OnceID = relayMsgID(to, old)
-		if !msg.Urgent {
-			msg.DecisionAt = time.Time{}
-		}
+	if len(groups) == 0 {
+		return msg, true, false
 	}
-	return msg
-}
-
-// Older rows have only the rendered prompt. Trust the template's counted,
-// consecutively numbered task headers, never task IDs mentioned in evidence.
-// Preserve an unfamiliar or ambiguous format intact.
-var legacyDigestHeader = lazyre.New(`^📋 督办：你派出去的任务有 ([0-9]+) 个要你处理\n`)
-var legacyDigestItem = lazyre.New(`(?m)^([1-9][0-9]*)\. 任务「[^\n]*?」（(todo_[A-Za-z0-9_-]+)，signal=([a-z_]+)(?:，链接 [^\n]*?)?）：`)
-
-func (s *Service) filterLegacyDigest(ctx context.Context, cfg Settings, to string, msg relayMsg) relayMsg {
-	h := legacyDigestHeader.FindStringSubmatchIndex(msg.Text)
-	if h == nil {
-		return msg
+	next := msg
+	next.OnceID = relayMsgID(to, msg)
+	next.Signals = encodeDigestSignals(groups[to])
+	if len(groups[to]) > 0 {
+		next.Text = s.renderQueuedDigest(ctx, to, entries[to], prompts.IsSuperviseRound(msg.Text))
+		next.Urgent = anyDecision(groups[to])
 	}
-	items := legacyDigestItem.FindAllStringSubmatchIndex(msg.Text, -1)
-	if len(items) == 0 || strconv.Itoa(len(items)) != msg.Text[h[2]:h[3]] {
-		return msg
-	}
-	var body strings.Builder
-	count, urgent, asked := 0, false, false
-	for i, m := range items {
-		if msg.Text[m[2]:m[3]] != strconv.Itoa(i+1) {
-			return msg
-		}
-		id, kind := msg.Text[m[4]:m[5]], msg.Text[m[6]:m[7]]
-		if !s.superviseEntryHolds(ctx, cfg, to, msg, id, kind) {
+	// Render before taking the queue lock: rendering may read other service state.
+	moved := map[string]relayMsg{}
+	for target, list := range groups {
+		if target == to {
 			continue
 		}
-		end := len(msg.Text)
-		if i+1 < len(items) {
-			end = items[i+1][0]
-		}
-		count++
-		body.WriteString(strconv.Itoa(count))
-		body.WriteString(msg.Text[m[3]:end])
-		// A legacy report has no structured report kind. Preserve its priority
-		// if the original digest was urgent.
-		urgent = urgent || (superviseSignal{Kind: kind}).waitsOnDecision() || kind == sigReport && msg.Urgent
-		asked = asked || kind == sigAsk
+		m := msg
+		m.OnceID = "" // another destination is a separate delivery
+		m.Text = s.renderQueuedDigest(ctx, target, entries[target])
+		m.Signals, m.Urgent = encodeDigestSignals(list), anyDecision(list)
+		moved[target] = m
 	}
-	if count == len(items) {
-		return msg
-	}
-	if count == 0 {
-		return relayMsg{}
-	}
-	prefix := msg.Text[:h[2]] + strconv.Itoa(count) + msg.Text[h[3]:items[0][0]]
-	if !asked {
-		lines := strings.Split(prefix, "\n")
-		prefix = strings.Join(slices.DeleteFunc(lines, func(l string) bool { return strings.HasPrefix(l, "Question routing:") }), "\n")
-	}
-	msg.Text, msg.Urgent = strings.TrimRight(prefix+body.String(), "\n"), urgent
-	return msg
-}
-
-func (s *Service) recheckSuperviseRelay(ctx context.Context, to string, msg relayMsg) (relayMsg, error) {
-	if err := s.ensureTodosLoaded(ctx); err != nil {
-		return msg, err
-	}
-	cfg, ok := s.savedSettings(ctx)
-	if !ok {
-		return msg, errors.New("supervision routing settings could not be read")
-	}
-	return s.filterSuperviseRelay(ctx, s.effective(ctx, cfg), to, msg), nil
-}
-
-func (s *Service) mergeableDigest(to string) relayMsg {
 	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	q := b.st.Queue[to]
-	for i := len(q) - 1; i >= 0; i-- {
-		m := q[i]
-		if (i > 0 || !b.draining[to]) && !m.NeedsSupervisor && m.Digest != nil && len(m.Digest.signals) > 0 {
-			return m
+	if len(q) == 0 || q[0] != msg {
+		return msg, false, true
+	}
+	// Do not change the identity or destination of a send that may already have landed.
+	if !msg.TriedAt.IsZero() && (next.Text != msg.Text || len(groups) > 1 || len(groups[to]) == 0) {
+		return msg, false, true
+	}
+	state := b.st
+	state.Queue = maps.Clone(b.st.Queue)
+	for target, m := range moved {
+		state.Queue[target] = append(slices.Clone(state.Queue[target]), m)
+	}
+	if len(groups[to]) > 0 {
+		state.Queue[to] = slices.Clone(q)
+		state.Queue[to][0] = next
+	} else {
+		state.Queue[to] = slices.Clone(q[1:])
+		if len(state.Queue[to]) == 0 {
+			delete(state.Queue, to)
 		}
 	}
-	return relayMsg{}
+	// Save moves and the corresponding source removal together, before anything can send the new payload.
+	if st := s.store(); st != nil {
+		if err := st.PutSetting(ctx, relayKey, state); err != nil {
+			return msg, false, true
+		}
+	}
+	b.st = state
+	return next, len(groups[to]) == 0, false
 }
 
-// Compare with the exact queued version: a drain, merge or handover can race a
-// task change. A failed setting write leaves that version available for retry.
-func (s *Service) replaceQueuedSupervise(to string, old, next relayMsg) bool {
+// Read the payload that is actually queued, rather than the last in-memory digest (which may have drained).
+func (s *Service) queuedDigestSignals(to string) []superviseSignal {
 	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	q := b.st.Queue[to]
-	i := slices.Index(q, old)
-	if i < 0 || i == 0 && b.draining[to] {
-		return false
+	if !s.relayLocked(context.Background()) {
+		return nil
 	}
-	if next.Tool != "" {
-		next = next.replacing(old, time.Now())
-	}
-	return s.editQueuedRelayLocked(to, i, next)
-}
-
-func (s *Service) editQueuedRelayLocked(to string, i int, next relayMsg) bool {
-	queue := s.relays.st.Queue
-	old := queue[to]
-	q := slices.Clone(old)
-	if next.Tool == "" {
-		q = slices.Delete(q, i, i+1)
-	} else {
-		q[i] = next
-	}
-	if len(q) == 0 {
-		delete(queue, to)
-	} else {
-		queue[to] = q
-	}
-	if s.saveRelayLocked() != nil {
-		queue[to] = old
-		return false
-	}
-	return true
-}
-
-// Task writes coalesce before notifying the apps; the watch also catches queued
-// work restored after a restart even when its receiver is busy or absent.
-func (s *Service) pruneQueuedSupervision(ctx context.Context) {
-	// Rehoming a runtime changes its ledger before moving its protected evidence.
-	if !s.supervise.dedupMu.TryLock() {
-		return // a digest or handover is in flight; its drain or the next watch rechecks
-	}
-	defer s.supervise.dedupMu.Unlock()
-	b := &s.relays
-	b.mu.Lock()
-	var candidates map[string][]relayMsg
-	if s.relayLocked(ctx) {
-		for to, q := range b.st.Queue {
-			for i, m := range q {
-				if m.Tool == superviseTool && (i > 0 || !b.draining[to]) {
-					if candidates == nil {
-						candidates = map[string][]relayMsg{}
-					}
-					candidates[to] = append(candidates[to], m)
-				}
-			}
+	for _, msg := range b.st.Queue[to] {
+		if msg.Tool != superviseTool {
+			continue
 		}
-	}
-	b.mu.Unlock()
-	changed := false
-	for to, q := range candidates {
-		for _, old := range q {
-			next, err := s.recheckSuperviseRelay(ctx, to, old)
-			if err == nil && next != old && s.replaceQueuedSupervise(to, old, next) {
-				changed = true
-			}
+		var list []superviseSignal
+		if msg.Signals != "" {
+			_ = json.Unmarshal([]byte(msg.Signals), &list)
+			return list
 		}
+		s.supervise.mu.Lock()
+		list = slices.Clone(s.supervise.queued[to])
+		s.supervise.mu.Unlock()
+		return list
 	}
-	if changed {
-		s.publish(ctx)
-	}
+	return nil
 }

@@ -4,6 +4,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../lib/api";
 import type { ItemsPage } from "../../lib/types";
 import { useTranscript, type Transcript } from "./useTranscript";
 
@@ -96,11 +97,62 @@ describe("loading an older page that fails", () => {
     expect(older()).toBe(3);
   });
 
+  it("joins a retry requested by the rail during backoff", async () => {
+    await loadEarlier();
+    api.mockImplementation(async (path: string) => path.includes("before_seq=")
+      ? { items: [{ id: "older", seq: 5, role: "user", kind: "text", text: "older" }], has_more: false }
+      : newest);
+    let first!: Promise<symbol | undefined>;
+    let second!: Promise<symbol | undefined>;
+    act(() => {
+      first = tr.current.loadEarlier({ waitForRetry: true });
+      second = tr.current.loadEarlier({ waitForRetry: true });
+    });
+    expect(second).toBe(first);
+    vi.advanceTimersByTime(2999);
+    expect(older()).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(await first).toBe(tr.current.earlierPage);
+    expect(older()).toBe(2);
+    expect(tr.current.items[0].seq).toBe(5);
+    expect(tr.current.hasMore).toBe(false);
+  });
+
+  it("cancels a rail retry when its conversation changes", async () => {
+    await loadEarlier();
+    let pending!: Promise<symbol | undefined>;
+    act(() => { pending = tr.current.loadEarlier({ waitForRetry: true }); });
+    await act(async () => root.render(<Probe sid="s2" />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(await pending).toBeUndefined();
+    expect(older()).toBe(1);
+    expect(tr.current.error).toBe("");
+  });
+
   it("asks at once in another session", async () => {
     await loadEarlier();
     await act(async () => root.render(<Probe sid="s2" />));
     expect(tr.current.items).toHaveLength(1);
     await loadEarlier();
     expect(older()).toBe(2);
+  });
+});
+
+// #11450: once the latest page said its computer can't find this history, no older page is read. The node answers an
+// older page of such a session with an empty one (released apps ask again on an error), which would end paging, draw
+// the chat's start above what is cached and take the error away.
+describe("a history its computer can't find", () => {
+  it("reads no older page and keeps the error", async () => {
+    api.mockImplementation(async (path: string) => {
+      if (path.includes("before_seq=")) return { items: [], has_more: false };
+      throw new ApiError(404, "Persona can't find its history", { error: "Persona can't find its history", code: "not_found",
+        reason: "no_transcript", detail: "transcript for session s1 not found" });
+    });
+    await act(async () => { tr.current.reload(); });
+    expect(tr.current.error).not.toBe("");
+    await loadEarlier();
+    expect(older()).toBe(0);
+    expect(tr.current.error).not.toBe("");
+    expect(tr.current.hasMore).toBe(true);
   });
 });

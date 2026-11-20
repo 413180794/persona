@@ -38,7 +38,7 @@ import (
 
 // codexAppHistoryVersion changes when already-written JSONL no longer matches what the converter produces. A mark
 // without it is a legacy cache and is rebuilt once, even when the App database has not changed.
-const codexAppHistoryVersion = 1
+const codexAppHistoryVersion = 2
 
 // codexAppHistoryWait bounds one read of the history database; a long chat's turns stream in well under it.
 const codexAppHistoryWait = 30 * time.Second
@@ -521,6 +521,7 @@ func writeCodexAppHistory(ctx context.Context, db string, t codexAppThread, path
 		for _, it := range cur.held {
 			line(it[0].(time.Time), "event_msg", map[string]any{"type": "item_completed", "item": it[1]})
 		}
+		res.turn, res.turnID, res.status = cur.ordinal, cur.id, cur.status
 	}
 	if err := w.Flush(); err != nil {
 		return res, err

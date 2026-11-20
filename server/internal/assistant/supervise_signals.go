@@ -43,8 +43,9 @@ var (
 	// superviseEvery is the least time between two supervision messages; superviseUrgentEvery when one waits on a decision.
 	superviseEvery       = 10 * time.Minute
 	superviseUrgentEvery = 2 * time.Minute
-	// superviseNoMainLogEvery is how often a digest that still finds no main conversation says so in the log: the
-	// watch's every pass (superviseTick) tries again, and each said it once before.
+	// superviseNoMainLogEvery is how often a digest that still leaves signals waiting for a main conversation (none is
+	// set and no conversation that dispatched them can be told, or no machine) says so in the log: the watch's every
+	// pass (superviseTick) tries again, and each said it once before.
 	superviseNoMainLogEvery = time.Hour
 	// superviseNeedsAfter is how long an agent waits for an answer before the supervisor hears of it (the user was
 	// pushed; a quiet task's at once: the user was not).
@@ -63,7 +64,6 @@ var (
 // the same signal with the same key is told once.
 type superviseSignal struct {
 	Todo, Kind, Key string
-	owner           string // ledger owner when routed, including explicit escalations and fallbacks
 	PRURL           string // draft_pr: the current or earlier followed PR, revalidated before delivery
 	// Unreachable: this decision exists because the task leader's agent could not be reached, not because the worker
 	// waits for the user. It stays a decision even though the worker's ledger is not needs_user (task_leader.go).
@@ -73,9 +73,10 @@ type superviseSignal struct {
 	Detail, Ask      string
 	Minutes          int
 	// A report's (sigReport): its kind (progress, question, blocked, done), evidence and the step it is on.
-	Report      string
-	Evidence    []string
-	Step, Steps int
+	SourcePermission proto.SourcePermission
+	Report           string
+	Evidence         []string
+	Step, Steps      int
 	// no_progress: the tool calls the hub saw in the stretch, and how many were waits or repeats (supervise_progress.go).
 	Calls, Waits int
 	// Orphan: why nobody works on it (sigOrphaned): orphanError, orphanClosed or orphanOffline.
@@ -123,6 +124,9 @@ func (g superviseSignal) id() string {
 	if g.Kind == sigInbox && g.Inbox != nil && g.Inbox.ToAgent == "sent" {
 		return g.Todo + "|" + g.Kind + ":agent_copy" // delivered copies never absorb an earlier failed delivery
 	}
+	if g.Kind == sigInbox && g.Inbox != nil && g.Inbox.ToAgent == "unhandled" {
+		return g.Todo + "|" + g.Kind + ":unhandled@" + g.Key
+	}
 	return g.Todo + "|" + g.Kind
 }
 
@@ -149,17 +153,18 @@ type superviseBook struct {
 	writeMu sync.Mutex // one ledger write at a time (updateSupervision)
 	dedupMu sync.Mutex // serializes digest reservations and delivery
 	dedup   map[string]superviseFingerprint
-	pending map[string]superviseSignal // by todo|kind
-	sent    map[string]string          // todo|kind → the key last told
-	asks    map[string]string          // todo → what its agent last asked (InteractionRaised)
-	last    time.Time                  // when the last supervision message went out
+	pending map[string]superviseSignal   // by todo|kind
+	sent    map[string]string            // todo|kind → the key last told
+	asks    map[string]string            // todo → what its agent last asked (InteractionRaised)
+	last    time.Time                    // when the last supervision message went out
+	queued  map[string][]superviseSignal // conversation → the signals of the message still waiting in its queue
 	timer   *time.Timer
 	timerAt time.Time
 
 	resuming map[[2]string]struct{} // fingerprints of offline leader sends in flight, under dedupMu
 
-	// noMainSince is when digests started finding no main conversation (zero: the last one found it), noMainLogged
-	// when that was last logged (sendDigest).
+	// noMainSince is when digests started leaving signals waiting for a main conversation (zero: the last one left none
+	// waiting), noMainLogged when that was last logged (sendDigest).
 	noMainSince, noMainLogged time.Time
 	hold                      map[string]time.Time // conversation → when a supervision message went in: its turn's finish is not pushed
 	visible                   map[string]bool      // an explicit user action makes the current triage turn visible
@@ -245,9 +250,21 @@ func (s *Service) signal(g superviseSignal) {
 		b.mu.Unlock()
 		return
 	}
+	s.queueSignal(g)
+}
+
+// queueSignal only adds a validated signal to the in-memory digest. It does not change the turn ledger.
+func (s *Service) queueSignal(g superviseSignal) {
+	if g.At.IsZero() {
+		g.At = time.Now()
+	}
+	b := &s.supervise
 	b.mu.Lock()
 	b.init()
-	if b.sent[g.id()] == g.Key {
+	// This early cache is not an unhandled source's delivery receipt: an owner wait
+	// can discard the entry before dispatch. Its durable fingerprint deduplicates delivery.
+	unhandled := g.Kind == sigInbox && g.Inbox != nil && g.Inbox.ToAgent == "unhandled"
+	if b.sent[g.id()] == g.Key && !unhandled {
 		b.mu.Unlock()
 		return
 	}
@@ -416,15 +433,13 @@ func (s *Service) superviseLoop(ctx context.Context) {
 // conversation left waiting to the main conversation's follow-up (handOverUnreviewed), and lets go of a hold on the
 // main conversation's pushes that outlived superviseHoldMax.
 func (s *Service) superviseWatch(ctx context.Context, now time.Time) {
-	s.supervise.dedupMu.Lock()
-	s.rehomeRuntimeSupervision(ctx, s.settings(ctx))
-	s.supervise.dedupMu.Unlock()
-	s.pruneQueuedSupervision(ctx)
 	s.autoReviewTick(ctx, now)
+	s.sessionReviewTick(ctx, now)
 	s.askTick(now)                 // cards held past their time go up a rung (ask_route.go)
 	s.handOverUnreviewed(ctx, now) // a review a side conversation left waiting goes to the main one's follow-up (side_handover.go)
 	routed := s.routedSessions()
 	s.pruneTurns(ctx) // the turns' ledger: read before the first signal (what was told before a restart is not told again), closed tasks off it
+	s.recoverTaskInboxEvents(ctx)
 	// Only the open tasks: everything below passes the finished ones by, and there can be thousands of them.
 	tasks := s.todosWhere(ctx, "*", func(t *Todo) bool { return t.DoneAt == nil })
 	s.pruneAllStoppedDedup(ctx)

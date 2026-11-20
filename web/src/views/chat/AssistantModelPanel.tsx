@@ -121,8 +121,8 @@ export function AssistantModelPanel({ chat, mid, anchor, onClose }: { chat: Assi
         const result = await api<{ session: Session; replaced?: string; carried: boolean }>("/assistant/main/model", {
           method: "POST", json: { expect: s.session_id, ...pick },
         });
-        upsertSession(result.session);
         patchAssistant({ main: result.session.session_id, main_machine_id: result.session.machine_id });
+        upsertSession(result.session);
         navigate({ name: "persona" });
         return true;
       } catch (e) {

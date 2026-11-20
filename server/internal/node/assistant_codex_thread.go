@@ -63,7 +63,7 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool, star
 	}
 	if err := c.call(ctx, method, params, &res); err != nil {
 		if resume && codexResumeWriterConflict(err, id) {
-			return codexWriterConflict()
+			return codexActiveWriterRefusal()
 		}
 		return err
 	}

@@ -41,17 +41,20 @@ type modelRecord struct {
 
 // ModelProvider is one provider as Settings › Model configuration offers it: never its key.
 type ModelProvider struct {
-	ID       string        `json:"id"`
-	Name     string        `json:"name"`
-	Kind     string        `json:"kind"`
-	Agent    string        `json:"agent,omitempty"`
-	API      string        `json:"api,omitempty"`
-	Model    string        `json:"model,omitempty"`
-	Machines []string      `json:"machines,omitempty"`
-	Hidden   bool          `json:"hidden,omitempty"`
-	HasKey   bool          `json:"has_key,omitempty"`
-	Models   []ModelChoice `json:"models,omitempty"`
-	Status   string        `json:"status,omitempty"`
+	ID           string                `json:"id"`
+	Name         string                `json:"name"`
+	Kind         string                `json:"kind"`
+	Agent        string                `json:"agent,omitempty"`
+	API          string                `json:"api,omitempty"`
+	ChatEffort   bool                  `json:"chat_effort,omitempty"`
+	Effort       string                `json:"effort,omitempty"`
+	Model        string                `json:"model,omitempty"`
+	Machines     []string              `json:"machines,omitempty"`
+	Hidden       bool                  `json:"hidden,omitempty"`
+	HasKey       bool                  `json:"has_key,omitempty"`
+	Models       []proto.ProviderModel `json:"models,omitempty"`
+	ModelAliases map[string]string     `json:"model_aliases,omitempty"`
+	Status       string                `json:"status,omitempty"`
 }
 
 type ModelChoice = assistantwire.ModelChoice
@@ -233,14 +236,19 @@ var errModelPurposeNotFound = i18n.Err("assistant-models.err_purpose_not_found")
 
 var errModelConflict = i18n.Err("assistant-models.err_conflict")
 
-func modelKey(id string) string { return "model_config." + id }
+const (
+	modelKeyPrefix         = "model_config."
+	modelOverrideKeyPrefix = modelKeyPrefix + "overrides.v1."
+)
+
+func modelKey(id string) string { return modelKeyPrefix + id }
 
 // The AI twin, Lark /agent and a task's own use were retired with category-only settings. A fresh namespace keeps
 // dormant records (model_config.inbox.agent, model_config.lark.agent, model_config.task.<id>) inert, including their
 // revisions. Only a new user save creates such a record.
 func modelRecordKey(id string) string {
 	if agentsOverride(id) || isTaskPurpose(id) {
-		return "model_config.overrides.v1." + id
+		return modelOverrideKeyPrefix + id
 	}
 	return modelKey(id)
 }
@@ -265,6 +273,7 @@ type modelsState struct {
 	cacheMu  sync.Mutex
 	cacheAt  map[string]time.Time
 	have     map[string]map[string]bool   // machine \x00 launcher → its models (ids and what aliases resolve to)
+	declared map[string][]string          // machine \x00 launcher → every id the launcher declared (ids, resolved, aliases)
 	aliases  map[string]map[string]string // machine \x00 launcher → alias id → its resolved id
 	defaults map[string]string            // machine \x00 launcher → its default model's resolved or own id
 
@@ -377,7 +386,7 @@ func (s *Service) modelPurposeDef(ctx context.Context, id string) (ModelPurpose,
 				// A task's own conversation starts on the assistant's machine (schedule.go runTask), so its override
 				// is held to that machine's launchers. A conversation it came from keeps its own launcher and does not
 				// use this purpose.
-				machine := cmp.Or(s.settings(ctx).MachineID, t.MachineID)
+				machine := cmp.Or(t.ExecutionMachineID, s.settings(ctx).MachineID, t.MachineID)
 				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.Label, Group: mc(l, "group_assistant"), Kind: "launcher", Parent: "assistant", MachineID: machine}, nil
 			}
 		}
@@ -449,7 +458,7 @@ func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
 		if apiName == "" {
 			apiName = "messages"
 		}
-		out = append(out, ModelProvider{ID: x.id, Name: x.name, Kind: "api", API: apiName, Model: c.Model, HasKey: c.APIKeyFile != "" || c.APIKey != ""})
+		out = append(out, ModelProvider{ID: x.id, Name: x.name, Kind: "api", API: apiName, ChatEffort: apiName == "chat", Model: c.Model, HasKey: c.APIKeyFile != "" || c.APIKey != ""})
 	}
 	for _, v := range s.launcherViews(ctx) {
 		kind := v.Kind
@@ -464,7 +473,22 @@ func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
 		if kind == "launcher" {
 			agent = viewAgent(v)
 		}
-		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: cmp.Or(v.DisplayName, v.Name), Kind: kind, Agent: agent, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
+		var aliases map[string]string
+		if kind == "api" && apiName == "chat" {
+			stored := storedLauncher{ManagedLauncher: proto.ManagedLauncher{
+				OpusModel: v.OpusModel, SonnetModel: v.SonnetModel, HaikuModel: v.HaikuModel,
+				FableModel: v.FableModel, SmallModel: v.SmallModel,
+			}}
+			for alias := range apiTierAliases {
+				if resolved, err := resolveAPITierAlias(stored, alias); err == nil {
+					if aliases == nil {
+						aliases = map[string]string{}
+					}
+					aliases[alias] = resolved
+				}
+			}
+		}
+		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: cmp.Or(v.DisplayName, v.Name), Kind: kind, Agent: agent, API: apiName, ChatEffort: kind == "api" && apiName == "chat", Effort: v.Effort, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey, Models: v.Models, ModelAliases: aliases})
 	}
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
 		p := ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher", Agent: "claude"}
@@ -474,7 +498,11 @@ func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
 		out = append(out, p)
 	}
 	for _, p := range s.voicePlugins(ctx) {
-		out = append(out, ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: p.Default, Models: p.Models, Status: p.Error})
+		models := make([]proto.ProviderModel, len(p.Models))
+		for i, m := range p.Models {
+			models[i] = proto.ProviderModel{ID: m.ID, Name: m.Name}
+		}
+		out = append(out, ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: p.Default, Models: models, Status: p.Error})
 	}
 	return out
 }

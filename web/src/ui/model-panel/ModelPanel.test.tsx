@@ -178,13 +178,30 @@ describe("the model panel", () => {
     expect(document.body.textContent).toContain("需要新开对话");
   });
 
-  it("distinguishes identical model names by their launcher in All", async () => {
+  it.each(["search", "expanded"] as const)("distinguishes identical model names by their launcher in %s", async (view) => {
     const shared = [{ id: "fable", name: "Fable", efforts: [] }];
     await open({ providers: [claude({ models: shared }), codex({ models: shared, unavailable: undefined })], state: { current: null, recommended: [], starting: true } });
+    if (view === "search") type(search(), "Fable");
+    else {
+      act(() => launcher("claude").click());
+      act(() => launcher("codex").click());
+    }
     const duplicates = rows().filter((r) => r.textContent?.includes("Fable"));
     expect(duplicates).toHaveLength(2);
     expect(duplicates[0].textContent).toContain("Claude");
     expect(duplicates[1].textContent).toContain("Codex");
+  });
+
+  it("draws each provider's Agent mark once, first: on its launcher summary and at the start of its rows, never a letter (#5497)", async () => {
+    await open({ providers: [claude(), codex(), { ...codex(), id: "dsh", name: "dsh", engine: "dsh" }] });
+    const mark = (el: Element) => el.querySelector("[data-agent-mark]")?.getAttribute("data-agent-mark");
+    expect(["claude", "codex", "dsh"].map((p) => mark(launcher(p)))).toEqual(["claude", "codex", "dsh"]);
+    expect(row("Opus").querySelectorAll("[data-agent-mark]")).toHaveLength(1);
+    expect(mark(row("Opus").firstElementChild!)).toBe("claude");
+    act(() => launcher("codex").click());
+    expect(mark(row("GPT").firstElementChild!)).toBe("codex");
+    expect(row("GPT").querySelector("[data-row-setup] [data-agent-mark]")).toBeNull();
+    expect(document.body.querySelector('[data-agent-mark="letter"]')).toBeNull();
   });
 
   it("draws a provider's weekly quota bar and reset tooltip, and no bar when it is unknown", async () => {
@@ -721,7 +738,7 @@ describe("a long list", () => {
     expect(document.body.querySelector("[data-panel-more]")).toBeNull();
   });
 
-  it("a name cut short shows the launcher and whole model ID; others add them only on a touch screen", async () => {
+  it.each(["", "A detailed model"])("a name cut short shows the launcher and whole model ID; others add them only on a touch screen (description: %s)", async (description) => {
     const sw = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth");
     const cw = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
     // a name longer than 20 characters does not fit
@@ -743,7 +760,7 @@ describe("a long list", () => {
         providers: [
           claude({
             models: [
-              { id: long, name: long, efforts: [] },
+              { id: long, name: long, description, efforts: [] },
               { id: "sonnet", name: "Sonnet 5", efforts: [] },
             ],
           }),

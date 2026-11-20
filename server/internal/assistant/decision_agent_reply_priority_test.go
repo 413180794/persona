@@ -155,12 +155,17 @@ func TestDecisionReplyInterjectKeepsOlderQueuedSupervision(t *testing.T) {
 	g := pendingDecisionReply(t, s, todo)
 	setSupervisorWorking(f)
 	older := superviseSignal{Todo: todo.ID, Kind: sigReview, Key: "older-review"}
-	s.queueRelay("conv1", relayMsg{From: superviseTool, FromTitle: "督办", Tool: superviseTool, Text: "older supervision", Digest: &queuedSupervision{Prompt: prompts.Supervise{Entries: []prompts.SuperviseEntry{{ID: todo.ID, Kind: older.Kind}}}, signals: []superviseSignal{older}}, At: time.Now().Add(-time.Minute)})
+	s.queueRelay("conv1", relayMsg{From: superviseTool, FromTitle: "督办", Tool: superviseTool, Text: "older supervision", At: time.Now().Add(-time.Minute)})
+	s.supervise.mu.Lock()
+	s.supervise.setQueuedLocked("conv1", []superviseSignal{older})
+	s.supervise.mu.Unlock()
 	dispatchSupervisionNow(t, s, g)
 	if queued := queuedRelays(s, "conv1"); len(queued) != 1 || queued[0].Text != "older supervision" {
 		t.Fatalf("older relay was lost while the decision interjected: %+v", queued)
 	}
-	tracked := s.mergeableDigest("conv1").Digest.signals
+	s.supervise.mu.Lock()
+	tracked := append([]superviseSignal(nil), s.supervise.queued["conv1"]...)
+	s.supervise.mu.Unlock()
 	if len(tracked) != 1 || tracked[0].Key != older.Key {
 		t.Fatalf("older relay tracking was cleared: %+v", tracked)
 	}

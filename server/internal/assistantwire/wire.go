@@ -89,6 +89,8 @@ type Placement struct {
 	// Standby: this hub is a member of a mesh group, whose center runs the scheduled tasks (docs/server/mesh.md).
 	Standby        bool `json:"standby,omitempty"`
 	MemoryDreaming bool `json:"memory_dreaming,omitempty"`
+	// CompleteAgentlessTodos lets a supervising conversation complete its own agentless memo without another card.
+	CompleteAgentlessTodos bool `json:"complete_agentless_todos,omitempty"`
 }
 
 // DeviceCall is device.call's params. Device is a machine id, or DeviceAll for DeviceDevicesList.
@@ -150,6 +152,8 @@ type Device struct {
 	ModelConfiguration bool   `json:"model_configuration,omitempty"`
 	// ExternalInventory is announced only by a node with an enabled, trusted local model adapter.
 	ExternalInventory bool `json:"external_inventory,omitempty"`
+	// TaskInstructions: this node preserves delegated instructions separately, including fallback/resume.
+	TaskInstructions bool `json:"task_instructions,omitempty"`
 	// ClaudeVersion is Claude Code's version there ("" when it has none or never said): 设置 › 模型供应商's built-in
 	// claude lists the machines that have it.
 	ClaudeVersion string `json:"claude_version,omitempty"`
@@ -319,6 +323,12 @@ type NotifyTodo struct {
 	// `response`. Left out by a hub from before them.
 	Options   []string `json:"options,omitempty"`
 	Responses []string `json:"responses,omitempty"`
+	// Ask is the decision's ask in the to-do's view (OwnerAsk.ID), which an answer from the notification names, and
+	// Lockscreen what its push may offer on the lock screen (OwnerAskLockscreen: answer, its options as actions;
+	// open_only, none, a tap opens it), from how risky answering it is (#10465). The hub forwards the options only
+	// with answer, and sends an older manager's push, which has neither, as before.
+	Ask        string `json:"ask,omitempty"`
+	Lockscreen string `json:"lockscreen,omitempty"`
 }
 
 // NotifyPush is the kind of the assistant's pushes.
@@ -361,15 +371,16 @@ type Snapshot struct {
 
 // TaskView is one scheduled task in the snapshot.
 type TaskView struct {
-	ID           string    `json:"id"`
-	Label        string    `json:"label"`  // its title, or what stands for one
-	Repeat       string    `json:"repeat"` // once / daily / interval / cron
-	Enabled      bool      `json:"enabled"`
-	At           time.Time `json:"at,omitempty"` // once: when; interval, cron: the next run
-	EveryMinutes int       `json:"every_minutes,omitempty"`
-	MachineID    string    `json:"machine_id,omitempty"` // of the conversation it came from
-	RunMachineID string    `json:"run_machine_id,omitempty"`
-	RunSessionID string    `json:"run_session_id,omitempty"` // its own conversation
+	ExecutionMachineID string    `json:"execution_machine_id,omitempty"`
+	ID                 string    `json:"id"`
+	Label              string    `json:"label"`  // its title, or what stands for one
+	Repeat             string    `json:"repeat"` // once / daily / interval / cron
+	Enabled            bool      `json:"enabled"`
+	At                 time.Time `json:"at,omitempty"` // once: when; interval, cron: the next run
+	EveryMinutes       int       `json:"every_minutes,omitempty"`
+	MachineID          string    `json:"machine_id,omitempty"` // of the conversation it came from
+	RunMachineID       string    `json:"run_machine_id,omitempty"`
+	RunSessionID       string    `json:"run_session_id,omitempty"` // its own conversation
 	// Push is what of a run reaches the phone: "" every run's answer, PushAsked only what the run sends with
 	// notify_user (#2396). Such a task always runs in its own conversation, whose finished turns are not pushed.
 	Push string `json:"push,omitempty"`

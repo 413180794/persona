@@ -59,6 +59,10 @@ An intermittent test is not verified by repeatedly running only its own class. I
 
 Buffered hand-off evidence is acknowledged before its recording runs, leaving the journal delivered but unrecorded until that request completes. Coalesce the buffered operation IDs with the same recovery pass's journal scan, not with a permanent attempted tombstone: a later reconnect or process owner must still retry. If a disconnect during startup IO starts another recovery generation, watch hub state from transport acquisition rather than subscribing after the blocking write. Hold the journal mutex to force a failed buffered record before the scan, and use the following reply-recovery lookup as the completion barrier (#9868).
 
+## Robolectric photo decoding needs real bitmap support and a main-looper resume
+
+`ImageDecoder`'s Robolectric shadow is not a real PNG decoder. For behavior tests of a production photo path, use `BitmapFactory` and a file-backed test `ContentProvider`, not a mocked decoder result. When production decodes on `Dispatchers.IO`, Compose `waitUntil` alone may never run the continuation queued on Android's main looper: pump `shadowOf(Looper.getMainLooper()).idle()` inside the wait condition. Assert the exact terminal error or result and that retry is enabled again, never a transient "Reading…" label (#11057).
+
 ## A Robolectric FileProvider keeps the cache directory of the test that first used it (#9365)
 
 `FileProvider` takes the folders it serves the first time it is asked and keeps them for the life of the instance (`mLocalPathStrategy`); the
@@ -135,6 +139,38 @@ Do not merge main or edit source while a multi-task Gradle invocation is running
 compile the old contracts and later tasks read newly merged tests, producing misleading missing-field and constructor
 errors. Finish or stop that invocation first, update the branch, then verify the fixed revision. A failure is not an
 inherited main defect until a clean, independent main worktree reproduces it.
+
+## A cache key that differs in every worktree (#10712)
+
+Gradle hashes an input as written, so an absolute path in one gives every checkout its own cache key and a second
+worktree at the same commit rebuilds and retests everything. Nothing warns about it. The ones this build had:
+
+- `Test.systemProperty("persona.repo.root", <path>)` and the native library's path. Pass a path through
+  `jvmArgumentProviders` (`android/build-logic/convention/src/main/kotlin/persona/buildlogic/TestArguments.kt`):
+  `@Internal` for a location, or `@InputFiles` with `PathSensitivity.NONE` when the file's contents are the input.
+- `-Xfriend-paths=<build dir>` in `freeCompilerArgs`. Use the Kotlin compile task's `friendPaths` instead: Kotlin keys
+  it by each friend's path relative to the module's build directory (the classpath tracks the contents). Keep the friends
+  to project outputs with a non-transitive configuration; a jar from the Gradle cache sits at a different relative path
+  in every checkout, so a transitive friend list still splits the key.
+- An `Exec` task's `commandLine` / `args` set at configuration time, and KSP's `arg(key, "$projectDir/…")`. Set the
+  command line inside `exec()`, and give KSP a `CommandLineArgumentProvider` with a relative fingerprint.
+- `inputs.files(…)` without `withPathSensitivity(…)`: its default is `ABSOLUTE`.
+
+To check, run one task in two worktrees at one commit with `--info` and look for `FROM-CACHE`; with
+`-Dorg.gradle.caching.debug=true` Gradle prints each input property's hash, and the one that differs is the culprit.
+
+Two more traps from the same change. Reading a source file at configuration time (to find which fixtures a module's
+tests read, say) makes it a configuration-cache input, so editing a test discards the configuration; do such a scan
+in a task whose output feeds the test task's inputs, as `fixtureReferences` does. And a Kotlin package named
+`persona.build` lives in `persona/build/`, which `android/.gitignore`'s `build/` rule hides: the build compiles it
+locally and the commit leaves it out.
+
+Shared keys also change what a cache hit leaves behind. Robolectric screenshot tests write PNGs to `build/<name>-shots/`,
+which no task declares; while each checkout had its own keys, a new worktree's first test run always drew them. Once
+keys match, a new worktree's test task can come `FROM-CACHE` with no pictures, and a reused one keeps an older run's. An
+undeclared output is only safe where the task cannot be restored, so `--tests` runs (how screenshots are captured)
+skip the build cache (`android/build-logic/convention/src/main/kotlin/persona/buildlogic/TestRuns.kt`), and a
+whole-suite capture adds `--rerun`.
 
 ## Reusing an onboarding checklist for ordinary settings (#5233)
 
@@ -825,6 +861,8 @@ A file attachment's unbounded error text can make its row taller than the previe
 ## Keep expanded-composer send and Escape focus states separate
 
 A movable small composer field can remain composed and focused behind the expanded editor, so `onFocusChanged` may not fire again when the editor closes. Preserving `focusRequest` alone therefore leaves `state.focused` stale after a hardware send, while the following Escape cannot restore it through another callback. Use separate collapse actions: sending preserves the request count and clears the focused state; Escape follows the ordinary focus request and restores it. Target key injection at the expanded input's own tag when both nodes report focus.
+
+A one-shot picker request cannot depend on a control whose composition ends when the same send clears the draft and focus. Keep that control's owner composed for the whole picker lifetime, not merely until `onOpenHandled` consumes the request; disposing it then also disposes the menu or sheet. Test the actual popup or dialog and its dismissal for every style, not only the request callback (#11405).
 
 ## A registering surface must not take focus from a child that already has it
 

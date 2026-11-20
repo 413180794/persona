@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { mcpServers } from '../lib/compat.js'
-import { agyInputSchema } from '../lib/mcp-schema.js'
 
 const PROXY = fileURLToPath(new URL('../mcp-proxy.mjs', import.meta.url))
 const FAKE = fileURLToPath(new URL('./fake-mcp-server.mjs', import.meta.url))
@@ -40,78 +39,56 @@ function proxied(t, tools) {
 }
 
 describe('MCP proxy (#7333)', { timeout: 15_000 }, () => {
-  it('keeps compact server tools reachable through persona_call', async (t) => {
-    const { call } = proxied(t)
+  it('adds persona_call to the server\'s tools', async (t) => {
+    const big = { name: 'kb_search', description: 'Search the knowledge base. '.repeat(20), inputSchema: { type: 'object', properties: {} } }
+    const { call } = proxied(t, [big, { name: 'agents_list', description: 'List the Agents', inputSchema: { type: 'object', properties: {} } }])
+    const res = await call('tools/list', {})
+    assert.deepEqual(res.result.tools.map((x) => x.name), ['kb_search', 'persona_call'])
+  })
+
+  it('weighs a tool by what agy declares of it, not its output schema or annotations (#10756)', async (t) => {
+    const padded = {
+      name: 'mail_accounts', description: 'List mail accounts', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+      outputSchema: { type: 'object', description: 'x'.repeat(2000) }, annotations: { title: 'y'.repeat(500) },
+    }
+    const { call } = proxied(t, [padded])
     const res = await call('tools/list', {})
     assert.deepEqual(res.result.tools.map((x) => x.name), ['persona_call'])
+    const listed = await call('tools/call', { name: 'persona_call', arguments: {} })
+    assert.match(listed.result.content[0].text, /- mail_accounts: List mail accounts Arguments: \{"type":"object","properties":\{"id":\{"type":"string"\}\},"required":\["id"\]\}/)
   })
 
-  it('keeps persona_call eager with many smaller connector tools and dispatches omitted tools (#10756)', async (t) => {
-    const size = (tool) => Buffer.byteLength(JSON.stringify({
-      name: tool.name, description: tool.description, parameters: tool.inputSchema,
-    }))
-    // Model largest-first deferral down to a 512 B budget, below the old 590 B dispatcher. Include _meta that agy
-    // drops: measuring the full MCP object would wrongly consider these tiny schemas larger than the dispatcher.
-    const eager = (tools) => {
-      const kept = [...tools].sort((a, b) => size(a) - size(b))
-      let bytes = kept.reduce((sum, tool) => sum + size(tool), 0)
-      while (bytes > 512) bytes -= size(kept.pop())
-      return kept
+  it('lists a left-out tool with its whole input schema, references and alternatives included (#10756)', async (t) => {
+    const schema = {
+      type: 'object',
+      $defs: { when: { type: 'string', enum: ['now', 'later'] } },
+      properties: { at: { $ref: '#/$defs/when' }, target: { anyOf: [{ type: 'string' }, { type: 'integer' }] } },
+      additionalProperties: false,
     }
-    for (const count of [32, 128, 1024]) {
-      const tools = Array.from({ length: count }, (_, i) => ({
-        name: `connector_read_${i}`, description: 'Read only.', _meta: { note: 'x'.repeat(300) },
-        inputSchema: { type: 'object', properties: {} },
-      }))
-      const { call } = proxied(t, tools)
-      const { result: { tools: declarations } } = await call('tools/list', {})
-      const dispatch = declarations.find((tool) => tool.name === 'persona_call')
-      assert.ok(dispatch)
-      assert.ok(size(dispatch) < 270, 'dispatcher is smaller than the observed mail_accounts schema')
-      assert.ok(tools.every((tool) => size(tool) < 590 && size(tool) < size(dispatch)))
-      assert.ok(!eager([...tools, dispatch]).some((tool) => tool.name === 'persona_call'), 'fixture reproduces deferral')
-      assert.ok(eager(declarations).some((tool) => tool.name === 'persona_call'))
-      assert.ok(declarations.length <= 9)
-      assert.ok(Buffer.byteLength(JSON.stringify(declarations)) <= 4 * 1024)
-
-      const omitted = tools.at(-1).name
-      assert.ok(!declarations.some((tool) => tool.name === omitted))
-      const list = await call('tools/call', { name: 'persona_call', arguments: {} })
-      assert.equal(list.result.content[0].text, `The Persona tools: ${tools.map((tool) => tool.name).join(', ')}.`)
-      const via = await call('tools/call', { name: 'persona_call', arguments: { name: omitted, arguments: { filter: 'open' } } })
-      assert.deepEqual(JSON.parse(via.result.content[0].text), { name: omitted, args: { filter: 'open' } })
-    }
+    const { call } = proxied(t, [{ name: 'cancel_followup', description: 'Cancel', inputSchema: schema }])
+    await call('tools/list', {})
+    const listed = await call('tools/call', { name: 'persona_call', arguments: {} })
+    const line = listed.result.content[0].text.split('\n').find((l) => l.startsWith('- cancel_followup:'))
+    assert.deepEqual(JSON.parse(line.slice(line.indexOf('Arguments: ') + 'Arguments: '.length)), schema)
   })
 
-  it('reserves the dispatcher before oversized schemas and keeps later small tools', async (t) => {
-    const tools = [
-      { name: 'large', description: 'x'.repeat(16 * 1024), inputSchema: { type: 'object' } },
-      { name: 'small', description: 'Read only. '.repeat(20), inputSchema: { type: 'object' } },
-    ]
-    const { call } = proxied(t, tools)
-    const listed = await call('tools/list', {})
-    assert.deepEqual(listed.result.tools.map((tool) => tool.name), ['small', 'persona_call'])
-    const via = await call('tools/call', { name: 'persona_call', arguments: { name: 'large' } })
-    assert.deepEqual(JSON.parse(via.result.content[0].text), { name: 'large', args: {} })
-  })
-
-  it('keeps the dispatcher smallest among every passthrough declaration', async (t) => {
-    const tools = Array.from({ length: 32 }, (_, i) => ({
-      name: `connector_read_${i}`, description: 'Read only. '.repeat(35),
-      inputSchema: { type: 'object', properties: {} },
-    }))
-    const { call } = proxied(t, tools)
-    const { result: { tools: declarations } } = await call('tools/list', {})
-    const size = (tool) => Buffer.byteLength(JSON.stringify({
-      name: tool.name, description: tool.description, parameters: tool.inputSchema,
-    }))
-    const dispatch = declarations.find((tool) => tool.name === 'persona_call')
-    assert.ok(declarations.length > 1)
-    assert.ok(declarations.filter((tool) => tool !== dispatch).every((tool) => size(tool) > size(dispatch)))
-    const eager = [...declarations].sort((a, b) => size(a) - size(b))
-    let bytes = eager.reduce((sum, tool) => sum + size(tool), 0)
-    while (bytes > size(dispatch)) bytes -= size(eager.pop())
-    assert.deepEqual(eager.map((tool) => tool.name), ['persona_call'])
+  it('declares no tool smaller than persona_call, so agy never defers it (#10756)', async (t) => {
+    const small = Array.from({ length: 40 }, (_, i) => ({ name: `connector_read_${i}`, description: 'Read one thing', inputSchema: { type: 'object', properties: {} } }))
+    const big = { name: 'todo_create', description: 'Add a to-do. '.repeat(40), inputSchema: { type: 'object', properties: { title: { type: 'string' } } } }
+    const { call } = proxied(t, [...small, big])
+    const res = await call('tools/list', {})
+    const size = (tool) => Buffer.byteLength(JSON.stringify(tool))
+    const declared = res.result.tools
+    const dispatch = declared.find((x) => x.name === 'persona_call')
+    assert.deepEqual(declared.map((x) => x.name), ['todo_create', 'persona_call'])
+    assert.ok(declared.every((x) => x === dispatch || size(x) > size(dispatch)), 'persona_call is the smallest declared tool')
+    // The tools left out are still listed, with their arguments, and callable through it.
+    const listed = await call('tools/call', { name: 'persona_call', arguments: {} })
+    assert.match(listed.result.content[0].text, /connector_read_0, .*connector_read_39, todo_create/)
+    assert.match(listed.result.content[0].text, /- connector_read_7: Read one thing Arguments: \{"type":"object","properties":\{\}\}/)
+    assert.doesNotMatch(listed.result.content[0].text, /- todo_create:/)
+    const via = await call('tools/call', { name: 'persona_call', arguments: { name: 'connector_read_7', arguments: {} } })
+    assert.deepEqual(JSON.parse(via.result.content[0].text), { name: 'connector_read_7', args: {} })
   })
 
   it('sends persona_call on as a call of the named tool, and other calls unchanged', async (t) => {
@@ -148,14 +125,14 @@ describe('MCP declaration enums (#9944)', { timeout: 15_000 }, () => {
   const taskTool = { name: 'task_review', description: 'Review a task', inputSchema: taskSchema }
   const catalogTool = { name: 'tool_catalog', inputSchema: { type: 'object' } }
 
-  it('projects the real task_review schema and dispatches it even when its declaration is too large', async (t) => {
+  it('projects the real task_review schema without its boolean enum and keeps boolean call arguments', async (t) => {
     assert.deepEqual(taskSchema.properties.evidence.properties.ready.enum, [true])
     const { call } = proxied(t, [taskTool])
     const listed = await call('tools/list', {})
     const expected = structuredClone(taskTool)
     delete expected.inputSchema.properties.evidence.properties.ready.enum
-    assert.deepEqual(agyInputSchema(taskSchema), expected.inputSchema)
-    assert.deepEqual(listed.result.tools.map((tool) => tool.name), ['persona_call'])
+    assert.deepEqual(listed.result.tools, [expected, listed.result.tools.at(-1)])
+    assert.equal(listed.result.tools.at(-1).name, 'persona_call')
     for (const ready of [true, false]) {
       const args = { todo_id: 'todo_fixture', verdict: 'parked', evidence: { kind: 'merge_review', ready } }
       for (const params of [
@@ -207,16 +184,13 @@ describe('MCP declaration enums (#9944)', { timeout: 15_000 }, () => {
   })
 
   it('correlates list responses by id and leaves tool results and ordinary messages unchanged', async (t) => {
-    const tools = [taskTool, { ...catalogTool, description: 'Read only. '.repeat(20), inputSchema: {
-      type: 'object', properties: { ready: { type: 'boolean', enum: [true] } },
-    } }]
+    const tools = [taskTool, catalogTool]
     const { call } = proxied(t, tools)
     const pending = call('tools/list', { hold: true }, 'list')
     const catalog = await call('tools/call', { name: 'tool_catalog', arguments: {} }, 0)
     assert.deepEqual(catalog.result, { tools })
     const listed = await pending
-    assert.equal(listed.result.tools[0].name, 'tool_catalog')
-    assert.equal(listed.result.tools[0].inputSchema.properties.ready.enum, undefined)
+    assert.equal(listed.result.tools[0].inputSchema.properties.evidence.properties.ready.enum, undefined)
     assert.deepEqual((await call('test/echo', { tools }, 'list')).result, { tools })
     assert.ok((await call('tools/list', { fail: true }, 0)).error)
     assert.deepEqual((await call('test/echo', { tools }, 0)).result, { tools })
@@ -231,5 +205,92 @@ describe('mcpServers', () => {
     assert.deepEqual(chat.map((s) => [s.name, s.command, s.args]), [['persona', process.execPath, [PROXY, '/bin/personad', 'mcp']]])
     assert.ok(chat[0].env.some((e) => e.name === 'PERSONA_ASSISTANT' && e.value === '1'))
     assert.ok(chat[0].env.some((e) => e.name === 'PERSONA_SESSION_ID' && e.value === 'agy-1'))
+  })
+})
+
+
+describe('MCP proxy process cleanup', { timeout: 15_000 }, () => {
+  async function fixture(t, mode = '') {
+    const dir = mkdtempSync(join(tmpdir(), 'persona-mcp-lifecycle-'))
+    const events = join(dir, 'events')
+    const source = `
+      const fs = require('node:fs');
+      const [events, mode] = process.argv.slice(1);
+      for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
+        fs.appendFileSync(events, signal + '\\n');
+        process.exit(0);
+      });
+      setInterval(() => {}, 1000);
+      process.stdin.on('data', () => process.stdout.write(JSON.stringify({ result: 'response' }) + '\\n'));
+      if (mode === 'close-input') {
+        process.stdin.once('close', () => {
+          fs.closeSync(0);
+          process.stdout.write(JSON.stringify({ result: { pid: process.pid } }) + '\\n');
+        });
+        process.stdin.destroy();
+      } else process.stdout.write(JSON.stringify({ result: { pid: process.pid } }) + '\\n');
+    `
+    const proc = spawn(process.execPath, [PROXY, process.execPath, '-e', source, events, mode], { stdio: ['pipe', 'pipe', 'pipe'] })
+    let childPid
+    let stderr = ''
+    proc.stderr.on('data', (chunk) => { stderr += chunk })
+    proc.stdin.on('error', () => {})
+    t.after(() => {
+      proc.kill('SIGKILL')
+      if (childPid) { try { process.kill(childPid, 'SIGKILL') } catch {} }
+      rmSync(dir, { recursive: true, force: true })
+    })
+    const [ready] = await once(proc.stdout, 'data')
+    childPid = JSON.parse(String(ready)).result.pid
+    return { proc, childPid, events, stderr: () => stderr }
+  }
+
+  function exited(proc) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('proxy did not exit')), 2000)
+      proc.once('exit', (code, signal) => { clearTimeout(timer); resolve({ code, signal }) })
+    })
+  }
+
+  function assertGone(pid) {
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
+  }
+
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    it(`forwards ${signal} and waits for the child to exit`, async (t) => {
+      const { proc, childPid, events } = await fixture(t)
+      const done = exited(proc)
+      proc.kill(signal)
+      await done
+      assert.equal(existsSync(events) && readFileSync(events, 'utf8'), signal + '\n')
+      assertGone(childPid)
+    })
+  }
+
+  it('ends a server that stays alive after stdin closes', async (t) => {
+    const { proc, childPid } = await fixture(t)
+    const done = exited(proc)
+    proc.stdin.end()
+    await done
+    assertGone(childPid)
+  })
+
+  it('handles a broken child input without an uncaught EPIPE or orphan', async (t) => {
+    const { proc, childPid, stderr } = await fixture(t, 'close-input')
+    const done = exited(proc)
+    proc.stdin.write('request\n')
+    await done
+    assert.doesNotMatch(stderr(), /Unhandled 'error' event|throw er;/)
+    assertGone(childPid)
+  })
+
+  it('cleans up when its output consumer closes the pipe', async (t) => {
+    const { proc, childPid, stderr } = await fixture(t)
+    const done = exited(proc)
+    proc.stdout.destroy()
+    proc.stdin.write('request\n')
+    await done
+    assert.doesNotMatch(stderr(), /Unhandled 'error' event|throw er;/)
+    assertGone(childPid)
   })
 })

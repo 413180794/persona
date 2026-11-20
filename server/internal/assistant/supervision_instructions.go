@@ -2,25 +2,31 @@ package assistant
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // supervisionStartup marks a manager-authorized start before its conversation id exists.
 // It is never read from RPC parameters or inferred from a model purpose supplied by a caller.
 type supervisionStartup struct{}
 
-// supervisionEvent marks a manager-owned relay. True requires an authorized reviewer;
-// the secretary may still receive its ordinary escalations without acquiring that role.
-type supervisionEvent struct{}
-
-func (cfg Settings) secretary(id string) bool {
-	return id != "" && id == cfg.Main && (cfg.MainSupervisesOwnTasks == nil || !*cfg.MainSupervisesOwnTasks)
+// runtimeSessionLacksSupervisionPolicy reports a session hosted by the runtime protocol whose runtime has not
+// advertised supervision_policy support. Absent or unknown capability stays conservatively unsupported (#10338, #11173).
+func runtimeSessionLacksSupervisionPolicy(c proto.Session) bool {
+	return c.SourceKind == proto.SourceRuntime && (c.Capabilities == nil || !c.Capabilities.SupervisionPolicy)
 }
 
-var errSupervisorUnavailable = errors.New("task follow-up requires an authorized Claude Code or Codex supervisor")
+// runtimeWithoutSupervisionPolicy reports a known session hosted by a runtime that lacks a separate policy channel.
+// Launcher names and agent kinds alone do not identify that execution path.
+func (s *Service) runtimeWithoutSupervisionPolicy(ctx context.Context, machine, id string) bool {
+	if id == "" {
+		return false
+	}
+	c, ok := s.session(ctx, machine, id)
+	return ok && runtimeSessionLacksSupervisionPolicy(c)
+}
 
 func (s *Service) supervisionInstructions(ctx context.Context, machine, id string) (string, error) {
 	cfg := s.settings(ctx)
@@ -29,20 +35,20 @@ func (s *Service) supervisionInstructions(ctx context.Context, machine, id strin
 	}
 	main := id == cfg.Main
 	if main {
-		if machine != cfg.mainRouteMachine() || cfg.secretary(id) {
+		if machine != cfg.mainRouteMachine() || cfg.MainSupervisesOwnTasks == nil || !*cfg.MainSupervisesOwnTasks {
 			return "", nil
 		}
 	} else if machine != cfg.MachineID {
 		return "", nil
 	}
-	c, listed := s.session(ctx, machine, id)
-	if listed && runtimeSupervisionUnavailable(c) {
+	c, known := s.session(ctx, machine, id)
+	if known && runtimeSessionLacksSupervisionPolicy(c) {
 		return "", nil
 	}
 	if !main && !(id == cfg.BackgroundSupervisor && cfg.BackgroundSupervisorMachineID == machine) && !slices.Contains(cfg.Leaders, id) {
 		// Side chats genuinely supervise their own open tasks (#4669). Sharing the
 		// directory, a scheduled purpose, or the ability to plan is not a role.
-		if listed && (!c.Assistant || c.Space != "") {
+		if known && (!c.Assistant || c.Space != "") {
 			return "", nil
 		}
 		if err := s.ensureTodosLoaded(ctx); err != nil {
@@ -68,8 +74,9 @@ func (s *Service) supervisionInstructions(ctx context.Context, machine, id strin
 	} else if guest {
 		return "", nil
 	}
-	// A leader's own direction notes follow its policy (direction_notes.go): changing them restarts only this one.
-	return s.leaderPolicy(ctx, id, prompts.RenderSupervisionInstructions()), nil
+	// A leader's own direction notes follow its policy (direction_notes.go): changing them restarts only this one, on
+	// a send that finds it idle.
+	return s.leaderPolicy(ctx, id, prompts.RenderSupervisionInstructions(), leadIdle(c, known)), nil
 }
 
 func (s *Service) putSupervisionInstructions(ctx context.Context, machine, id string, p map[string]any) error {
@@ -81,9 +88,6 @@ func (s *Service) putSupervisionInstructions(ctx context.Context, machine, id st
 	}
 	if id == "" && ctx.Value(supervisionStartup{}) == true && p["guest"] == nil {
 		text = prompts.RenderSupervisionInstructions()
-	}
-	if text == "" && ctx.Value(supervisionEvent{}) == true {
-		return errSupervisorUnavailable
 	}
 	p["supervision_instructions"] = text
 	return nil

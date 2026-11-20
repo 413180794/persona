@@ -59,9 +59,14 @@ class ClassifyTests(unittest.TestCase):
 
 
     def test_injected_messages_without_a_source_block(self):
-        limit = rendered("prompts/agents/limit_continue.md")
+        for language in ("en", "ja"):
+            limit = rendered(f"assistant/testdata/prompts/agent_language.limit.{language}.golden")
+            self.assertEqual(report.classify(limit)[0], "followup")
+            # Older transcripts lack the structured source but retain the exact
+            # localized marker, which must still distinguish Persona from the owner.
+            legacy = limit.split("<persona-limit-continue />", 1)[1]
+            self.assertEqual(report.classify("<persona-limit-continue />" + legacy)[0], "followup")
         lost = rendered("prompts/assistant/lost_tasks.md").replace('{{join .Tasks "\\n- "}}', "tail -f build.log")
-        self.assertEqual(report.classify(limit)[0], "followup")
         self.assertEqual(report.classify(SNAPSHOT + lost)[0], "system")
 
     def test_relayed_message_from_another_conversation(self):
@@ -75,6 +80,28 @@ class ClassifyTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_cli_counts_each_resolved_transcript_path_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            nested = root / "nested"
+            nested.mkdir()
+            first = nested / "first.jsonl"
+            second = root / "second.jsonl"
+            for path in (first, second):
+                path.write_text(json.dumps(reply("m", output=17)) + "\n")
+            alias = root / "alias.txt"
+            alias.symlink_to(first)
+
+            def run(*paths):
+                with redirect_stdout(io.StringIO()) as out:
+                    self.assertEqual(report.main(["--json", *map(str, paths)]), 0)
+                return json.loads(out.getvalue())
+
+            unique = run(first, second)
+            self.assertEqual((unique["files"], unique["total"]["model_calls"], unique["total"]["output_tokens"]),
+                             (2, 2, 34))
+            self.assertEqual(run(first, root, nested, alias), unique)
+
     def run_lines(self, lines, since=None):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "conv.jsonl"

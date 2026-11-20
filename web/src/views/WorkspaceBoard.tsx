@@ -8,6 +8,7 @@ import { useAgentSessions } from "../lib/sessions";
 import { onHubEvent, refreshTodos, useStore } from "../lib/store";
 import { BoardModel, boundCard, columnCards, selectedColumn, type BoardCard, type BoardColumn, type BoardMutation, type BoardState, type Workspace } from "../lib/workspace-board";
 import { autoFocusSession, sessionItem, todoItem, unboundSessions, workLanes, workspaceItem, type WorkItem, type WorkLane } from "../lib/workspace-board-auto";
+import { makeSessionLookup } from "../lib/todos";
 import { machinesByID, sessionsByCard, workspacesByCard } from "../lib/workspace-board-index";
 import type { Machine, Session } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Loading, Menu, StatePill, toast, type MenuItem } from "../ui/atoms";
@@ -15,7 +16,6 @@ import { Icon } from "../ui/icons";
 import { t } from "../i18n";
 import { useKnownDefault } from "../lib/manager-choice";
 import { BulkControls, useBoardSelection } from "./workspace-board/BulkControls";
-import { useTaskLookup } from "./assistant/Tasks";
 import { lazyPage } from "../lib/lazy-page";
 import { lazyOverlay } from "./LazyOverlay";
 const ActivityDialog = lazyOverlay(() => import("./workspace-board/Activity").then((module) => module.ActivityDialog));
@@ -27,8 +27,8 @@ import { CATALOG_POLL_MS } from "../lib/workspace-catalog";
 import { isResumed } from "../lib/reconnect";
 const field = "w-full rounded-control bg-field px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 const VIEW_KEY = "persona.workspace-board.view";
-const laneTitle = (lane: WorkLane) => lane === "needs_you" || lane === "working" || lane === "unread" || lane === "done"
-  ? stateName(lane) : t(`workspaceboard.auto_lane_${lane}`);
+// The lanes that are an agent state take the one canonical state name; only To review and Idle are board-only words.
+const laneTitle = (lane: WorkLane) => lane === "needs_you" || lane === "working" ? stateName(lane) : t(`workspaceboard.auto_lane_${lane}`);
 type Edit = { kind: "column" | "card"; id?: string; title: string };
 
 /** /workspace-board: the board only while it is turned on (#2475); off, nothing about it is loaded or polled. */
@@ -123,7 +123,7 @@ function Board({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const shown = useMemo(() => new Map(board?.columns.map((c) => [c.id, columnCards(board, c.id, { search, machine, archived })])), [board, search, machine, archived]);
   const selection = useBoardSelection({ board, shown, activeColumn, enabled: view === "manual" && board?.batch_cards === true && !state.readonly, busy: state.busy });
   const todos = useStore((s) => s.todos);
-  const lookup = useTaskLookup();
+  const lookup = useMemo(() => (view === "auto" ? makeSessionLookup(sessions) : undefined), [view, sessions]);
   // The auto view filters exactly like the manual one (search, machine, archived), then groups every kind of work:
   // bound workspaces, agent sessions no card claims, and to-dos (#2648).
   const auto = useMemo(() => {
@@ -136,7 +136,7 @@ function Board({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       items.push(...unboundSessions(sessions, filtered)
         .filter((s) => (!machine || s.machine_id === machine) && match(`${s.title} ${s.cwd} ${s.machine_id}`))
         .map(sessionItem));
-      if (!machine) items.push(...todos.filter((todo) => match(`${todo.title} ${todo.notes ?? ""}`)).map((todo) => todoItem(todo, lookup)));
+      items.push(...todos.filter((todo) => (!machine || (todo.agents ?? []).some((a) => !a.released_at && a.machine_id === machine)) && match(`${todo.title} ${todo.notes ?? ""}`)).map((todo) => todoItem(todo, lookup)));
     }
     return workLanes(items);
   }, [view, board, search, machine, archived, sessionsOf, sessions, todos, lookup]);
@@ -286,7 +286,7 @@ function WorkCard({ item, machine }: { item: WorkItem; machine?: Machine }) {
     <div className="mt-2">
       <Button tone="quiet" icon="chevronRight" className="!px-2 !py-1 text-xs" onClick={() => {
         if (s) openAgent(s.machine_id, s.session_id);
-        else if (item.todo) navigate(`/todos?id=${enc(item.todo.id)}`);
+        else navigate(item.todo ? `/todos?id=${encodeURIComponent(item.todo.id)}` : "/todos");
       }}>{item.kind === "todo" ? t("workspaceboard.work_open_todo") : t("workspaceboard.auto_open_session")}</Button>
     </div>
   </article>;

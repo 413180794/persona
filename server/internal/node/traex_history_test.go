@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 func TestTraexOfflineTiedRowsKeepIDOrder(t *testing.T) {
@@ -100,6 +102,10 @@ func TestTraexPaginatedRunningTurnIsReadableAndFinishesWithoutDuplicates(t *test
 	if err != nil || !strings.Contains(historyText(items), "user:text:Inspect the export") {
 		t.Fatalf("running turn: %s, %v", historyText(items), err)
 	}
+	mark, _ := readCodexHistoryMark(f.Where())
+	if mark.Version != codexAppHistoryVersion || mark.Turn != 0 || mark.TurnID != turn.id || mark.Status != turn.status {
+		t.Fatalf("running turn mark: %+v", mark)
+	}
 	turn.status = "completed"
 	turn.items = append(turn.items, answerItem("a1", "The export is correct."))
 	writeCodexHistory(t, n.traexHome(), []historyTurn{turn})
@@ -110,6 +116,66 @@ func TestTraexPaginatedRunningTurnIsReadableAndFinishesWithoutDuplicates(t *test
 	text := historyText(items)
 	if err != nil || strings.Count(text, "user:text:Inspect the export") != 1 || strings.Count(text, "assistant:text:The export is correct.") != 1 {
 		t.Fatalf("finished turn: %s, %v", text, err)
+	}
+}
+
+// Append to the running turn in the CLI database. Only the watch pump can project and push the reply.
+func TestTraexWatchPushesRunningTurnItem(t *testing.T) {
+	n := remoteTestNode(t)
+	db := traexHistoryRevisionFixture(t, n, []historyTurn{{thread: threadMain, id: "turn-1", status: "inProgress",
+		items: [][2]string{userItem("u1", "Inspect the export")}}})
+	hub := withHub(t, n)
+	if err := n.watch(threadMain, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer n.unwatch(threadMain)
+	answer := answerItem("a1", "The export is correct.")
+	traexHistoryRevisionSQL(t, db, fmt.Sprintf(`BEGIN;
+		INSERT INTO thread_items VALUES ('%s', 'turn-1', 'a1', 1, 1, '%s', '%s');
+		UPDATE thread_history_projection_state SET next_rollout_ordinal = next_rollout_ordinal + 1
+			WHERE thread_id = '%s'; COMMIT;`, threadMain, answer[1], answer[0], threadMain))
+	waitFor(t, "the watched TRAE reply", func() bool {
+		return slices.ContainsFunc(hub.got(), func(it proto.Item) bool {
+			return it.Role == "assistant" && it.Text == "The export is correct."
+		})
+	})
+}
+
+func TestTraexNonPaginatedRunningTurnCompletesInPlace(t *testing.T) {
+	home := t.TempDir()
+	turn := historyTurn{thread: threadMain, id: "turn-1", ordinal: 7, status: "inProgress",
+		items: [][2]string{userItem("u1", "Inspect the export")}}
+	writeCodexHistory(t, home, []historyTurn{turn})
+	db := codexHistoryDBPath(home)
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	row := codexAppThread{ID: threadMain, includeRunning: true, Paginated: false}
+	f := transcript.NewFile(path)
+	project := func(status string) string {
+		t.Helper()
+		res, err := writeCodexAppHistory(context.Background(), db, row, path, codexHistoryMark{}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.turn != int64(turn.ordinal) || res.turnID != turn.id || res.status != status {
+			t.Fatalf("watermark for %s: %+v", status, res)
+		}
+		items, err := f.Refresh()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return historyText(items)
+	}
+	if got := project("inProgress"); !strings.Contains(got, "user:text:Inspect the export") {
+		t.Fatalf("running transcript: %s", got)
+	}
+	answer := answerItem("a1", "The export is correct.")
+	traexHistoryRevisionSQL(t, db, fmt.Sprintf(`BEGIN;
+		INSERT INTO thread_items VALUES ('%s', 'turn-1', 'a1', 1, 1, '%s', '%s');
+		UPDATE thread_turns SET status = 'completed' WHERE thread_id = '%s' AND turn_id = 'turn-1';
+		COMMIT;`, threadMain, answer[1], answer[0], threadMain))
+	if got := project("completed"); strings.Count(got, "user:text:Inspect the export") != 1 ||
+		strings.Count(got, "assistant:text:The export is correct.") != 1 {
+		t.Fatalf("completed transcript: %s", got)
 	}
 }
 

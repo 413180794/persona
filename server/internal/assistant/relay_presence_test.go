@@ -263,6 +263,8 @@ func TestScheduledRunWaitsForTheOwner(t *testing.T) {
 	}{
 		{"into the conversation the owner talks in", Task{SessionID: "conv1"}, at, 90 * time.Second},
 		{"into its own conversation the owner talks in", Task{RunSessionID: "own1"}, at, 90 * time.Second},
+		{"fresh recurring task does not interrupt its source", Task{SessionID: "conv1", Repeat: repeatInterval, FreshEachRun: true}, at, 0},
+		{"one-off still waits for its source", Task{SessionID: "conv1", Repeat: repeatOnce, FreshEachRun: true}, at, 90 * time.Second},
 		{"due 4 minutes ago: one more", Task{SessionID: "conv1"}, at.Add(-4 * time.Minute), time.Minute},
 		{"due 5 minutes ago: it runs", Task{SessionID: "conv1"}, at.Add(-5 * time.Minute), 0},
 		{"into another conversation", Task{SessionID: "conv9"}, at, 0},
@@ -450,10 +452,10 @@ func TestDecisionWaitingMessagesAreHeldAtMost(t *testing.T) {
 		{Tool: "conversation_send", Text: "other", At: now.Add(-10 * time.Minute)},
 		{Tool: superviseTool, Urgent: true, Text: "soon", At: now.Add(-4 * time.Minute)},
 	}
-	if i, wait := b.pickLocked("conv1", now, nil); i != -1 || wait != time.Minute {
+	if i, wait := b.pickLocked("conv1", now); i != -1 || wait != time.Minute {
 		t.Fatalf("pick %d, wait %s", i, wait)
 	}
-	if i, wait := b.pickLocked("conv1", now.Add(time.Minute), nil); i != 1 || wait != 0 {
+	if i, wait := b.pickLocked("conv1", now.Add(time.Minute)); i != 1 || wait != 0 {
 		t.Fatalf("after the decision's hold: pick %d, wait %s", i, wait)
 	}
 	b.frontLocked("conv1", 1)
@@ -524,7 +526,7 @@ func TestReplacedQueuedMessageKeepsItsWait(t *testing.T) {
 	}
 	s.relays.mu.Unlock()
 	before := time.Now()
-	if !s.replaceQueuedSupervise("conv1", queuedRelays(s, "conv1")[0], relayMsg{From: superviseTool, Tool: superviseTool, Urgent: true, Text: "both", At: before.UTC()}) {
+	if !s.replaceQueuedSupervise("conv1", relayMsg{From: superviseTool, Tool: superviseTool, Urgent: true, Text: "both", At: before.UTC()}) {
 		t.Fatal("not replaced")
 	}
 	if !s.replaceQueuedNotice("conv1", relayMsg{From: "t1", Tool: noticeTool, State: "failed", Text: "failed", At: before.UTC()}) {

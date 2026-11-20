@@ -49,6 +49,9 @@ func (s *Service) toolModelProfile(ctx context.Context, self, name string, args 
 }
 
 func (s *Service) applyStartTier(ctx context.Context, params map[string]any) error {
+	if _, err := validateStartSpeed(params); err != nil {
+		return err
+	}
 	tier, _ := params["tier"].(string)
 	delete(params, "tier") // node runtimes need only the resolved fields
 	if tier == "" {
@@ -62,25 +65,24 @@ func (s *Service) applyStartTier(ctx context.Context, params map[string]any) err
 	model, _ := params["model"].(string)
 	effort, _ := params["effort"].(string)
 	speed, _ := params["speed"].(string)
-	layTier(t, &launcher, &model, &effort, &speed)
-	params["launcher"], params["model"], params["effort"] = launcher, model, effort
-	if speed != "" {
-		params["speed"] = speed
+	if layTier(t, &launcher, &model, &effort) && speed == "" && (model == "" || model == t.Model) {
+		speed = t.Speed
 	}
+	params["launcher"], params["model"], params["effort"], params["speed"] = launcher, model, effort, speed
 	return nil
 }
 
-// layTier lays tier t over a start's launcher, model, effort and speed, and says whether it gave them anything: not
-// when the start names a launcher of its own (withTier). An explicit different model does not inherit the effort or
-// speed intended for the tier's model (a Codex speed tier is the model's own).
-func layTier(t ModelTier, launcher, model, effort, speed *string) bool {
+// layTier lays tier t over a start's launcher, model and effort, and says whether it gave them anything: not when the
+// start names a launcher of its own (withTier). An explicit different model does not inherit effort intended for the
+// tier's model.
+func layTier(t ModelTier, launcher, model, effort *string) bool {
 	if *launcher != "" && *launcher != t.Launcher {
 		return false
 	}
 	if *model != "" && *model != t.Model {
-		t.Effort, t.Speed = "", ""
+		t.Effort = ""
 	}
-	withTier(t, launcher, model, effort, speed)
+	withTier(t, launcher, model, effort)
 	return true
 }
 

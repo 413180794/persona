@@ -393,7 +393,8 @@ export function ModelPanel({ anchor, onClose, providers, state, scope, onPick, o
     if (row.kind !== "model") return;
     if (row.current && live) {
       const patch: PanelOverride = {};
-      const d = row.model.defaultEffort;
+      // An agy start uses its native default when the request omits effort.
+      const d = state.starting && row.provider.engine === "agy" ? undefined : row.model.defaultEffort;
       if (d && row.setup.effort && row.setup.effort !== d) patch.effort = d;
       // no default known: back to none, the model's own (an Agent not started yet; a running one sends nothing for it)
       else if (!d && row.setup.effort) patch.effort = "";
@@ -441,8 +442,9 @@ export function ModelPanel({ anchor, onClose, providers, state, scope, onPick, o
 
   const second = (row: PanelRow): { text: string; describes?: boolean } => {
     if (row.kind === "typed") return { text: `${row.provider.name} · ${t("ui-modelpanel.use_typed_note")}` };
-    if (row.kind === "preset") return { text: row.preset?.description || `${row.provider.name} · ${row.model.name}` };
+    if (row.kind === "preset") return { text: `${row.provider.name} · ${row.preset?.description || row.model.name}` };
     if (row.model.custom) return { text: `${row.provider.name} · ${t("ui-modelpanel.typed_before")}` };
+    if (!searching && row.kind === "model" && providers.some((p) => p.id !== row.provider.id && p.models?.some((m) => m.name === row.model.name))) return { text: row.provider.name };
     if (!searching && row.kind === "model") return { text: row.model.description ?? "", describes: true };
     return { text: row.provider.name };
   };

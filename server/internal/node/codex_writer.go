@@ -10,7 +10,7 @@ import (
 
 const codexWriterConflictCode = "codex_active_writer"
 
-func codexWriterConflict() error {
+func codexActiveWriterRefusal() error {
 	return refusal(codexWriterConflictCode, i18n.T(i18n.En, "rpc-errors."+codexWriterConflictCode), map[string]any{"retryable": false})
 }
 

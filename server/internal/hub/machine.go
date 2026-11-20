@@ -98,7 +98,9 @@ type Machine struct {
 	fswRunning bool
 	fswPending bool
 	fswForce   bool
-	lastSeq    map[string]int // session id -> highest item seq seen
+
+	lastSeq     map[string]int // session id -> latest cursor within its history
+	lastHistory map[string]string
 	// derived: a computer only a member hub has in hub.json; the center reaches it through that hub.
 	derived bool
 
@@ -149,7 +151,7 @@ func (m *Machine) ownerOrCarrier() string {
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
-	m := &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}}
+	m := &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}, lastHistory: map[string]string{}}
 	m.setName(cfg.Name)
 	return m
 }
@@ -295,9 +297,10 @@ func (m *Machine) reachable() bool {
 	m.mu.Lock()
 	p := m.peer
 	managed, connected := m.managed, m.connected
+	owner := cmp.Or(m.owner, devicesOwner)
 	m.mu.Unlock()
 	if managed {
-		return connected && m.hub.devicesUp()
+		return connected && m.hub.devicesUpFor(owner) // its own manager's state (devices_reports.go)
 	}
 	if p == nil {
 		return false
@@ -493,6 +496,7 @@ func (m *Machine) setSessionListRaws(list []proto.Session, raws []string) {
 	for id := range m.lastSeq {
 		if gone(id) && !m.watchStateInUseLocked(id) {
 			delete(m.lastSeq, id)
+			delete(m.lastHistory, id)
 		}
 	}
 	var unsettled []string
@@ -556,6 +560,7 @@ func (m *Machine) settleEnded(id string) {
 	}
 	delete(m.nodeWatch, id)
 	delete(m.lastSeq, id)
+	delete(m.lastHistory, id)
 }
 
 // listsLocked reports whether the node's last list has session id, among the archived rows told apart too
@@ -669,13 +674,16 @@ func (m *Machine) syncWatchOnce(ctx context.Context, id string) bool {
 	m.mu.Lock()
 	want := m.watchers[id] > 0
 	state := m.nodeWatch[id]
-	since := m.lastSeq[id]
+	since, history := m.lastSeq[id], m.lastHistory[id]
 	m.mu.Unlock()
 	var method string
 	var params map[string]any
 	switch {
 	case want && state != nodeWatching:
 		method, params = "session.watch", map[string]any{"session_id": id, "since_seq": since}
+		if history != "" {
+			params["history"] = history
+		}
 	case !want && state != nodeUnwatched:
 		method, params = "session.unwatch", map[string]any{"session_id": id}
 		ctx = context.Background() // not the leaving app's connection
@@ -786,8 +794,12 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			last = max(last, *p.ToSeq)
 		}
 		m.mu.Lock()
-		if last > m.lastSeq[p.SessionID] {
+		reset := (p.FromSeq != nil && *p.FromSeq == 0) || (p.History != "" && p.History != m.lastHistory[p.SessionID])
+		if reset || last > m.lastSeq[p.SessionID] {
 			m.lastSeq[p.SessionID] = last
+		}
+		if p.History != "" {
+			m.lastHistory[p.SessionID] = p.History
 		}
 		m.mu.Unlock()
 		p.Items = m.hub.withInjected(p.Items)

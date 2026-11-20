@@ -12,8 +12,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -348,6 +351,86 @@ class AssistantDrawerShotsTest {
         }
     }
 
+    // #11117: an Agent chat in front owns the sidebar's one selected row. A sub-Agent opens its parent's chat, so the
+    // visible parent and child must never both take that selection. Draw the selected parent in every style and theme.
+    @Test fun directionAgentRowsMoveAndClearTheSingleSidebarSelection() {
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        var compactDrawer by mutableStateOf(false)
+        val parentKey = SessionKey("hub", "selection-parent")
+        val otherKey = SessionKey("hub", "selection-other")
+        val lead = Session(machineId = "hub", sessionId = "selection-lead", title = "1110 | 探索 | 增长", status = "idle",
+            updatedAt = minutesAgo(4))
+        var shadedPlace by mutableStateOf("agent:${parentKey.path}")
+        val tree = DirectionTree(listOf(Direction("selection-lead", "增长", tasks = listOf(
+            DirectionTask("selection-task", "Agent selection", DirectionTaskState.Working, listOf(
+                DirectionAgent("hub", parentKey.sessionId, title = "Parent Agent", state = "working", children = listOf(
+                    DirectionAgent("hub", "${parentKey.sessionId}@child", title = "Child Agent", state = "working"))),
+                DirectionAgent("hub", otherKey.sessionId, title = "Other Agent", state = "idle"),
+            ))))))
+        val groups = ConversationGroups(main, listOf(lead), emptyList(),
+            names = mapOf(lead.sessionId to "增长"), tree = tree)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                CompositionLocalProvider(LocalHomeDrawer provides compactDrawer) {
+                    Box(Modifier.testTag("shot").width(400.dp).height(1400.dp).background(PersonaTheme.palette.background)) {
+                        AssistantDrawer("", {}, groups, active = lead.key, hasMain = true, onEnd = null, onMain = {}, onOpen = {},
+                            onInfo = {}, onNew = {}, onSettings = {}, onOpenAgent = { shadedPlace = "agent:${it.path}" },
+                            shadedPlace = shadedPlace)
+                    }
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("增长 的待办").performClick()
+        rule.onNodeWithContentDescription("Agent selection 的 Agent").performClick()
+        rule.onNodeWithContentDescription("Parent Agent 的 Agent").performClick()
+        rule.onNodeWithText("Child Agent").assertExists()
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            style = s; dark = d
+            androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+            capture("drawer-direction-agent-selected-${s.name.lowercase()}-${if (d) "dark" else "light"}")
+        }
+        style = AppStyle.Glass; dark = false
+        androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+        rule.waitForIdle()
+
+        fun assertOnlySelected(title: String) {
+            rule.onNodeWithText(title).assertIsSelected()
+            rule.onAllNodes(isSelected()).assertCountEquals(1)
+        }
+        fun assertNotSelected(vararg titles: String) {
+            titles.forEach { rule.onNodeWithText(it).assert(!isSelected()) }
+        }
+        val retainedRows = arrayOf("主对话", "增长")
+
+        assertOnlySelected("Parent Agent")
+        assertNotSelected(*retainedRows, "Other Agent", "Child Agent")
+
+        shadedPlace = "agent:${otherKey.path}"
+        rule.waitForIdle()
+        assertOnlySelected("Other Agent")
+        assertNotSelected(*retainedRows, "Parent Agent", "Child Agent")
+
+        shadedPlace = AssistantSidebarShade.None
+        rule.waitForIdle()
+        rule.onAllNodes(isSelected()).assertCountEquals(0)
+        assertNotSelected(*retainedRows, "Parent Agent", "Other Agent", "Child Agent")
+
+        // The production row opens a sub-Agent's parent key; that parent chat still selects only the visible parent row.
+        rule.onNodeWithText("Child Agent").performClick()
+        rule.waitForIdle()
+        assertEquals("agent:${parentKey.path}", shadedPlace)
+        assertOnlySelected("Parent Agent")
+        assertNotSelected(*retainedRows, "Other Agent", "Child Agent")
+
+        // Compact Glass draws its own selected background; it exposes the same selected semantics as the other layouts.
+        compactDrawer = true
+        rule.waitForIdle()
+        rule.onNodeWithText("Child Agent").assertExists()
+        assertOnlySelected("Parent Agent")
+        assertNotSelected(*retainedRows, "Other Agent", "Child Agent")
+    }
+
     // #4922 / #5196: every newest chat, including automatic ones with their source mark, between 常驻 and All chats
     // (which still lists everything), in every style, light and dark; no Recent heading when the group is empty.
     @Test fun drawsRecentBetweenTheLeadersAndAllChats() {
@@ -485,6 +568,48 @@ class AssistantDrawerShotsTest {
         rule.onAllNodesWithContentDescription("对话操作")[4].performClick()
         rule.onNodeWithText("设为常驻").assertExists()
         rule.onNodeWithText("归档").assertExists()
+        rule.onNodeWithText("结束…").assertExists()
+    }
+
+    private fun showRecentBackgroundSupervisor() {
+        val background = Session(machineId = "hub", sessionId = "bg", title = "Background supervisor", origin = "supervisor",
+            status = "working", updatedAt = minutesAgo(3), lastText = "登录页修复：三条验收标准都有证据，已验收。")
+        val snapshot = persona.core.contracts.api.AssistantSnapshot(main.key, listOf(main, background) + recent,
+            backgroundSupervisor = "bg", recentTaskChats = true)
+        val groups = conversationGroups(snapshot, "", ConversationWords("新对话", "接力", "接力：%s", "后台督办"))
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                Box(Modifier.testTag("shot").width(400.dp).height(900.dp).background(PersonaTheme.palette.background)) {
+                    AssistantDrawer("", {}, groups, active = null, hasMain = true, onEnd = {}, onMain = {}, onOpen = {},
+                        onInfo = {}, onNew = {}, onSettings = {}, onArchive = {}, onLeader = {}, onRename = {}, onEditTags = {})
+                }
+            }
+        }
+    }
+
+    @Test fun recentBackgroundSupervisorUsesBuiltInNameAndTaskOrigin() {
+        showRecentBackgroundSupervisor()
+        rule.onNodeWithText("后台督办").assertExists()
+        rule.onAllNodesWithText("Background supervisor").assertCountEquals(0)
+        rule.onAllNodesWithContentDescription("定时任务", useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test fun recentBackgroundSupervisorOmitsManagementActions() {
+        showRecentBackgroundSupervisor()
+        rule.onAllNodesWithContentDescription("对话操作")[1].performClick()
+        rule.onNodeWithText("拷贝会话 ID").assertExists()
+        rule.onAllNodesWithText("设为常驻").assertCountEquals(0)
+        rule.onAllNodesWithText("归档").assertCountEquals(0)
+        rule.onAllNodesWithText("重命名…").assertCountEquals(0)
+        rule.onAllNodesWithText("编辑标签…").assertCountEquals(0)
+        rule.onAllNodesWithText("结束…").assertCountEquals(0)
+        rule.onNodeWithText("拷贝会话 ID").performClick()
+        // An ordinary Recent row keeps the same management actions.
+        rule.onAllNodesWithContentDescription("对话操作")[2].performClick()
+        rule.onNodeWithText("设为常驻").assertExists()
+        rule.onNodeWithText("归档").assertExists()
+        rule.onNodeWithText("重命名…").assertExists()
+        rule.onNodeWithText("编辑标签…").assertExists()
         rule.onNodeWithText("结束…").assertExists()
     }
 

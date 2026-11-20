@@ -23,7 +23,7 @@ import (
 // card was made from: profiles edited in the meantime are a conflict, never overwritten.
 
 // tierEdit is model_profiles.tiers' set value. A field left out keeps the tier's own; a different launcher drops the
-// old model, effort and speed (they were the old launcher's), as a provider change does in Model Settings.
+// old model and effort (they were the old launcher's), as a provider change does in Model Settings.
 type tierEdit struct {
 	Tier        string   `json:"tier"`
 	Launcher    *string  `json:"launcher"`
@@ -331,14 +331,12 @@ func (s *Service) getModelTiers(ctx context.Context) (string, error) {
 	if v.Active == "" {
 		b.WriteString("No profile is in use: tiers start nothing until one is switched to (model_profile_switch).\n")
 	}
-	b.WriteString("Effort levels: " + strings.Join(proto.EffortLevels, ", ") + ".\n")
-	b.WriteString("Speeds: " + strings.Join(proto.AgentSpeeds, ", ") + " (fast: Codex's Fast tier or Claude Code's fast mode; ultrafast: Codex models that offer it; both use more quota).")
+	b.WriteString("Effort levels: " + strings.Join(proto.EffortLevels, ", ") + ".")
 	return b.String(), nil
 }
 
 // modelTiersValue is the shape of model_profiles.tiers' set value, as the setting's list entry says it.
 const modelTiersValue = `{"tier": a name (lowercase letters, digits, _ -), "launcher": a launcher name, "model": a model id ("" the launcher's default), ` +
-	`"effort": a level ("" the launcher's), "speed": standard, fast or ultrafast ("" the launcher's own; fast and ultrafast ` +
-	`use more quota, ultrafast is Codex-only), "description": when to use it (one line, at most 100 characters), ` +
+	`"effort": a level ("" the launcher's), "speed": standard | fast | ultrafast ("" the launcher's), "description": when to use it (one line, at most 100 characters), ` +
 	`"profiles": [profile ids] (default: every profile), "remove": true to delete it}; a field left out keeps the tier's own ` +
 	`(a different launcher drops the old model, effort and speed), a new tier needs its launcher`

@@ -79,6 +79,12 @@ beforeEach(() => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method: init?.method ?? "GET", url, body });
+    if (url.endsWith("/api/v1/assistant")) {
+      const a = getState().assistant!;
+      const s = getSession(mid(), "c1");
+      const conversations = a.conversations ?? [];
+      return json({ ...a, conversations: s && !conversations.some((c) => c.session_id === s.session_id) ? [...conversations, s] : conversations });
+    }
     if (url.includes("/codex/models")) return json(codexList);
     if (sharedPicker && url.includes("/runtime/models")) return json({ agent: "claude", models: [] });
     if (url.includes("/models")) return json(claudeList);
@@ -94,6 +100,8 @@ beforeEach(() => {
     });
     if (url.includes("/assistant/conversations/c1/model")) return pickAnswer();
     if (url.includes("/assistant/main/model")) return pickAnswer();
+    // Newly listed chats re-read Assistant; return its complete snapshot instead of an operation receipt.
+    if (url.endsWith("/assistant")) return json(getState().assistant);
     return json({ ok: true });
   }));
   host = document.createElement("div");
@@ -249,6 +257,7 @@ describe("a Persona chat's pill on a hub that keeps picks", () => {
       Object.assign(getState().assistant!, { main: "other", leaders: undefined }, as);
       // it last ran on Haiku, but its next message follows Model configuration › Main chat (Opus)
       await show(chat({ launcher: "relay", model: "claude-haiku-5-5", ...(as.leaders ? {} : { origin: "task" }) }));
+      expect(getState().assistant).toMatchObject({ launcher: "claude", main: "other", leaders: as.leaders });
       expect(pill().textContent).toContain("Opus 5.5");
       expect(pill().textContent).not.toContain("Haiku");
       await open();
