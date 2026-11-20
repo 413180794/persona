@@ -3124,3 +3124,14 @@ filters disappear and a stale selection resolves to All without changing the
 shared display preference. Saving uses the acknowledged server value with local
 pending feedback and recoverable errors. The per-computer switch still controls
 inventory, and hidden rows remain usable for to-do attribution and dispatch.
+
+### herdr tab names in Agents
+
+**Use the herdr tab name as the session name** in Settings › Agents defaults
+to off and syncs across devices on the paired hub. When enabled, the sidebar,
+chat header and session search show the tab name first. A different CLI title
+appears in the hover text or the search result's secondary line. A name edited
+in herdr appears at the next inventory refresh. The **Rename** dialog offers
+one **Name** field, which updates the tab and the CLI title where supported.
+Even with the setting off, an empty or shell-prompt title falls back to the
+herdr tab name. Sessions without a named herdr tab use their session title.

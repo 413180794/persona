@@ -5793,22 +5793,42 @@ in-flight command remains unknown until its execution can be established; it is 
 
 ## Agents display settings
 
-The default manager keeps the paired hub's `agents.show_botmux` boolean in its
+The default manager keeps the paired hub's `agents.show_botmux` and
+`agents.use_herdr_tab_name` booleans in its
 existing settings store, following the Agents triage route's ownership and role
 checks. These are authenticated routes relayed by the hub; clients do not select
 another manager for this shared preference.
 
 | Method | Path | Response / request |
 | --- | --- | --- |
-| GET | `/api/v1/agents/display-settings` | `{show_botmux: true, configured: false}` when unset; otherwise the saved boolean and `configured: true`. Authenticated answer-only devices may read. |
-| PUT | `/api/v1/agents/display-settings` | Full access only (403 otherwise). Requires `{show_botmux: boolean}`. Optional `only_if_unset: true` uses an atomic insert without updating an existing key. Both forms return the current saved value with `configured: true`, including when another writer won. |
+| GET | `/api/v1/agents/display-settings` | Defaults to `{show_botmux: true, configured: false, use_herdr_tab_name: false}`. `configured` reports whether `show_botmux` was saved. Authenticated answer-only devices may read. |
+| PUT | `/api/v1/agents/display-settings` | Full access only (403 otherwise). Send one of `{show_botmux: boolean}` or `{use_herdr_tab_name: boolean}`. For `show_botmux`, optional `only_if_unset: true` uses an atomic insert without updating an existing key. Returns the current settings, including when another writer won. |
 
 Invalid or missing booleans return 400; unavailable storage or failed reads/writes
 return 503, never a default presented as a successful save. The conditional
-migration and an explicit update serialize at the unique settings key across
+migration and an explicit botmux update serialize at the unique settings key across
 processes. Clients remove legacy local preferences only after a configured value
-is confirmed. Refresh on reconnect and the next Agents list refresh. This is a
-display preference only: Web paged lists use `exclude_pane_source=feishu`, complete
+is confirmed. Refresh on reconnect and the next Agents list refresh. For botmux,
+Web paged lists use `exclude_pane_source=feishu`, complete
 lists exclude botmux hosts before grouping/counting. Inventory and `seeBotmux`
 to-do attribution are unchanged. The per-computer inventory switch is independent
 ([engines.md](../integrations/engines.md), “Botmux display preference”).
+
+For an Agent with a named herdr or Herdr App tab, Web and Feishu use `slot_name`
+as the primary name when `use_herdr_tab_name` is true. They also use it when
+`title` is empty or is only a shell prompt such as `user@host:~/work`.
+Inventory refreshes carry the current tab label. The unified Web Rename dialog
+posts `tab_name` and, for a supported CLI, the same `title` to the existing
+session rename route. Other managers read the same preference through the
+hub's `app.call` method `agents.display.get`, which relays the default
+manager's display settings.
+
+Named assistant dispatches send `title` with `tab_name` in `session.start`.
+The synchronous terminal reply uses the actual tab label when available,
+including a suffix added for uniqueness. The manager persists the initial
+Persona title for subsequent inventory reads.
+
+With tab naming enabled, automatic naming calls the node's
+`session.rename_tab_if_current` with `session_id`, `tab_id`,
+`expected_tab_name` and `tab_name`. The node checks the live slot and its current
+host label before changing it and replies with `{ok: true}` on success.
