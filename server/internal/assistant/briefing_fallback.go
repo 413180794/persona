@@ -108,7 +108,7 @@ func (s *Service) briefFallbackRun(ctx context.Context, scheduled ScheduleRun, t
 	}
 	cancel()
 
-	if feat, ready := s.feishuFeatures(ctx); ready && feat.Pushes {
+	if feat, ready := s.feishuFeatures(ctx); !t.targetBrief && ready && feat.Pushes {
 		mirror := &mirrorSend{l: l, cards: cards,
 			target: botTarget{Kind: targetPersona, MachineID: m.ID, SessionID: scheduled.SessionID}, label: run.label,
 			key: "f" + id, sent: func() { s.briefAsked(run.facts, shown) }}
@@ -168,6 +168,7 @@ func (s *Service) briefNotStarted(ctx context.Context, t Task, failed ScheduleRu
 		if !ok {
 			return
 		}
+		cur.targetBrief = t.targetBrief
 		if _, err := s.runTask(cur, failed.Due, time.Now(), false, true); err != nil {
 			s.logf("task %s briefing retry: %v", t.ID, err)
 		}

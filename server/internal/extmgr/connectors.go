@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -82,6 +83,23 @@ func (h *Manager) callConnector(ctx context.Context, by asker, name string, args
 		trace.card, trace.answeredBy = id, r.AnsweredBy
 		return r.Allow != nil && *r.Allow
 	})
+}
+
+// ReadLarkBriefDigest is the native schedule's read-only path to the installed Lark Context connector.
+func (h *Manager) ReadLarkBriefDigest(ctx context.Context, args json.RawMessage) (string, error) {
+	const id, name = "larkcontext", "larkcontext_digest"
+	if !h.ready(ctx) || h.connectors == nil || !h.connectors.Enabled(id) {
+		return "", errors.New("Lark Context connector is unavailable")
+	}
+	c := h.connectors.Get(id)
+	reader, ok := connector.As[connector.ReadTools](c)
+	if !ok || !slices.ContainsFunc(reader.Tools(), func(t proto.Tool) bool { return t.Name == name }) {
+		return "", errors.New("Lark Context has no read-only digest tool")
+	}
+	if state := connector.StatusOf(ctx, c); state.State != connector.StateOK {
+		return "", fmt.Errorf("Lark Context connector state: %s", state.State)
+	}
+	return reader.Call(ctx, name, args)
 }
 
 func (h *Manager) connectorRoutes(api *http.ServeMux) {

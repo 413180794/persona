@@ -220,13 +220,14 @@ type Service struct {
 	repoRootsMu      sync.Mutex              // pr_number_ref.go: one write of the repository roots at a time
 	// ownerVerifiesAll: every deployed task asks the owner to verify, not only the big ones (ownerVerifies; tests).
 	ownerVerifiesAll         bool
-	later                    laterBook    // later.go: questions that can wait for a briefing
-	brief                    briefBook    // briefing.go
-	reporters                reporterBook // reporters.go
-	sched                    schedule     // schedule.go
-	delayedMu                sync.Mutex   // delayed_waits.go: one local writer to the durable wait backlog
-	delayedRecoveryMu        sync.Mutex   // one restore pass; tracks entries already armed by this incarnation
-	delayedReceiptsRecovered bool         // initial receipt-claim requeue has completed for this incarnation
+	later                    laterBook         // later.go: questions that can wait for a briefing
+	brief                    briefBook         // briefing.go
+	briefDeliveries          briefDeliveryBook // briefing_delivery.go
+	reporters                reporterBook      // reporters.go
+	sched                    schedule          // schedule.go
+	delayedMu                sync.Mutex        // delayed_waits.go: one local writer to the durable wait backlog
+	delayedRecoveryMu        sync.Mutex        // one restore pass; tracks entries already armed by this incarnation
+	delayedReceiptsRecovered bool              // initial receipt-claim requeue has completed for this incarnation
 	delayedRestored          map[string]bool
 	tasks                    tasksState    // tasks.go
 	taskSpaces               taskSpaceBook // task_space.go: herdr leader-task placement and ownership

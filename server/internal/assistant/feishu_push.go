@@ -171,6 +171,9 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	if strings.Contains(asked, "title=\"飞书机器人\"") { // the context tag of the bot's messages (prompts/channels), not text for people
 		return // its own message: answered by the run
 	}
+	if strings.HasPrefix(stripContext(asked), "⏰") && strings.Contains(asked, briefDeliveryPrompt) {
+		return // the scheduled occurrence owns its Feishu delivery
+	}
 	l := s.botLang(ctx)
 	label := i18n.T(l, "assistant-feishu_cards.main_chat")
 	if !main {

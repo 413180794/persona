@@ -289,6 +289,9 @@ func (s *Service) briefStart(ctx context.Context, t Task, now time.Time) string 
 		}
 	}
 	run := &briefRun{facts: s.briefFactsAt(ctx, now, t.ID), label: t.label()}
+	if t.targetBrief {
+		run.facts.Card = false // the Lark Context digest and the app's Persona facts are separate reports
+	}
 	// What the briefs say since the last briefing, told once: only a real run moves the mark, not a look at the facts.
 	run.facts.Briefs, run.facts.BriefsDone = s.briefDigest(ctx, now, s.briefDigestSince(ctx, now), run.facts.loc)
 	s.briefDigestTold(ctx, now)

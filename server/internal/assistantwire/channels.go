@@ -89,6 +89,8 @@ const (
 	// owner opted in, and with neither field the call is what it always was.
 	// kind "conclusion" or "push" selects the owner's configured channel transport for a private proactive card.
 	FeishuPost = "feishu.post"
+	// FeishuBriefPost sends one keyed card to the same owner pairing that admitted the scheduled briefing.
+	FeishuBriefPost = "feishu.brief_post"
 	// FeishuText: {reply_to?, text, chat_id?, in_thread?, uuid?, no_detour?, full_answer?} → {message_id}: plain text as a reply,
 	// else into the owner's chat; chat_id, in_thread, uuid (cut to 50 characters here) and no_detour are FeishuPost's.
 	// One more place is open to it (#6146): a reply to a message the hub took as the owner's "@bot /ai …" in a group that
@@ -300,6 +302,14 @@ type FeishuStatus struct {
 	SourceReportDelayMinutes *int `json:"source_report_delay_minutes,omitempty"`
 	// SourceReportFullReply is the owner's opt-in to posting the task's final answer in its source group.
 	SourceReportFullReply bool `json:"source_report_full_reply,omitempty"`
+}
+
+type FeishuBriefPostParams struct {
+	Owner     string    `json:"owner"`
+	PairedAt  time.Time `json:"paired_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	UUID      string    `json:"uuid"`
+	Card      string    `json:"card"`
 }
 
 // NudgeAfterDefault is nudge_after when never set: minutes a card of the Lark bot waits before it is nudged.

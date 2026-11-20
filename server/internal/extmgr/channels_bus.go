@@ -93,6 +93,9 @@ func (h *Manager) channelsAppCall(ctx context.Context, p assistantwire.AppCall) 
 }
 
 func (h *Manager) feishuCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	if method == assistantwire.FeishuBriefPost {
+		return h.feishuBriefPost(ctx, params)
+	}
 	var a struct {
 		ReplyTo    string               `json:"reply_to"`
 		Card       string               `json:"card"`
@@ -318,6 +321,35 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		return map[string]any{"path": path}, err
 	}
 	return nil, fmt.Errorf("app %s has no method %s", assistantwire.AppFeishu, method)
+}
+
+func (h *Manager) feishuBriefPost(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p assistantwire.FeishuBriefPostParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, err
+	}
+	if p.UUID == "" || callerKey(p.UUID, feishuMaxUUID) != p.UUID || p.Card == "" {
+		return nil, errors.New("feishu.brief_post needs a valid UUID and card")
+	}
+	ctx, cancel := context.WithDeadline(ctx, p.ExpiresAt)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	api, set := h.botAPI()
+	if api == nil {
+		return nil, errBotOff
+	}
+	if p.Owner == "" || set.Owner.OpenID != p.Owner || !set.Owner.At.Equal(p.PairedAt) || set.Owner.ChatID == "" {
+		return nil, errBotChatDenied
+	}
+	// The direct DM send uses exactly this UUID and payload. There is no alternate transport or fallback send.
+	id, err := api.Send(ctx, "chat_id", set.Owner.ChatID, feishubot.TypeInteractive, p.Card, p.UUID)
+	if err != nil {
+		return nil, feishuCoded(err)
+	}
+	h.rememberMessageChat(id, set.Owner.ChatID)
+	return map[string]string{"message_id": id}, nil
 }
 
 func (h *Manager) sendOwnerCard(ctx context.Context, api *feishubot.Client, set FeishuBotSettings, kind, ref, fallback, card string) (channel.SendResult, error) {

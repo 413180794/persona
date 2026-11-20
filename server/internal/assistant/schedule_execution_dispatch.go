@@ -68,7 +68,9 @@ func (s *Service) failSourceTaskRun(ctx context.Context, t Task, run ScheduleRun
 
 func (s *Service) failTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, unknown bool, work *scheduleWork) (proto.Session, error) {
 	run.Status, run.Error, run.DeliveryUnknown = runFailed, err.Error(), unknown
-	s.verifyScheduleReceipt(work, s.recordRun(run), runFailed)
+	run.ID = s.recordRun(run)
+	s.verifyScheduleReceipt(work, run.ID, runFailed)
+	s.enqueueBriefDelivery(t, run)
 	if unknown {
 		work.retain()
 		s.oneOffFailed(ctx, t, run)

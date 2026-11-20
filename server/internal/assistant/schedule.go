@@ -91,6 +91,8 @@ type Task struct {
 	RunIf  *routineCheck `json:"run_if,omitempty"`
 	// factsText is the run's facts as the model is given them (briefing.go); set on the copy a run is made from, never stored.
 	factsText string
+	// targetBrief is set on the dispatched copy for a natural Lark Context briefing.
+	targetBrief bool
 	// kbDir is the knowledge directory the run's hint names (a daily run with the knowledge base on); set on the copy, never stored.
 	kbDir string
 	// The conversation it came from (on MachineID), runs go into it; empty = the task's own conversation.
@@ -1505,6 +1507,8 @@ func (s *Service) Run(ctx context.Context) {
 	s.recoverSendsOut(recoverCtx) // sends of more for accepted tasks the manager before this one left out (tasks_sends_out.go)
 	s.recoverApprovalJournals(recoverCtx)
 	cancel()
+	go s.briefDeliveryLoop(ctx)
+
 	go s.delayedWaitsRecoveryLoop(ctx) // usage-limit retries and task receipt rechecks left by the previous manager
 	go s.taskCloseLoop(ctx)            // the agents of finished tasks (tasks_close.go)
 	go s.superviseLoop(ctx)            // the tasks the main conversation follows up (supervise_signals.go)
@@ -1950,7 +1954,9 @@ func (s *Service) runScheduledTask(t Task, due, now time.Time, manual, retried, 
 		return proto.Session{}, s.skipRun(run, errTaskBusy)
 	}
 	defer s.sched.end(t.ID)
+	retryTargetBrief := t.targetBrief
 	t, model, err := s.taskRunSnapshot(ctx, t)
+	t.targetBrief = !manual && (retried && retryTargetBrief || !retried && s.targetsLarkBrief(t))
 	run.Kind, run.Title = t.kind(), t.label()
 	if t.TodoID != "" && t.Repeat != repeatOnce {
 		run.TodoProgress = &ScheduleTodoAssessment{TodoID: t.TodoID, State: "pending"}
@@ -2326,6 +2332,7 @@ func (s *Service) startScheduledRunTracked(run ScheduleRun, t Task, m *Device, w
 	}
 	run.ID = s.recordRun(run)
 	s.verifyScheduleReceipt(work, run.ID, run.Status)
+	s.enqueueBriefDelivery(t, run)
 	if m == nil || run.ID == "" {
 		work.retain()                                  // a dispatched turn with no watcher has an unconfirmed outcome
 		s.endRound(run.MachineID, run.SessionID, t.ID) // no watcher to see its turn end: its plans ask
@@ -2421,7 +2428,7 @@ func (s *Service) watchScheduledRunTracked(run ScheduleRun, t Task, m Device, wo
 		wait := s.limitRetryWait(reset, now)
 		s.logf("task %s run %s: the usage limit resets at %s: retried in %s", t.ID, run.ID, reset.UTC().Format(time.RFC3339), wait.Round(time.Second))
 		w := delayedWait{ID: "limit_" + run.ID, Kind: delayedScheduledRetry, At: now.Add(wait),
-			Retry: &scheduledLimitRetry{Run: run, RunOf: run.of, MachineName: m.Name, LimitTurn: turn}}
+			Retry: &scheduledLimitRetry{Run: run, RunOf: run.of, MachineName: m.Name, LimitTurn: turn, TargetBrief: t.targetBrief}}
 		persisted := false
 		if s.store != nil && s.store() != nil {
 			pctx, cancel := context.WithTimeout(s.runCtx(), 5*time.Second)
@@ -2459,6 +2466,7 @@ func (s *Service) watchScheduledRunTracked(run ScheduleRun, t Task, m Device, wo
 	if briefing {
 		due = run.Due // one scheduled occurrence keeps its identity across the automatic retry
 	}
+	cur.targetBrief = t.targetBrief
 	if _, err := s.runScheduledTask(cur, due, time.Now(), false, true, false, work); err != nil {
 		s.logf("task %s retry: %v", t.ID, err)
 	}
@@ -2813,7 +2821,11 @@ func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb, cont
 	if late := now.Sub(due); !manual && !t.calendar() && late > 2*time.Minute {
 		r.Late = humanDuration(late)
 	}
-	return prompts.RenderTaskRun(r)
+	text := prompts.RenderTaskRun(r)
+	if t.targetBrief {
+		text += briefDeliveryPrompt + fmt.Sprintf("本轮日期 %s（北京时间），slot=%s。请在当前会话输出简报。", due.In(beijingBriefZone).Format(time.DateOnly), t.ID)
+	}
+	return text
 }
 
 // lateness for the log: "0.4s".

@@ -15,6 +15,7 @@ type scheduledLimitRetry struct {
 	RunOf       time.Time   `json:"run_of"`
 	MachineName string      `json:"machine_name"`
 	LimitTurn   time.Time   `json:"limit_turn"`
+	TargetBrief bool        `json:"target_brief,omitempty"`
 }
 
 // runScheduledLimitRetry waits at the persisted absolute deadline, validates the live schedule, then claims once.
@@ -102,7 +103,12 @@ func (s *Service) scheduledLimitRetryDue(ctx context.Context, w delayedWait) (Ta
 
 func (s *Service) dispatchScheduledLimitRetry(cur Task, w delayedWait) {
 	failed := w.Retry.Run
-	if _, err := s.runTask(cur, time.Now(), time.Now(), false, true); err != nil {
+	now := time.Now()
+	due := now
+	if w.Retry.TargetBrief {
+		cur.targetBrief, due = true, failed.Due
+	}
+	if _, err := s.runTask(cur, due, now, false, true); err != nil {
 		s.logf("task %s retry: %v", failed.RefID, err)
 	}
 }
