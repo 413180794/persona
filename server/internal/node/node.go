@@ -572,7 +572,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	}
 	go n.meterUsage(ctx, n.stateReady)
 	go n.backfillUsage(ctx, n.stateReady) // the days before the hub's history, once (usage_backfill.go)
-	go n.runUsageWindows(ctx.Done())
+	go n.runUsageWindows(ctx)
 	go n.sampleMetrics(ctx)
 	go n.watchPorts(ctx)
 	go n.modelRecoveryLoop(ctx)
@@ -1268,8 +1268,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			n.setLiveReplies(*c.ClaudeLiveReplies)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
-	case "usage.windows": // subscription rate-limit windows read from local files (usagewindows.go, #2432)
-		return n.usageSnapshot(false), nil
+	case "usage.windows": // subscription rate-limit windows collected on this computer (usagewindows.go, #2432)
+		return n.usageSnapshot(), nil
 	case "launchers.list":
 		if p.Source == proto.ExternalLauncherSource {
 			return n.externalLauncherList(ctx, p.Refresh)
