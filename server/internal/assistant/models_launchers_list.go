@@ -199,10 +199,21 @@ type machineLauncherListing struct {
 	HostRuntime bool                     `json:"host_runtime"`
 }
 
+type launcherRefreshKey struct{}
+
+// withLauncherRefresh asks the node to replace its ordinary one-minute shell-launcher snapshot. It is used only for
+// bounded recovery of a specific Assistant launcher, not ordinary picker loads.
+func withLauncherRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, launcherRefreshKey{}, true)
+}
+
 // known distinguishes an explicit node list (including []) from a missing/null catalog on an older node.
 func (s *Service) machineLaunchersOn(ctx context.Context, machine, host string) (list []proto.Launcher, hostRuntime, known bool, err error) {
 	var res machineLauncherListing
 	params := map[string]any{}
+	if refresh, _ := ctx.Value(launcherRefreshKey{}).(bool); refresh {
+		params["refresh"] = true
+	}
 	if host != "" {
 		params["host"] = host
 	}

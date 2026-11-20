@@ -125,6 +125,9 @@ func TestMainChatPickerReplaysSharedLauncherFixture(t *testing.T) {
 func TestSendRefusesOrReplacesALauncherThatCannotRunTheAssistant(t *testing.T) {
 	ctx := context.Background()
 	s, f := mainChatFixture(t)
+	f.hello.Models.LauncherRecovery = map[string]LauncherRecovery{"server": {Fallbacks: map[string][]string{
+		"cc-relay": {"gw"}, "codex-gw": {"cx"},
+	}}}
 	setModel(t, s, "assistant", ModelBinding{Provider: "launcher.gw"})
 	f.setSessions("server", proto.Session{SessionID: "side", Launcher: "cc-relay", Model: "kimi", Assistant: true},
 		proto.Session{SessionID: "side-codex", Launcher: "codex-gw", Assistant: true},
@@ -137,7 +140,13 @@ func TestSendRefusesOrReplacesALauncherThatCannotRunTheAssistant(t *testing.T) {
 	}
 	for _, sid := range []string{"side", "side-codex"} {
 		p, err := s.SendParams(ctx, SendParams{MachineID: "server", SessionID: sid, Params: map[string]any{"text": "hi"}})
-		if err != nil || p["launcher"] != "gw" || p["model"] != nil {
+		wantLauncher, wantModel := "gw", any(nil)
+		if sid == "side" {
+			wantModel = "kimi" // an approved substitute keeps a model its unreadable list cannot rule out
+		} else {
+			wantLauncher = "cx"
+		}
+		if err != nil || p["launcher"] != wantLauncher || p["model"] != wantModel {
 			t.Fatalf("%s left on a launcher that can't run it: %v %v", sid, p, err)
 		}
 	}
@@ -158,6 +167,7 @@ func TestSendValidatesTheResolvedAssistantLauncher(t *testing.T) {
 	ctx := context.Background()
 	t.Run("old managed Codex default on the main conversation", func(t *testing.T) { // gives way to a Codex launcher, never to Claude (#4659)
 		s, f := mainChatFixture(t)
+		f.hello.Models.LauncherRecovery = map[string]LauncherRecovery{"server": {Fallbacks: map[string][]string{"codex-gw": {"cx"}}}}
 		setModel(t, s, "assistant", ModelBinding{Provider: "launcher.codex-gw", Model: "old-model"})
 		setSettings(t, s, func(v *Settings) { v.Main = "main" })
 		f.setSessions("server", proto.Session{SessionID: "main", Assistant: true})
@@ -168,6 +178,7 @@ func TestSendValidatesTheResolvedAssistantLauncher(t *testing.T) {
 	})
 	t.Run("legacy side falls back to the same incompatible default", func(t *testing.T) {
 		s, f := mainChatFixture(t)
+		f.hello.Models.LauncherRecovery = map[string]LauncherRecovery{"server": {Fallbacks: map[string][]string{"cc-relay": {"claude"}}}}
 		setModel(t, s, "assistant", ModelBinding{Provider: "launcher.cc-relay"})
 		f.setSessions("server", proto.Session{SessionID: "side", Launcher: "cc-relay", Assistant: true})
 		p, err := s.SendParams(ctx, SendParams{MachineID: "server", SessionID: "side", Params: map[string]any{"text": "hi"}})
