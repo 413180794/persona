@@ -146939,6 +146939,12 @@
         }
       }
     },
+    "Sent on my behalf" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "自分の名義で送信" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "以我的名义发出" } }
+      }
+    },
     "Sent only to you, the bound person, to check that %@ receives it." : {
       "localizations" : {
         "en" : {

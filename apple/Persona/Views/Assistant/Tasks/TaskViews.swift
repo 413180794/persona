@@ -529,8 +529,47 @@ struct FeedLine: View {
                     .padding(.horizontal, Theme.Space.xl)
                     .accessibilityIdentifier("feed.notice")
             }
+        case .larkMessage:
+            if let message = item.larkMessage { larkMessage(message) }
         case .unknown: EmptyView()
         }
+    }
+
+    private func larkMessage(_ message: FeedItem.LarkMessage) -> some View {
+        let author = message.author
+        return HStack(alignment: .top, spacing: Theme.Space.s) {
+            if author.owner { Spacer(minLength: Theme.Space.xl) }
+            if !author.owner { larkAvatar(author) }
+            VStack(alignment: author.owner ? .trailing : .leading, spacing: Theme.Space.xs) {
+                HStack(spacing: Theme.Space.xs) {
+                    Text(author.name).font(Theme.Font.captionMedium)
+                    if author.onBehalf == true {
+                        Text(String(localized: "Sent on my behalf"))
+                    } else if author.owner {
+                        Text(String(localized: "Me"))
+                    }
+                    Text(author.source.title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Feishu")).lineLimit(1)
+                    Text(message.at, style: .time).monospacedDigit()
+                }
+                .font(Theme.Font.caption)
+                .foregroundStyle(.secondary)
+                Text(message.text)
+                    .font(Theme.Font.body)
+                    .foregroundStyle(author.owner ? Theme.userBubbleText : Color.primary)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
+                    .background(author.owner ? Theme.userBubbleFill : Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.bubble))
+            }
+            if author.owner { larkAvatar(author) }
+            if !author.owner { Spacer(minLength: Theme.Space.xl) }
+        }
+        .accessibilityIdentifier("feed.larkMessage")
+    }
+
+    private func larkAvatar(_ author: FeedItem.LarkMessage.Author) -> some View {
+        ThreadAvatar(connector: "larkcontext", name: author.name, ref: author.avatarRef, size: 32)
+            .environment(\.larkManager, AppModel.shared.feedManager(of: item.conversation, group: group))
     }
 
     private var taskTitle: String { item.ref.flatMap { store.todos[$0]?.title } ?? String(localized: "Tasks") }

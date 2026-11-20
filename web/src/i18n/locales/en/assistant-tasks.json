@@ -1,4 +1,7 @@
 {
+  "lark_source": "Feishu",
+  "lark_author_owner": "Me",
+  "lark_author_on_behalf": "Sent on my behalf",
   "channel_notice_send": "Confirm and send",
   "channel_notice_confirm": "Send the displayed reply to the original Feishu conversation?",
   "channel_notice_sent": "Sent",

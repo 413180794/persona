@@ -4646,6 +4646,17 @@ these sessions have no `pane_id`, and the App doesn't show a terminal for them a
 
 Tasks dispatched from an assistant chat ([unified-entry.md](../assistant/unified-entry.md)). The assistant hands in a plan with `task_plan`; read-only ones and ones the user chose to remember start directly, and the rest wait for "Start" on the phone.
 
+**Feishu messages.** A `lark_message` feed item has `body: {id, at, text, author}`.
+The outer `at` is its feed insertion time for pagination, and `body.at` is the Feishu message time for display.
+The author is `{id,name,avatar?,source,owner,on_behalf?}`. Its source is
+`{kind:"lark",conversation_id,title?}`. `avatar` is an opaque reference for
+`GET /api/v1/connectors/larkcontext/media?ref=…`. `owner` identifies the bound Feishu user, and
+`on_behalf` means a reply was confirmed sent as that user.
+When `GET /api/v1/assistant/capabilities` advertises `lark_message_feed`, the Lark Context extension can
+publish `{machine_id,messages:[{id,at,text,author}]}` to `POST /api/v1/assistant/conversations/{id}/lark-messages`
+for a conversation it opened. The manager stores the rows idempotently by the destination and Feishu message ID
+and returns 204. These feed writes do not deliver model input.
+
 **Stable task rows (#2878).** The feed endpoint additionally returns `task_cards`, a derived projection, without changing or
 removing its original `items` and `plans`. Android and web render a task only as its single row in **In progress**, or in
 **Needs you** while it waits on the user (#3387); the chat shows hand-off cards instead of plan/task/receipt/review/report cards (Android's Glass style draws the receipts, reviews, reports, Persona's hand-offs, message cards and `notice` lines in the chat as iOS does, `docs/plans/android-ios-alignment/chats.md` C13). Web, iOS and Android draw one card per Agent a dispatch started or a task took over (#5096, #5110). A card with an Agent opens that Agent's page, and before an Agent is up it opens the task, never the whole tray (#3700).

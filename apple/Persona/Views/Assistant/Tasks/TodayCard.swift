@@ -255,7 +255,7 @@ extension ChatLines {
         case .work(_, _, _, let start, _): start
         case .userImages(_, let items), .recaps(_, let items): items.first?.ts
         case .apiError(let item, _, _): item.ts
-        case .feed(let f): f.at
+        case .feed(let f): f.displayAt
         default: nil
         }
     }

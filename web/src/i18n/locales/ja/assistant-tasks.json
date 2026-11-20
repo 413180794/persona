@@ -1,4 +1,7 @@
 {
+  "lark_source": "Feishu",
+  "lark_author_owner": "自分",
+  "lark_author_on_behalf": "自分の名義で送信",
   "channel_notice_send": "確認して送信",
   "channel_notice_confirm": "表示された返信を元の Feishu 会話に送信しますか？",
   "channel_notice_sent": "送信済み",

@@ -366,6 +366,7 @@ func New(o Options) *Service {
 	s.readinessRoutes()
 	s.availabilityRoutes()
 	s.startRoutes()
+	s.larkMessageRoutes()
 	s.skillRoutes()
 	s.workoutRoutes()
 	s.scheduleRoutes()

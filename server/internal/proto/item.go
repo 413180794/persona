@@ -357,7 +357,7 @@ const (
 )
 
 // MessageSource preserves an input's provenance without changing the model's role.
-// ConversationID is a stable session id, never a peer's display name (Item.From).
+// ConversationID is a stable Persona session ID or external conversation ID for SourceLark.
 type MessageSource struct {
 	Kind           string `json:"kind"`
 	ConversationID string `json:"conversation_id,omitempty"`
@@ -369,6 +369,7 @@ type MessageSource struct {
 
 const (
 	SourceConversation  = "conversation"
+	SourceLark          = "lark"
 	SourcePatrol        = "patrol"
 	SourceFollowup      = "followup"
 	SourceSupervision   = "supervision"

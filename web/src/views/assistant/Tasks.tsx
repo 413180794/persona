@@ -492,6 +492,8 @@ export const FeedLineView = memo(function FeedLineView({ item, simplified = fals
     case "urgent_call":
       // an urgent call (docs/assistant/urgent-call.md): its row, loaded with the first one
       return <Suspense fallback={null}><LazyUrgentCallLine item={item} /></Suspense>;
+    case "lark_message":
+      return <Suspense fallback={null}><LazyLarkMessage item={item} /></Suspense>;
     case "channel_notice":
       return <Suspense fallback={null}><LazyChannelNotice item={item} /></Suspense>;
     case "notice": {
@@ -675,6 +677,7 @@ function useSayToPersona(conversation: string) {
 // ── message cards ──
 
 const LazyMessageDraft = lazy(() => import("./MessageDraft"));
+const LazyLarkMessage = lazy(() => import("./LarkMessage").then((m) => ({ default: m.LarkMessage })));
 const LazyChannelNotice = lazy(() => import("./ChannelNotice").then((m) => ({ default: m.ChannelNotice })));
 const LazyBriefCard = lazy(() => import("./BriefCard").then((m) => ({ default: m.BriefCard })));
 // a hand-off conversation's write-back (#5932): loaded with the first such card

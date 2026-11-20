@@ -681,22 +681,33 @@ extension ChatLines {
     /// receipt follows the answer of its turn instead of splitting it; what came after the last message goes last.
     static func mergeFeed(_ lines: [ChatLine], _ feed: [FeedItem]) -> [ChatLine] {
         guard !feed.isEmpty else { return lines }
+        let regular = feed.filter { $0.kind != .larkMessage }
+        let lark = feed.filter { $0.kind == .larkMessage }.map { (item: $0, at: $0.displayAt) }
+            .sorted { $0.at < $1.at }
         var out: [ChatLine] = []
         out.reserveCapacity(lines.count + feed.count)
         var next = 0
+        var nextLark = 0
         for line in lines {
-            if let at = inputTime(line) {
-                while next < feed.count, feed[next].at < at {
-                    out.append(.feed(feed[next]))
+            let input = inputTime(line)
+            if let input {
+                while next < regular.count, regular[next].at < input {
+                    out.append(.feed(regular[next]))
                     next += 1
+                }
+            }
+            let at: Date?
+            if case .row(.assistant(let item)) = line.content { at = item.ts } else { at = input }
+            if let at {
+                while nextLark < lark.count, lark[nextLark].at <= at {
+                    out.append(.feed(lark[nextLark].item))
+                    nextLark += 1
                 }
             }
             out.append(line)
         }
-        while next < feed.count {
-            out.append(.feed(feed[next]))
-            next += 1
-        }
+        let remaining = regular[next...].map { (item: $0, at: $0.at) } + Array(lark[nextLark...])
+        out.append(contentsOf: remaining.sorted { $0.at < $1.at }.map { .feed($0.item) })
         return out
     }
 
@@ -818,7 +829,7 @@ extension ChatLines {
         case .row(.image(let i)) where i.role == "user": return sent(i)
         case .userImages(_, let items): return items.first.flatMap(sent)
         case .day(let d): return d
-        case .feed(let f): return f.at
+        case .feed(let f): return f.displayAt
         case .modeChange(_, let c): return c.at
         default: return nil
         }

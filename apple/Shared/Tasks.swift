@@ -180,6 +180,7 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
         case plan, task, answered, receipt, routed, today, message, view, notice, review, report, brief, unknown
         /// A hand-off conversation's write-back to an inbox item (#5932): `ref` is the item, `body` a `HandoffCardBody`.
         case inboxSuggestion = "inbox_suggestion"
+        case larkMessage = "lark_message"
         init(from decoder: Decoder) throws {
             self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
         }
@@ -194,6 +195,49 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     var body: JSONValue?
 
     enum CodingKeys: String, CodingKey { case id, conversation, at, kind, ref, body }
+
+    struct LarkMessage: Codable, Hashable, Sendable {
+        struct Author: Codable, Hashable, Sendable {
+            struct Source: Codable, Hashable, Sendable {
+                var kind: String
+                var conversationID: String
+                var title: String?
+
+                enum CodingKeys: String, CodingKey {
+                    case kind, title
+                    case conversationID = "conversation_id"
+                }
+            }
+
+            var id: String
+            var name: String
+            var avatar: String?
+            var source: Source
+            var owner: Bool
+            var onBehalf: Bool?
+
+            enum CodingKeys: String, CodingKey {
+                case id, name, avatar, source, owner
+                case onBehalf = "on_behalf"
+            }
+
+            var avatarRef: String? {
+                guard let avatar, avatar.range(of: #"^avatar:[0-9]{1,64}:[0-9a-f]{64}$"#, options: .regularExpression) != nil else { return nil }
+                return avatar
+            }
+        }
+
+        var at: Date
+        var text: String
+        var author: Author
+    }
+
+    var larkMessage: LarkMessage? {
+        guard kind == .larkMessage, let body, let data = try? JSONEncoder().encode(body) else { return nil }
+        return try? JSON.decoder.decode(LarkMessage.self, from: data)
+    }
+
+    var displayAt: Date { larkMessage?.at ?? at }
 
     /// A plan card carries the plan in its body: drawn even when the `task_plan` event for it was missed or raced.
     var plan: TaskPlan? {

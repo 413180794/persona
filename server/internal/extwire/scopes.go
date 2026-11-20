@@ -101,6 +101,7 @@ var RouteScopes = map[string]string{
 	"GET /api/v1/assistant/capabilities":                         ScopeAssistantAsk,
 	"POST /api/v1/assistant/conversations":                       ScopeAssistantAsk,
 	"GET /api/v1/assistant/conversations/{id}/feed":              ScopeAssistantAsk,
+	"POST /api/v1/assistant/conversations/{id}/lark-messages":    ScopeAssistantAsk,
 	"POST /api/v1/assistant/conversations/{id}/stop":             ScopeAssistantAsk, // /agent's /stop (#3308)
 	"GET /api/v1/assistant/reporters":                            ScopeAssistantAsk,
 	// The todos (the assistant's, relayed): reading them, adding, editing and attaching agents and spaces, and writing

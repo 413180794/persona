@@ -69,7 +69,7 @@ export interface TaskPlan {
   suggestion?: RuleSuggestion;
 }
 
-export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice" | "brief" | "inbox_suggestion" | "urgent_call" | "channel_notice";
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice" | "brief" | "inbox_suggestion" | "urgent_call" | "channel_notice" | "lark_message";
 
 export interface FeedItem {
   id: string;
@@ -930,11 +930,16 @@ function inputTime(line: ChatLine): number | undefined {
   return Date.parse(line.seg.user.ts);
 }
 
+export function larkMessageTime(item: FeedItem): number {
+  const sourceTime = item.kind === "lark_message" && typeof item.body?.at === "string" ? Date.parse(item.body.at) : NaN;
+  return Number.isFinite(sourceTime) ? sourceTime : Date.parse(item.at);
+}
+
 /** When a line happened, for the day lines. */
 function lineTime(l: DisplayLine): number | undefined {
   switch (l.kind) {
     case "feed":
-      return Date.parse(l.item.at);
+      return larkMessageTime(l.item);
     case "chat": {
       const c = l.line;
       if (c.kind === "supervision") return inputTime(c);
@@ -979,18 +984,24 @@ export function loadedFrom(items: Item[]): number | undefined {
  *  they wait for the page that covers them. */
 export function displayLines(lines: ChatLine[], all: FeedItem[], from?: number): DisplayLine[] {
   // the hand-offs the task cards take in are drawn there, not among the lines (#1542); how a task goes on is its row (#8237)
-  const feed = drawnFeed(shownFeed(all)).filter((it) => from === undefined || !(Date.parse(it.at) < from));
+  const items = drawnFeed(shownFeed(all)).filter((it) => from === undefined || !(larkMessageTime(it) < from));
+  const feed = items.filter((it) => it.kind !== "lark_message");
+  const lark = items.filter((it) => it.kind === "lark_message").sort((a, b) => larkMessageTime(a) - larkMessageTime(b));
   const out: DisplayLine[] = [];
+  const addFeed = (item: FeedItem) => out.push({ kind: "feed", id: "feed-" + item.id, item });
   let next = 0;
+  let nextLark = 0;
   for (const line of lines) {
     const at = inputTime(line);
     if (at !== undefined) {
-      while (next < feed.length && Date.parse(feed[next].at) < at) {
-        out.push({ kind: "feed", id: "feed-" + feed[next].id, item: feed[next] });
-        next++;
-      }
+      while (next < feed.length && Date.parse(feed[next].at) < at) addFeed(feed[next++]);
     }
-    out.push({ kind: "chat", id: line.id, line });
+    const chat: DisplayLine = { kind: "chat", id: line.id, line };
+    const chatTime = lineTime(chat);
+    if (chatTime !== undefined) {
+      while (nextLark < lark.length && larkMessageTime(lark[nextLark]) <= chatTime) addFeed(lark[nextLark++]);
+    }
+    out.push(chat);
     if (line.kind === "segment") {
       for (const step of line.seg.steps) {
         if (step.kind !== "tool") continue;
@@ -999,7 +1010,8 @@ export function displayLines(lines: ChatLine[], all: FeedItem[], from?: number):
       }
     }
   }
-  for (; next < feed.length; next++) out.push({ kind: "feed", id: "feed-" + feed[next].id, item: feed[next] });
+  const remaining = [...feed.slice(next), ...lark.slice(nextLark)];
+  remaining.sort((a, b) => larkMessageTime(a) - larkMessageTime(b)).forEach(addFeed);
   return withDays(out);
 }
 

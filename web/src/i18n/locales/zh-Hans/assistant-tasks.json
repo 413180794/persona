@@ -1,4 +1,7 @@
 {
+  "lark_source": "飞书",
+  "lark_author_owner": "我",
+  "lark_author_on_behalf": "以我的名义发出",
   "channel_notice_send": "确认并发送",
   "channel_notice_confirm": "将上面的建议回复发送到原飞书会话？",
   "channel_notice_sent": "已发送",

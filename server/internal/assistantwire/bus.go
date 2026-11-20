@@ -282,6 +282,7 @@ var Routes = []string{
 	"PUT /api/v1/assistant/directions/{id}/notes",
 	"PUT /api/v1/assistant/sessions/{mid}/{sid}/direction",
 	"GET /api/v1/assistant/conversations/{id}/feed",
+	"POST /api/v1/assistant/conversations/{id}/lark-messages",
 	"POST /api/v1/assistant/feed/{id}/confirm-channel-notice",
 	"POST /api/v1/assistant/feed/{id}/dismiss",
 	"POST /api/v1/assistant/feed/{id}/undo-dismiss",

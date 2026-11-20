@@ -994,7 +994,7 @@ func (s *Service) startRoutes() {
 	// What this hub's assistant can do that an extension asks before relying on it: an older hub answers 404 and
 	// would ignore what it does not know (a guest conversation started as an ordinary one).
 	s.handle("GET /api/v1/assistant/capabilities", func(w http.ResponseWriter, r *http.Request) {
-		apierr.WriteJSON(w, map[string]any{"guest_conversations": true})
+		apierr.WriteJSON(w, map[string]any{"guest_conversations": true, "lark_message_feed": true})
 	})
 	s.handle("POST /api/v1/assistant/conversations/{id}/compact", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {

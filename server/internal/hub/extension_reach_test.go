@@ -263,6 +263,8 @@ func TestTodoViewRoutesStayOnTheirManager(t *testing.T) {
 // checks what its body or query names itself.
 func TestEveryExtensionRouteIsBounded(t *testing.T) {
 	bounded := map[string]string{
+		"POST /api/v1/assistant/conversations/{id}/lark-messages": "path",
+
 		"GET /api/v1/kb/{kind}": "manager", "GET /api/v1/kb/{kind}/{id}": "manager", "GET /api/v1/kb/chats/{id}/context": "manager",
 		"GET /api/v1/kb/chats/{id}/days/{day}": "manager", "GET /api/v1/kb/moments/{id}": "manager", "GET /api/v1/kb-search": "manager",
 		"PUT /api/v1/kb/{kind}/{id}": "manager",
