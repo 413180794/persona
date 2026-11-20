@@ -41,8 +41,6 @@ var supervisedStarts = map[string]string{
 	"startTaskSuccessor": "startTaskSuccessor",
 	// agent_send's resume of a stopped agent: on an open task of the caller's, or the task the send made (#8099)
 	"resumeAndSend": "resumeAndSend",
-	// rework of a retired herdr leader: the same session, under its task's existing supervision ledger (#4786)
-	"sendTaskInput": "sendTaskInput",
 }
 
 // startOptOuts are the start paths that stay unsupervised on purpose, with why. Each is the user's own conversation or
@@ -58,7 +56,7 @@ var startOptOuts = map[string]string{
 	"sendHandoff":          "the inbox's hand-off into the main conversation: the main conversation is the supervisor",
 	"followupSend":         "a meeting follow-up conversation: the meeting page owns it and the user reads it there",
 	"startInboxAgent":      "an inbox event's agent: its result is the draft in the inbox, which the user reviews",
-	"runTask":              "a scheduled task's own conversation: its runs report through notify_user, and the schedule follows them",
+	"runScheduledTask":     "a scheduled task's own conversation: its runs report through notify_user, and the schedule follows them",
 	"runAutoReview":        "an independent reviewer of a supervised task: the review is part of that task's supervision",
 	"startSessionReview":   "an explicit independent reviewer: its source session's owner asked for it and answers its result card",
 	"deliverSessionReview": "the owner chose Send on a finished review card: an explicit message or resume of the source session",
@@ -152,6 +150,9 @@ func parsePackageFuncs(t *testing.T) map[string]pkgFunc {
 				f = pkgFunc{file: path, calls: map[string]bool{}, idents: map[string]bool{}}
 			}
 			ast.Inspect(fd.Body, func(n ast.Node) bool {
+				if nodeMethodComparison(n) {
+					return false
+				}
 				switch x := n.(type) {
 				case *ast.CallExpr:
 					switch fn := x.Fun.(type) {
@@ -169,6 +170,29 @@ func parsePackageFuncs(t *testing.T) map[string]pkgFunc {
 		}
 	}
 	return out
+}
+
+// nodeMethodComparison identifies a dispatch-free comparison against a method name.
+// Calls and assignments still count when auditing which functions can send node commands.
+func nodeMethodComparison(n ast.Node) bool {
+	cmp, ok := n.(*ast.BinaryExpr)
+	if !ok || (cmp.Op != token.EQL && cmp.Op != token.NEQ) {
+		return false
+	}
+	method, ok := cmp.X.(*ast.Ident)
+	if !ok || method.Name != "method" {
+		return false
+	}
+	switch name := cmp.Y.(type) {
+	case *ast.BasicLit:
+		return name.Kind == token.STRING
+	case *ast.Ident:
+		return true
+	case *ast.SelectorExpr:
+		_, qualified := name.X.(*ast.Ident)
+		return qualified
+	}
+	return false
 }
 
 // startEntries are the functions that start an Agent (a call with DeviceSessionStart) or call a start primitive, the

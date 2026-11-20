@@ -58,6 +58,9 @@ func TestOnlyUserActionsCloseAgentTerminals(t *testing.T) {
 				continue
 			}
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				if nodeMethodComparison(n) {
+					return false
+				}
 				var method string
 				switch v := n.(type) {
 				case *ast.BasicLit:

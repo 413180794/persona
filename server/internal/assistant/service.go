@@ -766,13 +766,19 @@ func (s *Service) event(ctx context.Context, ev map[string]any) {
 
 // ---- the snapshot ----
 
-// publish reports the whole snapshot (manager.snapshot) after a change; the hub shows it.
-func (s *Service) publish(ctx context.Context) {
+// nextSnapshot captures the snapshot and assigns its publication sequence together.
+func (s *Service) nextSnapshot(ctx context.Context) Snapshot {
 	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
 	snap := s.snapshot(ctx)
 	s.seq++
 	snap.Epoch, snap.Seq, snap.At = s.epoch, s.seq, time.Now().UTC()
-	s.pubMu.Unlock()
+	return snap
+}
+
+// publish reports the whole snapshot (manager.snapshot) after a change; the hub shows it.
+func (s *Service) publish(ctx context.Context) {
+	snap := s.nextSnapshot(ctx)
 	if s.fleetOn() {
 		s.fleetTakeSnapshot(snap) // the lists' decoration, its own cards on the phone (fleet_snapshot.go)
 		snap.Interactions = nil

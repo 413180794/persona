@@ -376,6 +376,17 @@ func (s *Service) quietBackgroundReply(machine string, sess proto.Session) bool 
 	}, &page); err != nil {
 		return false
 	}
+	// The transcript can already hold the next input when this completion is
+	// decided from an older session row. Its origin belongs to the next turn.
+	if !sess.UpdatedAt.IsZero() {
+		for i, item := range page.Items {
+			if item.Role == "user" && item.Kind == proto.KindText && item.ToolUseID == "" &&
+				!item.Queued && !item.Wake && item.TS.After(sess.UpdatedAt) {
+				page.Items = page.Items[:i]
+				break
+			}
+		}
+	}
 	return transcript.BackgroundReplyMissing(page.Items)
 }
 

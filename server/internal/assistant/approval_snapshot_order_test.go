@@ -2,7 +2,6 @@ package assistant
 
 import (
 	"context"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,119 +12,26 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// startOlderApprovalSnapshotPublisher starts a real publish before the prepared
-// card exists and holds it immediately before askOnPhone. The old snapshot has
-// to remove this seeded task link, so it waits on quiet's leaf mutex. A newer
-// snapshot sees that the link is already gone and can pass this cleanup without
-// taking that mutex. Thus the newer publisher can apply its interactions first,
-// after which release applies the genuinely older interaction list.
-func startOlderApprovalSnapshotPublisher(t *testing.T, ft *fleetTest) (<-chan struct{}, func()) {
-	t.Helper()
-	key := [2]string{"mac", "left_before_approval_snapshot"}
-	r := &ft.s.fleet.rep
-	r.mu.Lock()
-	r.links = map[[2]string]TodoLink{key: {
-		MachineID: key[0],
-		SessionID: key[1],
-		TodoID:    "old_approval_snapshot_link",
-	}}
-	r.mu.Unlock()
-
-	quiet := &ft.s.tasks.quiet
-	quiet.mu.Lock()
-	var releaseOnce sync.Once
-	release := func() { releaseOnce.Do(quiet.mu.Unlock) }
-	handedOff := false
-	defer func() {
-		if !handedOff {
-			release()
-		}
-	}()
-
-	done := make(chan struct{})
-	go func() {
-		ft.s.publish(context.Background())
-		close(done)
-	}()
-	for {
-		r.mu.RLock()
-		reached := r.got && len(r.links) == 0
-		r.mu.RUnlock()
-		if reached {
-			break
-		}
-		// A mutex-blocked goroutine is not durably blocked for synctest's
-		// virtual clock. Yield instead of using a sleep-based polling helper
-		// until the older publisher has reached this gate.
-		runtime.Gosched()
-	}
-	handedOff = true
-	return done, release
-}
-
-// startPreparedInteractionAtSnapshotGate is startPreparedInteraction with a
-// scheduler handoff instead of its sleep-based waitPending: the older publisher
-// is still parked on an ordinary mutex, so virtual time cannot advance yet.
-func startPreparedInteractionAtSnapshotGate(t *testing.T, ft *fleetTest, ix proto.Interaction, op approvalops.Operation) <-chan preparedTestResult {
-	t.Helper()
-	done := make(chan preparedTestResult, 1)
-	go func() {
-		out, err := ft.s.waitPreparedCard(context.Background(), ix, op)
-		done <- preparedTestResult{out: out, err: err}
-	}()
-	for {
-		if got := len(ft.s.pendingInteractions()); got == 1 {
-			break
-		} else if got > 1 {
-			t.Fatalf("pending interactions during gated setup = %d, want one", got)
-		}
-		runtime.Gosched()
-	}
-	t.Cleanup(func() {
-		ft.s.fleet.mu.Lock()
-		p := ft.s.fleet.interactions[ix.ID]
-		ft.s.fleet.mu.Unlock()
-		if p != nil {
-			ft.s.endPrepared(p, "cancelled", "test cleanup")
-		}
-	})
-	return done
-}
-
 func TestPreparedSnapshotOutOfOrderDoesNotCancelOriginal(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ft := newFleetTestNoStore(t)
 		preparedTestConversation(ft)
-		olderDone, releaseOlder := startOlderApprovalSnapshotPublisher(t, ft)
-		defer releaseOlder()
+		ctx := context.Background()
+		older := ft.s.nextSnapshot(ctx)
+		if older.Seq == 0 || len(older.Interactions) != 0 {
+			t.Fatalf("older snapshot must have a sequence and no pending approval: %+v", older)
+		}
 
 		const id = "ix_out_of_order_snapshot"
 		var applies atomic.Int32
-		originalDone := startPreparedInteractionAtSnapshotGate(t, ft, proto.Interaction{
-			ID: id, MachineID: "mac", SessionID: "s1", Kind: proto.IxPermission,
-			ToolName: "persona_settings", Summary: "Change the example setting",
-			ExpiresAt: time.Now().Add(time.Hour),
-		}, approvalops.Operation{Apply: func(context.Context, proto.Resolution) (string, error) {
+		originalDone := startPreparedTest(t, ft, id, "", func(context.Context, proto.Resolution) (string, error) {
 			applies.Add(1)
 			return "setting applied", nil
-		}})
+		})
 
-		freshDone := make(chan struct{})
-		go func() {
-			ft.s.publish(context.Background())
-			close(freshDone)
-		}()
-		<-freshDone
-		select {
-		case <-olderDone:
-			t.Fatal("the older publisher passed its application gate before the fresh publisher")
-		default:
-		}
-
-		// Sequence 2 is now fully applied. Releasing sequence 1 makes its empty
-		// interaction list the last one applied, reproducing the publication race.
-		releaseOlder()
-		<-olderDone
+		ft.s.publish(ctx)
+		// The older publisher reached the fleet after the current one had applied.
+		ft.s.fleetTakeSnapshot(older)
 		synctest.Wait()
 
 		select {

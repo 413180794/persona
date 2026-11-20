@@ -453,7 +453,11 @@ func TestQuietFollowupUsesItsInputSource(t *testing.T) {
 		Task{ID: "fu_e", Title: "日报", Prompt: "写日报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(time.Hour),
 			Enabled: true, MachineID: "server", SessionID: "lead2"})
 	idle := proto.Session{SessionID: "lead1", Status: proto.StatusDone, Assistant: true, LastText: "没有新情况。"}
-	n.setSessions("server", idle, proto.Session{SessionID: "lead2", Status: proto.StatusDone, Assistant: true, LastText: "日报好了。"})
+	daily := proto.Session{SessionID: "lead2", Status: proto.StatusDone, Assistant: true, LastText: "日报好了。"}
+	n.setSessions("server", idle, daily)
+	n.mu.Lock()
+	n.known[idle.SessionID], n.known[daily.SessionID] = true, true // the listed conversations accept resume_only
+	n.mu.Unlock()
 
 	if _, err := runNow(t, h, "fu_p"); err != nil {
 		t.Fatal(err)

@@ -35,8 +35,11 @@ func newPatrolEnv(t *testing.T) *patrolEnv {
 	setTasks(ft.s, task)
 	sess := proto.Session{SessionID: "lead1", Title: "Project", Cwd: "/home/u/.persona/assistant", Assistant: true,
 		Status: proto.StatusDone, LastText: "Previous answer", UpdatedAt: time.Now(), Rev: 1}
+	ft.f.setSessions("mac", sess)
+	ft.f.mu.Lock()
+	ft.f.known[sess.SessionID] = true // the listed conversation accepts resume_only
+	ft.f.mu.Unlock()
 	ft.sessions("mac", sess)
-	ft.f.sessions["mac"] = []proto.Session{sess}
 	return &patrolEnv{t: t, ft: ft, task: task, sess: sess}
 }
 
@@ -215,8 +218,12 @@ func TestQuietPatrolWakeByABackgroundTask(t *testing.T) {
 func TestQuietPatrolInputWrittenAfterUsersTurn(t *testing.T) {
 	e := newPatrolEnv(t)
 	e.working()
+	next := e.patrolInput()
+	// done advances the last observed row by one second. The next input
+	// reaches the transcript after that row, before the push reads it.
+	next.TS = e.sess.UpdatedAt.Add(2 * time.Second)
 	e.done([]proto.Item{{Role: "user", Kind: proto.KindText, Text: "帮我看下 MR"},
-		{Role: "assistant", Kind: proto.KindText, Text: "MR 已看完。"}, e.patrolInput()}, "MR 已看完。")
+		{Role: "assistant", Kind: proto.KindText, Text: "MR 已看完。"}, next}, "MR 已看完。")
 	got := e.ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second)
 	if len(got) != 1 || got[0].Body != "MR 已看完。" {
 		t.Errorf("the user's answer with a patrol input written after it: %d notifications, want 1 with its answer", len(got))
