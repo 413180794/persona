@@ -8,12 +8,15 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-func (s *stateFile) stopped(id string, cause proto.StopCause) {
+func (s *stateFile) stopped(id string, cause proto.StopCause) int64 {
+	var at int64
 	s.update(id, func(v *sessionState) bool {
 		v.StopCause = cause
-		v.StopCauseAt = max(time.Now().UnixNano(), v.StopCauseAt+1)
+		at = max(time.Now().UnixNano(), v.StopCauseAt+1)
+		v.StopCauseAt = at
 		return true
 	})
+	return at
 }
 
 // A new running observation invalidates the previous stopped-session capability.
@@ -37,23 +40,29 @@ func (n *Node) recordRunning(id string) {
 	})
 }
 
-// state.put is one-way. Verify the cause before closing or consuming a stopped
+// Verify the cause before closing or consuming a stopped
 // capability: a failed save must not revive old recovery permission after a restart.
 func (n *Node) saveStopCause(ctx context.Context, id string, cause proto.StopCause) error {
-	n.state.stopped(id, cause)
-	want, known := n.state.get(id)
-	if !known || n.peer == nil {
+	at := n.state.stopped(id, cause)
+	if at == 0 || n.peer == nil {
 		return nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	unsaved := refusal("stop_not_saved", "The stop state could not be saved. Nothing was started, stopped or closed; try again.", nil)
+	if j := n.nodeStateJournal.Load(); j != nil {
+		if err := j.flush(cctx, n.peer); err != nil {
+			n.logf("flush stop state receipts: %v", err)
+			return unsaved
+		}
+	}
 	var saved struct {
 		Sessions map[string]sessionState `json:"sessions"`
 	}
 	err := n.peer.Call(cctx, "state.load", map[string]any{}, &saved)
 	got, ok := saved.Sessions[id]
-	if err != nil || !ok || got.StopCause != cause || got.StopCauseAt != want.StopCauseAt {
-		return refusal("stop_not_saved", "The stop state could not be saved. Nothing was started, stopped or closed; try again.", nil)
+	if err != nil || !ok || got.StopCause != cause || got.StopCauseAt != at {
+		return unsaved
 	}
 	return nil
 }

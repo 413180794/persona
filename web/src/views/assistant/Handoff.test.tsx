@@ -154,6 +154,22 @@ describe("hand-off cards", () => {
     act(() => card!.click());
     expect(opened()).toBe("/s/example-computer/next-agent");
   });
+
+  it("shows the reason a plan failed before it had a to-do and offers no detail action", async () => {
+    const reason = "The stop state could not be saved. Try again.";
+    const plan: TaskPlan = { id: "failed-plan", conversation, state: "started", created_at: at, tasks: [
+      { title: "Continuation", prompt: "a", cwd: "/example", machine: "example-computer",
+        error: `continues: cannot stop agent linux/session on to-do todo_a: ${reason}` },
+      { title: "Unknown failure", prompt: "b", cwd: "/example", machine: "example-computer", error: "exit status 1" },
+    ] };
+    getFeedState().plans[plan.id] = plan;
+    await show({ id: "plan-event", conversation, at, kind: "plan", ref: plan.id }, [], []);
+    expect(cards().map((card) => card.tagName)).toEqual(["DIV", "DIV"]);
+    expect(cards().map((card) => card.querySelector("[data-handoff-failure]")?.textContent)).toEqual([
+      t("assistant-tasks.start_failed", { error: reason }),
+      t("assistant-tasks.start_failed_short"),
+    ]);
+  });
 });
 
 describe("the card's words", () => {

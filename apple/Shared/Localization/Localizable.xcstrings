@@ -59044,6 +59044,28 @@
         }
       }
     },
+    "Didn't start." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Didn't start."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "起動できませんでした。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没开起来"
+          }
+        }
+      }
+    },
     "Didn't start. Open it for details." : {
       "localizations" : {
         "en" : {

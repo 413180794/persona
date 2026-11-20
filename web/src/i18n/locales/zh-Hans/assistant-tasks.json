@@ -187,5 +187,6 @@
   "start_cause_timed_out": "启动太久，超时了",
   "start_cause_not_allowed": "这台电脑没有允许",
   "start_cause_needs_update": "这台电脑上的 Persona 需要更新",
-  "start_failed_details": "没开起来，点开看详情"
+  "start_failed_details": "没开起来，点开看详情",
+  "start_failed_short": "没开起来"
 }

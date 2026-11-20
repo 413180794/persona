@@ -85,7 +85,9 @@ struct DispatchHandoffCard: View {
             }
             return .agent(at: at, state: state, limit: limit)
         }
-        if let failure = failure(todo) { return .failed(StartFailureWords.cardLine(failure)) }
+        if let failure = failure(todo) {
+            return .failed(StartFailureWords.cardLine(failure, canOpenDetails: entry.todoID != nil))
+        }
         if todo?.doneAt != nil { return .closedEarly }
         if todo == nil, entry.todoID != nil, !store.todos.isEmpty { return .gone }
         return .starting

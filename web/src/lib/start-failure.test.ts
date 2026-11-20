@@ -25,7 +25,18 @@ describe("a failed start's reason", () => {
     expect(startFailurePlain("  ")).toBeUndefined();
     expect(startFailureRowLine("exit status 1")).toBe(t("assistant-tasks.start_failed_details"));
     expect(startFailureRowLine("rpc: connection closed")).toBe(t("assistant-tasks.start_cause_connection_lost"));
-    expect(startFailureCardLine("rpc: connection closed")).toBe(t("assistant-tasks.start_failed", { error: t("assistant-tasks.start_cause_connection_lost") }));
-    expect(startFailureCardLine("exit status 1")).toBe(t("assistant-tasks.start_failed_details"));
+    expect(startFailureCardLine("rpc: connection closed", false)).toBe(t("assistant-tasks.start_failed", { error: t("assistant-tasks.start_cause_connection_lost") }));
+    expect(startFailureCardLine("exit status 1", true)).toBe(t("assistant-tasks.start_failed_details"));
+    expect(startFailureCardLine("exit status 1", false)).toBe(t("assistant-tasks.start_failed_short"));
+  });
+
+  it("strips continues wrappers before interpreting the reason", () => {
+    expect(startFailurePlain("continues: cannot stop agent linux/session on to-do todo_a: The stop state could not be saved. Try again."))
+      .toBe("The stop state could not be saved. Try again.");
+    expect(startFailurePlain("continues: cannot stop agent linux/session on to-do todo_a: 停止状态未保存，请重试。")) // i18n-ignore
+      .toBe("停止状态未保存，请重试。"); // i18n-ignore
+    expect(startFailurePlain("continues: cannot confirm agent linux/session stopped: its computer is unavailable"))
+      .toBe(t("assistant-tasks.start_cause_offline"));
+    expect(startFailurePlain("continues: cannot stop agent linux/session on to-do todo_a: exit status 1")).toBeUndefined();
   });
 });

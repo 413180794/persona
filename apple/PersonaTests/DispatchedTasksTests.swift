@@ -187,8 +187,18 @@ struct DispatchHandoffFailureTests {
         #expect(W.plain("  ") == nil)
         #expect(W.rowLine("exit status 1") == W.details)
         #expect(W.rowLine("rpc: connection closed") == W.words(.connectionLost))
-        #expect(W.cardLine("rpc: connection closed") == String(localized: "Didn't start: \(W.words(.connectionLost)) [Tasks Store 38bbb7]"))
-        #expect(W.cardLine("exit status 1") == W.details)
+        #expect(W.cardLine("rpc: connection closed", canOpenDetails: false) == String(localized: "Didn't start: \(W.words(.connectionLost)) [Tasks Store 38bbb7]"))
+        #expect(W.cardLine("exit status 1", canOpenDetails: true) == W.details)
+        #expect(W.cardLine("exit status 1", canOpenDetails: false) == String(localized: "Didn't start."))
+    }
+
+    @Test func continuationFailureBeforeTodoShowsTheUnderlyingReason() {
+        typealias W = StartFailureWords
+        let reason = "The stop state could not be saved. Try again."
+        let prefix = "continues: cannot stop agent linux/session on to-do todo_a: "
+        #expect(W.cardLine(prefix + reason, canOpenDetails: false) == String(localized: "Didn't start: \(reason) [Tasks Store 38bbb7]"))
+        #expect(W.plain(prefix + "停止状态未保存，请重试。") == "停止状态未保存，请重试。")
+        #expect(W.plain("continues: cannot confirm agent linux/session stopped: its computer is unavailable") == W.words(.offline))
     }
 
     @Test func theInterruptedLineSaysWhyWhenItCan() {

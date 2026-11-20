@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/nodeproto"
 )
@@ -15,6 +17,7 @@ type stateJournalPeer struct {
 	committed map[string]pendingNodeState
 	writes    int
 	loseReply bool
+	beforePut func() error
 }
 
 func (p *stateJournalPeer) Call(_ context.Context, method string, params, out any) error {
@@ -23,6 +26,11 @@ func (p *stateJournalPeer) Call(_ context.Context, method string, params, out an
 	case nodeproto.MethodStateReceipt:
 		ack.Revision = p.committed[params.(map[string]string)["session_id"]].Revision
 	case nodeproto.MethodStatePutReceipt:
+		if p.beforePut != nil {
+			if err := p.beforePut(); err != nil {
+				return err
+			}
+		}
 		entry := params.(pendingNodeState)
 		prior := p.committed[entry.SessionID]
 		if prior.Revision != entry.Revision {
@@ -41,6 +49,53 @@ func (p *stateJournalPeer) Call(_ context.Context, method string, params, out an
 		return errors.New("unexpected method")
 	}
 	return nil
+}
+
+func TestStateJournalFlushSerializesWithAnOlderAttachment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), stateJournalFile)
+	a, b := &stateJournal{path: path}, &stateJournal{path: path}
+	if err := a.append("session", sessionState{Pane: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	inFlight, release := make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	peer := &stateJournalPeer{
+		committed: map[string]pendingNodeState{},
+		beforePut: func() error {
+			if calls.Add(1) != 1 {
+				return errors.New("concurrent receipt submission")
+			}
+			close(inFlight)
+			<-release
+			return nil
+		},
+	}
+	defer func() { close(release) }()
+	done := make(chan error, 1)
+	go func() {
+		_, err := a.send(t.Context(), peer)
+		done <- err
+	}()
+	<-inFlight
+	if err := b.append("session", sessionState{Pane: "newest"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Millisecond)
+	defer cancel()
+	if err := b.flush(ctx, peer); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("flush did not wait for the sender within its deadline: %v", err)
+	}
+	release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	peer.beforePut = nil
+	if err := b.flush(t.Context(), peer); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := b.head(); err != nil || found || peer.writes != 2 || peer.committed["session"].State.Pane != "newest" {
+		t.Fatalf("flush did not finish the shared queue in order: %v %v %+v", found, err, peer)
+	}
 }
 
 func TestStateJournalSurvivesLostReceiptAndAttachmentRestart(t *testing.T) {

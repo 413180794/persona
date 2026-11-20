@@ -19,6 +19,10 @@ const stateJournalFile = "node-state-pending.json"
 // from an old and new attachment is serialized in the resident process.
 var stateJournalMu sync.Mutex
 
+// Serialize the receipt exchange across the background sender, synchronous
+// flushes and overlapping attachments. Journal appends can continue during RPCs.
+var stateJournalSender = make(chan struct{}, 1)
+
 type stateJournal struct {
 	path string
 	wake chan struct{}
@@ -97,8 +101,7 @@ func (j *stateJournal) head() (pendingNodeState, bool, error) {
 	return pending[0], true, nil
 }
 
-// updateHead is conditional so two generations of an attachment can recover
-// the same operation without overwriting the next queued snapshot.
+// updateHead only changes the entry whose receipt is being exchanged.
 func (j *stateJournal) updateHead(op pendingNodeState, acknowledged bool) (pendingNodeState, error) {
 	stateJournalMu.Lock()
 	defer stateJournalMu.Unlock()
@@ -120,6 +123,48 @@ func (j *stateJournal) updateHead(op pendingNodeState, acknowledged bool) (pendi
 }
 
 func (j *stateJournal) send(ctx context.Context, peer stateReceiptPeer) (bool, error) {
+	if err := acquireStateJournalSender(ctx); err != nil {
+		return false, err
+	}
+	defer func() { <-stateJournalSender }()
+	return j.sendHead(ctx, peer)
+}
+
+func acquireStateJournalSender(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case stateJournalSender <- struct{}{}:
+		return nil
+	}
+}
+
+// flush commits the prefix queued at entry, including any write the caller just
+// appended. Later appends remain the background sender's responsibility.
+func (j *stateJournal) flush(ctx context.Context, peer stateReceiptPeer) error {
+	if err := acquireStateJournalSender(ctx); err != nil {
+		return err
+	}
+	defer func() { <-stateJournalSender }()
+	stateJournalMu.Lock()
+	pending, err := j.read()
+	stateJournalMu.Unlock()
+	if err != nil {
+		return err
+	}
+	for range pending {
+		if _, err := j.sendHead(ctx, peer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sendHead requires the sender lock from the first read through acknowledgment.
+func (j *stateJournal) sendHead(ctx context.Context, peer stateReceiptPeer) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	op, found, err := j.head()
 	if !found || err != nil {
 		return false, err

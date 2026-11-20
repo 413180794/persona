@@ -1,7 +1,7 @@
 // Why a task's Agent did not start, in words for everyone (#8237; iOS `StartFailureWords`). The hub's reason is often a
 // raw error ("rpc: connection closed", "context deadline exceeded"); that stays for the task's details. The hand-off card
 // and the Needs you row say the cause in a few plain words when the error names a known one, keep a sentence the hub
-// already wrote for people (in the owner's language, or a whole English sentence), and otherwise say to open it. The
+// already wrote for people (in the owner's language, or a whole English sentence). The
 // Needs you row reads its plan task's code first (lib/start-retry.ts startFailureCodeLine, #10365).
 import { t } from "../i18n";
 
@@ -16,7 +16,7 @@ export function startFailureCause(raw: string): StartFailureCause | undefined {
   if (has(["deadline exceeded", "timed out", "timeout", "超时", "タイムアウト"])) return "timed_out"; // i18n-ignore: matches the hub's text
   if (has(["permission denied", "unauthorized", "unauthorised", "forbidden", "access denied", "publickey", "authentication failed"])) return "not_allowed";
   if (has(["unknown method", "version mismatch", "protocol version", "incompatible"])) return "needs_update";
-  if (has(["offline", "not connected", "no route", "unreachable", "connection refused", "no such host", "could not resolve", "离线", "不在线", "オフライン"])) return "offline"; // i18n-ignore: matches the hub's text
+  if (has(["offline", "not connected", "no route", "unreachable", "connection refused", "no such host", "could not resolve", "its computer is unavailable", "离线", "不在线", "オフライン"])) return "offline"; // i18n-ignore: matches the hub's text
   return undefined;
 }
 
@@ -29,7 +29,7 @@ export function readsAsSentence(text: string): boolean {
 
 /** The reason for people: the cause in words, the hub's own sentence, or undefined (nothing readable: say to open it). */
 export function startFailurePlain(raw: string): string | undefined {
-  const text = raw.trim();
+  const text = raw.trim().replace(/^continues:\s*(?:(?:cannot stop agent \S+ on to-do \S+|cannot confirm agent \S+ stopped):\s*)?/, "");
   if (!text) return undefined;
   const cause = startFailureCause(text);
   if (cause) return t(`assistant-tasks.start_cause_${cause}`);
@@ -37,9 +37,10 @@ export function startFailurePlain(raw: string): string | undefined {
 }
 
 /** The hand-off card's line: "Didn't start: <why>", or that the details say why. */
-export function startFailureCardLine(raw: string): string {
+export function startFailureCardLine(raw: string, canOpenDetails: boolean): string {
   const plain = startFailurePlain(raw);
-  return plain ? t("assistant-tasks.start_failed", { error: plain }) : t("assistant-tasks.start_failed_details");
+  if (plain) return t("assistant-tasks.start_failed", { error: plain });
+  return canOpenDetails ? t("assistant-tasks.start_failed_details") : t("assistant-tasks.start_failed_short");
 }
 
 /** The Needs you row's line (its status word already says it did not start): why, or that the details say. */

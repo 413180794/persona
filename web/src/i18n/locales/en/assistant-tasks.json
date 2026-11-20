@@ -201,5 +201,6 @@
   "start_cause_timed_out": "It took too long to start",
   "start_cause_not_allowed": "This computer didn't allow it",
   "start_cause_needs_update": "Persona on this computer needs an update",
-  "start_failed_details": "Didn't start. Open it for details."
+  "start_failed_details": "Didn't start. Open it for details.",
+  "start_failed_short": "Didn't start."
 }

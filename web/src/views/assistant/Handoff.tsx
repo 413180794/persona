@@ -137,7 +137,7 @@ export function HandoffCard({ handoff }: { handoff: Handoff }) {
       )}
     </>
   ) : failure ? (
-    <span data-handoff-failure className="truncate text-[12px] leading-4 text-red">{startFailureCardLine(failure)}</span>
+    <span data-handoff-failure className="truncate text-[12px] leading-4 text-red">{startFailureCardLine(failure, interactive)}</span>
   ) : handoff.ended ? (
     <span className="truncate text-[12px] leading-4 text-ink-3">{todo ? t("assistant-tasks.handoff_closed") : t("assistant-tasks.handoff_gone")}</span>
   ) : (

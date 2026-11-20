@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -59,12 +61,15 @@ func TestStopRPCPersistsItsProvenance(t *testing.T) {
 
 func TestStopChangesNeedDurableProvenanceBeforeTouchingTerminal(t *testing.T) {
 	for _, tc := range []struct {
-		name              string
-		failWrite, resume bool
+		name                       string
+		failWrite, resume, journal bool
 	}{
-		{"saved user close", false, false},
-		{"user close store failed", true, false},
-		{"resume consume store failed", true, true},
+		{"saved user close", false, false, false},
+		{"user close store failed", true, false, false},
+		{"resume consume store failed", true, true, false},
+		{"journaled user close", false, false, true},
+		{"journaled user close store failed", true, false, true},
+		{"journaled resume consume store failed", true, true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			n, f, home := herdrNode(t)
@@ -79,6 +84,8 @@ func TestStopChangesNeedDurableProvenanceBeforeTouchingTerminal(t *testing.T) {
 			manager := rpc.New("manager", right)
 			var mu sync.Mutex
 			saved := initial
+			var receipt string
+			var attempts, loads int
 			manager.OnEvent = func(event string, data json.RawMessage) {
 				if event != "state.put" || tc.failWrite {
 					return
@@ -91,10 +98,29 @@ func TestStopChangesNeedDurableProvenanceBeforeTouchingTerminal(t *testing.T) {
 				saved = put.State
 				mu.Unlock()
 			}
-			manager.OnRequest = func(context.Context, string, json.RawMessage) (any, error) {
+			manager.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
 				mu.Lock()
 				defer mu.Unlock()
-				return map[string]any{"sessions": map[string]sessionState{sidA: saved}}, nil
+				switch method {
+				case nodeproto.MethodStateReceipt:
+					return nodeproto.StateRevision{Revision: receipt}, nil
+				case nodeproto.MethodStatePutReceipt:
+					var op pendingNodeState
+					if err := json.Unmarshal(params, &op); err != nil {
+						return nil, err
+					}
+					attempts++
+					if tc.failWrite || op.Previous != receipt || op.SessionID != sidA {
+						return nil, errors.New("state write rejected")
+					}
+					saved, receipt = op.State, op.Revision
+					return nodeproto.StateRevision{Revision: receipt}, nil
+				case "state.load":
+					loads++
+					return map[string]any{"sessions": map[string]sessionState{sidA: saved}}, nil
+				default:
+					return nil, errors.New("unexpected method")
+				}
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan struct{}, 2)
@@ -112,9 +138,15 @@ func TestStopChangesNeedDurableProvenanceBeforeTouchingTerminal(t *testing.T) {
 					}
 				}
 			})
-			n.state.persist = func(id string, st sessionState) {
-				_ = n.peer.Notify("state.put", map[string]any{"session_id": id, "state": st})
+			if tc.journal {
+				// Leave the background loop stopped so a stale read is deterministic.
+				j := &stateJournal{path: filepath.Join(t.TempDir(), stateJournalFile)}
+				if err := j.append(sidA, initial); err != nil {
+					t.Fatal(err)
+				}
+				n.nodeStateJournal.Store(j)
 			}
+			n.state.persist = n.persistState
 			f.reset()
 			var err error
 			if tc.resume {
@@ -137,6 +169,17 @@ func TestStopChangesNeedDurableProvenanceBeforeTouchingTerminal(t *testing.T) {
 				}
 			} else if err != nil || len(f.trace("tab.close", "pane.close")) != 1 {
 				t.Fatalf("saved user stop did not close the terminal: %v", err)
+			}
+			if tc.journal {
+				mu.Lock()
+				defer mu.Unlock()
+				if tc.failWrite {
+					if attempts != 1 || loads != 0 {
+						t.Fatalf("failure should leave the receipt queued without loading state: writes=%d loads=%d", attempts, loads)
+					}
+				} else if attempts != 2 || loads != 1 || saved.StopCause != proto.StopUser || saved.StopCauseAt <= initial.StopCauseAt {
+					t.Fatalf("stop did not flush older state and its own provenance: writes=%d loads=%d saved=%+v", attempts, loads, saved)
+				}
 			}
 		})
 	}

@@ -3,7 +3,7 @@ import Foundation
 /// Why a task's Agent did not start, in words for everyone (#8237). The hub's reason is often a raw error
 /// ("rpc: connection closed", "context deadline exceeded"); that stays for the task's details. The hand-off card and the
 /// Needs You row say the cause in a few plain words when the error names a known one, keep a sentence the hub already
-/// wrote for people (in the owner's language, or a whole English sentence), and otherwise say to open it for details.
+/// wrote for people (in the owner's language, or a whole English sentence).
 nonisolated enum StartFailureWords {
     enum Cause: Equatable, Sendable { case connectionLost, offline, timedOut, notAllowed, needsUpdate }
 
@@ -21,7 +21,7 @@ nonisolated enum StartFailureWords {
         }
         if has(["unknown method", "version mismatch", "protocol version", "incompatible"]) { return .needsUpdate }
         if has(["offline", "not connected", "no route", "unreachable", "connection refused", "no such host", "could not resolve",
-                "离线", "不在线", "オフライン"]) { return .offline } // i18n-ignore: matches the hub's text
+                "its computer is unavailable", "离线", "不在线", "オフライン"]) { return .offline } // i18n-ignore: matches the hub's text
         return nil
     }
 
@@ -38,14 +38,17 @@ nonisolated enum StartFailureWords {
     /// The reason for people: the cause in words, the hub's own sentence, or nil (nothing readable: say to open it).
     static func plain(_ raw: String) -> String? {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"^continues:\s*(?:(?:cannot stop agent \S+ on to-do \S+|cannot confirm agent \S+ stopped):\s*)?"#,
+                                  with: "", options: .regularExpression)
         guard !text.isEmpty else { return nil }
         if let cause = cause(text) { return words(cause) }
         return readsAsSentence(text) ? text : nil
     }
 
     /// The hand-off card's line: "Didn't start: <why>", or that the details say why.
-    static func cardLine(_ raw: String) -> String {
-        plain(raw).map { String(localized: "Didn't start: \($0) [Tasks Store 38bbb7]") } ?? details
+    static func cardLine(_ raw: String, canOpenDetails: Bool) -> String {
+        if let reason = plain(raw) { return String(localized: "Didn't start: \(reason) [Tasks Store 38bbb7]") }
+        return canOpenDetails ? details : String(localized: "Didn't start.")
     }
 
     /// The Needs You row's second line (its status word already says it did not start): why, or that the details say.

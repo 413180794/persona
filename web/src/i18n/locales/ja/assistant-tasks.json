@@ -187,5 +187,6 @@
   "start_cause_timed_out": "起動に時間がかかりすぎました",
   "start_cause_not_allowed": "このコンピューターで許可されませんでした",
   "start_cause_needs_update": "このコンピューターの Persona を更新する必要があります",
-  "start_failed_details": "起動できませんでした。開いて詳細を確認してください。"
+  "start_failed_details": "起動できませんでした。開いて詳細を確認してください。",
+  "start_failed_short": "起動できませんでした。"
 }
