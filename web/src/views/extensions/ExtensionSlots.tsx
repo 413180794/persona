@@ -15,11 +15,13 @@ import { Icon, type IconName } from "../../ui/icons";
 import { lazyPage } from "../../lib/lazy-page";
 import { NEW_ICON_GLYPH } from "./icon-map";
 import { ExtensionOwnerScope } from "../../lib/extension-owner";
+import { refreshUsageWindows, SUBSCRIPTION_USAGE_ID } from "../../lib/usage-windows";
 
 // The extension page is its own chunk (#1794): App.tsx reaches this file for the sidebar's and the nav page's icons and
 // titles, and the first screen draws no extension UI. A page, a card and a section each wait under their own Suspense
 // (the page keeps its top bar) with the Loading that ExtensionUI shows while it asks for its view.
 const ExtensionUI = lazyPage(() => import("../settings/ExtensionView").then((m) => m.ExtensionUI));
+const SubscriptionUsage = lazyPage(() => import("./SubscriptionUsage").then((m) => m.SubscriptionUsage));
 // Arranging Overview (#9745, #10905) is its own chunk too: the first screen draws the cards and the sections, never
 // their editor (its heading, each card's controls and each section's bar, and the drag).
 const OverviewArrange = lazyPage(() => import("./OverviewArrange").then((m) => m.OverviewArrange));
@@ -58,9 +60,11 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
   const title = place?.title || ui;
   // the extension's name after the title, unless it only says the title again
   const name = nameBesideTitle(place?.extension_name, title);
+  const subscriptionUsage = extension === SUBSCRIPTION_USAGE_ID && ui === SUBSCRIPTION_USAGE_ID && place?.placement === "nav_page";
   // a code review or a file browser (UI version 4) and a dashboard of columns (8) take the page's whole width; everything
   // else stays a column
   const [wide, setWide] = useState(false);
+  const extensionView = <OwnerScope extension={extension}><ExtensionUI key={`${extension}/${ui}/${n}`} extension={extension} ui={ui} title={title} bare state={state} onWide={setWide} remember /></OwnerScope>;
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
@@ -71,12 +75,15 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
         <h1 className="min-w-0 truncate text-[14px] font-semibold text-ink">{title}</h1>
         {name && <span className="hidden min-w-0 truncate text-[12px] text-ink-3 sm:inline">{name}</span>}
         <span className="flex-1" />
-        <IconButton icon="retry" label={t("extensions-extensionslots.redraw")} onClick={() => setN((x) => x + 1)} />
+        <IconButton icon="retry" label={t("extensions-extensionslots.redraw")} onClick={() => {
+          if (subscriptionUsage) refreshUsageWindows();
+          setN((x) => x + 1);
+        }} />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className={cx("mx-auto flex flex-col px-4 py-6 sm:px-8", wide ? "max-w-[1680px]" : "max-w-[880px]")}>
           <Suspense fallback={<Loading />}>
-            <OwnerScope extension={extension}><ExtensionUI key={`${extension}/${ui}/${n}`} extension={extension} ui={ui} title={title} bare state={state} onWide={setWide} remember /></OwnerScope>
+            {subscriptionUsage ? <SubscriptionUsage fallback={extensionView} /> : extensionView}
           </Suspense>
         </div>
       </div>

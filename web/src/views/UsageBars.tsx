@@ -3,7 +3,8 @@
 // behind an even pace. Hidden entirely while the hub has no data.
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { t as tr } from "../i18n";
-import { fullest, isWarn, liveAccounts, topAccounts, useUsageWindows, sourceNames, type UnconnectedProvider, type UsageAccount } from "../lib/usage-windows";
+import { useExtensionPlace } from "../lib/extension-slots";
+import { fullest, hasSubscriptionUsage, isWarn, liveAccounts, SUBSCRIPTION_USAGE_ID, topAccounts, useUsageWindows, sourceNames, type UnconnectedProvider, type UsageAccount } from "../lib/usage-windows";
 import { cx } from "../ui/atoms";
 import { lazyOverlay } from "./LazyOverlay";
 
@@ -13,12 +14,13 @@ let LoadedUnconnected: ComponentType<{ accounts: UsageAccount[]; onChange: (next
 const percent = (p: number) => Math.min(100, Math.max(0, p));
 const shown = (p: number) => `${Math.round(p)}%`;
 const fill = (p: number) => (isWarn(p) ? "bg-orange" : "bg-accent");
+const meterTones = { low: "bg-green", medium: "bg-orange", high: "bg-red" };
 
 /** A bar: the track, the used part (caution colour from 80%) and, with `expected`, a tick where an even pace would be. */
-export function Meter({ used, expected, label, tall }: { used: number; expected?: number; label: string; tall?: boolean }) {
+export function Meter({ used, expected, label, tall, tone }: { used: number; expected?: number; label: string; tall?: boolean; tone?: keyof typeof meterTones }) {
   return (
-    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent(used))} className={cx("relative w-full rounded-full bg-inset", tall ? "h-1.5" : "h-1")}>
-      <div className={cx("h-full rounded-full transition-[width] duration-300", fill(used))} style={{ width: `${percent(used)}%` }} />
+    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={tone ? percent(used) : Math.round(percent(used))} className={cx("relative w-full rounded-full", tall ? "h-1.5" : "h-1", tone ? "bg-hover-2" : "bg-inset")}>
+      <div className={cx("h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none", tone ? meterTones[tone] : fill(used))} style={{ width: `${percent(used)}%` }} />
       {expected !== undefined && <span aria-hidden data-pace-tick className="absolute -top-0.5 -bottom-0.5 w-0.5 -translate-x-1/2 rounded-full bg-ink-2" style={{ left: `${percent(expected)}%` }} />}
     </div>
   );
@@ -86,7 +88,10 @@ export function UsageBars({ accounts, unconnected = EMPTY_UNCONNECTED, now = Dat
 
 /** The sidebar mounts. */
 export function SidebarUsage() {
-  return <SidebarUsageInner accounts={useUsageWindows()} />;
+  const accounts = useUsageWindows();
+  const page = useExtensionPlace(SUBSCRIPTION_USAGE_ID, SUBSCRIPTION_USAGE_ID);
+  if (page?.placement === "nav_page" && hasSubscriptionUsage(accounts)) return null;
+  return <SidebarUsageInner accounts={accounts} />;
 }
 
 function SidebarUsageInner({ accounts }: { accounts: UsageAccount[] }) {

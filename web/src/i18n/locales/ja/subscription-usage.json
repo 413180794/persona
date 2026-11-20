@@ -1,0 +1,16 @@
+{
+  "time_zone": "リセット時刻 · 北京時間",
+  "today": "今日 {clock}",
+  "tomorrow": "明日 {clock}",
+  "reset": "{countdown}後にリセット（{clock}）",
+  "reset_passed": "リセット時刻を経過（{clock}）",
+  "sample": "{age}に取得",
+  "pending": "使用量はまだ届いていません。",
+  "expired": "前回の期間の使用量です。新しいデータを待っています。",
+  "read_failed": "取得元に接続できないため、前回の使用量を表示しています。",
+  "stale": "使用量がしばらく更新されていません。",
+  "sample_unknown": "使用量を取得した時刻が報告されていません。",
+  "reset_unknown": "リセット時刻が報告されていません。",
+  "devices": "端末 · {names}",
+  "sources": "登録元 · {names}"
+}

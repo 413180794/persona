@@ -1,0 +1,16 @@
+{
+  "time_zone": "Reset times · Beijing time",
+  "today": "today at {clock}",
+  "tomorrow": "tomorrow at {clock}",
+  "reset": "Resets in {countdown} ({clock})",
+  "reset_passed": "Reset time passed ({clock})",
+  "sample": "Sampled {age}",
+  "pending": "Usage hasn’t been reported yet.",
+  "expired": "This is the previous window’s usage. Waiting for a new reading.",
+  "read_failed": "The source is unavailable. Showing the last reading.",
+  "stale": "This reading hasn’t been updated in a while.",
+  "sample_unknown": "The source didn’t report a sample time.",
+  "reset_unknown": "The source didn’t report a reset time.",
+  "devices": "Devices · {names}",
+  "sources": "Registered sources · {names}"
+}

@@ -1,0 +1,16 @@
+{
+  "time_zone": "重置时间 · 北京时间",
+  "today": "今天 {clock}",
+  "tomorrow": "明天 {clock}",
+  "reset": "{countdown}后重置（{clock}）",
+  "reset_passed": "重置时间已过（{clock}）",
+  "sample": "采样于 {age}",
+  "pending": "还没收到这项用量。",
+  "expired": "这是上一周期的用量，正在等新读数。",
+  "read_failed": "暂时读不到来源，显示上次的用量。",
+  "stale": "用量有一段时间没更新了。",
+  "sample_unknown": "来源未提供采样时间。",
+  "reset_unknown": "来源未提供重置时间。",
+  "devices": "设备 · {names}",
+  "sources": "注册来源 · {names}"
+}

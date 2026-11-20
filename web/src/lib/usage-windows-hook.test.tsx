@@ -19,7 +19,7 @@ vi.mock("./api", async (original) => ({
     }),
 }));
 
-import { useUsageWindows, useUsageWindowsReady } from "./usage-windows";
+import { refreshUsageWindows, useUsageWindows, useUsageWindowsReady } from "./usage-windows";
 import { ApiError } from "./api";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -62,6 +62,15 @@ describe("useUsageWindows", () => {
     expect(Array.from(host.querySelectorAll("p"), (p) => p.textContent)).toEqual(["A", "A"]);
     backToFront();
     expect(calls).toHaveLength(2);
+  });
+
+  it("refreshes the shared feed when the usage page's refresh button is used", async () => {
+    await settle(() => calls[0].resolve({ accounts: [account("previous")] }));
+    act(() => refreshUsageWindows());
+    expect(host.textContent).toBe("previous");
+    expect(calls).toHaveLength(2);
+    await settle(() => calls[1].resolve({ accounts: [account("updated")] }));
+    expect(host.textContent).toBe("updated");
   });
 
   it("keeps the newer reply when the older one lands after it", async () => {

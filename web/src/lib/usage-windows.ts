@@ -10,6 +10,10 @@ export interface UsageWindow {
   window_minutes: number;
   used_percent: number;
   resets_at?: string;
+  sampled_at?: string;
+  stale_at?: string;
+  stale?: boolean;
+  problem?: string;
   /** An allowance a provider keeps for one model next to the plan's own (#2595); absent for the plan's window. */
   model?: string;
 }
@@ -20,6 +24,7 @@ export interface UsageAccount {
   plan?: string;
   windows: UsageWindow[];
   sampled_at: string;
+  sample_time_estimated?: boolean;
   stale?: boolean;
   /** When it turns stale if nothing newer comes (#1905): kept numbers are judged again against it (`liveAccounts`). */
   stale_at?: string;
@@ -153,6 +158,19 @@ export function planNote(a: UsageAccount): string {
 
 export const windowKey = (w: UsageWindow) => `${w.label}:${w.window_minutes}:${w.model ?? ""}`;
 
+// The installed extension's nav entry also identifies the Web page that replaces the sidebar popover.
+export const SUBSCRIPTION_USAGE_ID = "subscription-usage";
+
+export function measuredUsage(a: UsageAccount, w: UsageWindow): number | undefined {
+  // Older Claude collectors sent an empty 5-hour window as zero without a reset.
+  if (a.provider === "claude" && windowMinutes(w) === 300 && !w.model && !w.resets_at && w.used_percent === 0) return;
+  if (Number.isFinite(w.used_percent)) return Math.min(100, Math.max(0, w.used_percent));
+}
+
+export function hasSubscriptionUsage(accounts: UsageAccount[]): boolean {
+  return accounts.some((a) => a.windows?.some((w) => measuredUsage(a, w) !== undefined));
+}
+
 /** The accounts the sidebar draws bars for: the two with the fullest window, stale ones last. */
 export function topAccounts(accounts: UsageAccount[], n = 2): UsageAccount[] {
   return [...accounts].sort((a, b) => Number(!!a.stale) - Number(!!b.stale) || fullest(b) - fullest(a)).slice(0, n);
@@ -168,13 +186,13 @@ export interface UnconnectedProvider {
 
 const emptyAccounts: UsageAccount[] = [];
 let usageAccounts = emptyAccounts;
-let usageReady = false;
-let stopPolling: (() => void) | undefined;
+let usageStatus: "loading" | "ready" | "unavailable" = "loading";
+let poll: ReturnType<typeof pollUsage> | undefined;
 const listeners = new Set<() => void>();
 
-function publishUsage(accounts: UsageAccount[], ready = usageReady) {
+function publishUsage(accounts: UsageAccount[], status: typeof usageStatus) {
   usageAccounts = accounts;
-  usageReady = ready;
+  usageStatus = status;
   for (const listener of listeners) listener();
 }
 
@@ -187,33 +205,36 @@ function pollUsage() {
     const mine = ++seq;
     const current = () => !dead && mine === seq;
     api<{ accounts?: UsageAccount[] }>("/usage/windows")
-      .then((r) => current() && publishUsage(r.accounts ?? emptyAccounts, true))
+      .then((r) => current() && publishUsage(r.accounts ?? emptyAccounts, "ready"))
       .catch((e: unknown) => {
         if (!current()) return;
         const missing = e instanceof ApiError && e.status === 404;
-        publishUsage(missing ? emptyAccounts : usageAccounts.slice(), missing ? false : usageReady);
+        publishUsage(missing ? emptyAccounts : usageAccounts.slice(), missing || usageStatus !== "ready" ? "unavailable" : "ready");
       });
   };
   load();
   const timer = setInterval(load, POLL_MS);
   document.addEventListener("visibilitychange", load);
-  return () => {
-    dead = true;
-    clearInterval(timer);
-    document.removeEventListener("visibilitychange", load);
+  return {
+    refresh: load,
+    stop: () => {
+      dead = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    },
   };
 }
 
 function subscribeUsage(listener: () => void) {
   listeners.add(listener);
-  stopPolling ??= pollUsage();
+  poll ??= pollUsage();
   return () => {
     listeners.delete(listener);
     if (listeners.size === 0) {
-      stopPolling?.();
-      stopPolling = undefined;
+      poll?.stop();
+      poll = undefined;
       usageAccounts = emptyAccounts;
-      usageReady = false;
+      usageStatus = "loading";
     }
   };
 }
@@ -225,5 +246,13 @@ export function useUsageWindows(): UsageAccount[] {
 
 /** True once GET /api/v1/usage/windows has completed a supported (non-404) response. */
 export function useUsageWindowsReady(): boolean {
-  return useSyncExternalStore(subscribeUsage, () => usageReady, () => false);
+  return useUsageWindowsStatus() === "ready";
+}
+
+export function useUsageWindowsStatus(): typeof usageStatus {
+  return useSyncExternalStore(subscribeUsage, () => usageStatus, () => "loading");
+}
+
+export function refreshUsageWindows() {
+  poll?.refresh();
 }

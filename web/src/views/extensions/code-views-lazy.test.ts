@@ -22,9 +22,12 @@ describe("the first screen's extension files", () => {
   it("ExtensionSlots loads the extension page on demand", () => {
     const source = read("./ExtensionSlots.tsx");
     expect(staticImports(source)).not.toContain("../settings/ExtensionView");
+    expect(staticImports(source)).not.toContain("./SubscriptionUsage");
     expect(source).toMatch(/import\(\s*["']\.\.\/settings\/ExtensionView["']\s*\)/);
-    // the page, a card and a section each wait under their own Suspense, not App's (the owner scoping sits inside)
-    expect(source.match(/<Suspense fallback=\{<Loading \/>\}>\s*<OwnerScope extension=\{[^}]+\}>\s*<ExtensionUI /g)).toHaveLength(3);
+    expect(source).toMatch(/import\(\s*["']\.\/SubscriptionUsage["']\s*\)/);
+    // The nav page shares its own boundary with its fallback. An Overview card and a machine section wait separately.
+    expect(source).toMatch(/<Suspense fallback=\{<Loading \/>\}>\s*\{subscriptionUsage \? <SubscriptionUsage fallback=\{extensionView\} \/> : extensionView\}/);
+    expect(source.match(/<Suspense fallback=\{<Loading \/>\}>\s*<OwnerScope extension=\{[^}]+\}>\s*<ExtensionUI /g)).toHaveLength(2);
   });
 
   it("the assistant's cards load the renderer through the first-screen module (#3614)", () => {

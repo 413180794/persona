@@ -2246,7 +2246,13 @@ with the sample time to the right of the title. **With no data the whole block i
 refreshed once a minute, with no requests while the page is in the background. The pace and countdown algorithms, and how Claude's usage is hooked up, are in [usage-windows.md](../server/usage-windows.md).
 Accounts come from files read on the computers and from the account-pool gateways the hub queries (#2595): in the popover, the line under each account's title gives the plan and the source ("MacBook · Relay": the computers that read it by name, then the gateways; with only one source it names that one).
 Single-model windows put the model name next to the length (not used for sorting); when a gateway can't be read it says "these are its last numbers". The sidebar bar's tooltip also gives the source. Gateways are configured under "Usage sources" in the admin interface (`docs/operations/admin.md`).
-Code: `lib/usage-windows.ts` (pure functions, with unit tests), `views/UsageBars.tsx`; the mock hub has `MOCK_USAGE=none` to simulate no data and `MOCK_USAGE=gateways` to simulate a mix of computer and gateway accounts.
+When the subscription usage extension registers its sidebar page, Web draws each account in a card on that page. The card
+shows a bar for each measured window, the time until reset alongside the Beijing clock time, and the age of the individual
+sample. Missing, stale and expired readings have quiet explanations. When the page has a measured window, the bottom strip
+and its popover are removed across Web. Both surfaces use the same read-only poll, and the page's refresh button also uses it.
+
+Code: `lib/usage-windows.ts`, `views/UsageBars.tsx` and `views/extensions/SubscriptionUsage.tsx`; the mock hub has
+`MOCK_USAGE=none` to simulate no data and `MOCK_USAGE=gateways` to simulate a mix of computer and gateway accounts.
 
 ## Model pill and model panel (#5032)
 
