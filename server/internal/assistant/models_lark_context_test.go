@@ -101,7 +101,7 @@ func TestLarkContextModelSettingsAndLegacyRecords(t *testing.T) {
 		p := purposeOf(t, s, larkContextModelPurposeID)
 		if p.ID != larkContextModelPurposeID || p.Parent != "assistant" || p.CategoryID != "assistant" || p.Kind != "launcher" ||
 			p.Launch != "headless" || p.Name != "Lark Context" || p.Candidates != nil || p.Revision != revision || p.Override != override || p.Effective != want ||
-			!slices.Equal(p.Fields, []string{"provider", "model", "effort"}) || (p.InheritedFrom != "") != (override.Provider == "") {
+			!slices.Equal(p.Fields, []string{"provider", "model", "effort", "permission_mode"}) || (p.InheritedFrom != "") != (override.Provider == "") {
 			t.Fatalf("canonical purpose: %+v, want binding %+v revision %d override %+v", p, want, revision, override)
 		}
 		for _, id := range []string{larkContextModelPurposeID, purposeLarkAgent} {

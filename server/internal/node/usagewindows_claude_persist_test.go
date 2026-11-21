@@ -52,7 +52,7 @@ func TestClaudeUsagePersistence(t *testing.T) {
 		t.Fatalf("mode %o", st.Mode().Perm())
 	}
 	restart := &Node{home: n.home, dir: dir}
-	snap := restart.usageSnapshot(true)
+	snap := restart.usageSnapshot()
 	if len(snap.Accounts) != 1 || len(snap.Accounts[0].Windows) != 2 || snap.Accounts[0].Windows[0].UsedPercent != 25 {
 		t.Fatalf("restart snapshot: %+v", snap)
 	}

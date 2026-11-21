@@ -123,6 +123,8 @@ data class ModelPurpose(
     /** The providers it can use; without the list, the providers of the same kind. */
     @SerialName("provider_ids") val providerIds: List<String>? = null,
     @SerialName("category_id") val categoryId: String? = null,
+    /** Candidate chains for an extension's own purpose. Older hubs omit this field. */
+    val candidates: ModelCandidates? = null,
 ) {
     val displayName: String get() = name.ifBlank { id }
 
@@ -166,14 +168,22 @@ data class ModelPurposeDetail(
  */
 data class ModelConfigurationDraft(
     val provider: String = "", val model: String = "", val effort: String = "", val clearsRuntime: Boolean = false,
+    val candidates: CandidateDraft? = null,
 ) {
-    fun choosingProvider(id: String): ModelConfigurationDraft = if (id == provider) this else ModelConfigurationDraft(provider = id)
+    fun choosingProvider(id: String): ModelConfigurationDraft =
+        if (id == provider) this else copy(provider = id, model = "", effort = "", clearsRuntime = false)
 
     /** The PATCH body: the revision, and only the fields [purpose] takes; blank ones go as null (restore inheritance). */
     fun patch(purpose: ModelPurpose): JsonObject = buildJsonObject {
         put("revision", purpose.revision)
-        for ((key, value) in listOf("provider" to provider, "model" to model, "effort" to effort)) {
-            if (purpose.supports(key)) put(key, value.trim().takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
+        val change = candidates?.change(purpose)
+        if (change != null) put("candidates", change)
+        val binding = purpose.override
+        if (change == null || clearsRuntime || provider.trim() != binding.provider.orEmpty() ||
+            model.trim() != binding.model.orEmpty() || effort.trim() != binding.effort.orEmpty()) {
+            for ((key, value) in listOf("provider" to provider, "model" to model, "effort" to effort)) {
+                if (purpose.supports(key)) put(key, value.trim().takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
+            }
         }
         if (clearsRuntime && purpose.supports("runtime")) put("runtime", JsonNull)
     }
@@ -184,6 +194,7 @@ data class ModelConfigurationDraft(
 
         fun from(purpose: ModelPurpose) = ModelConfigurationDraft(
             purpose.override.provider.orEmpty(), purpose.override.model.orEmpty(), purpose.override.effort.orEmpty(),
+            candidates = purpose.extensionCandidates()?.draft(),
         )
     }
 }

@@ -34,7 +34,8 @@ type claudeStreamWindow struct {
 // This lock is separate from the file poll: stdout also carries time-sensitive control replies.
 type claudeUsageStreams struct {
 	sync.Mutex
-	samples map[claudeStreamWindow]claudeWindowSample
+	samples   map[claudeStreamWindow]claudeWindowSample
+	persistWG sync.WaitGroup
 }
 
 func newerClaudeWindow(a, b proto.UsageWindow) bool {
@@ -97,7 +98,9 @@ func (n *Node) recordClaudeUsage(source string, raw json.RawMessage, now time.Ti
 	if source == "claude:claude.json" && len(changed) > 0 {
 		// File locking must not block the assistant stdout reader. Each write merges under the
 		// shared lock, so concurrent goroutines and statusline writers cannot regress a window.
+		streams.persistWG.Add(1)
 		go func() {
+			defer streams.persistWG.Done()
 			if err := persistClaudeWindows(n.dir, changed); err != nil && n.logger != nil {
 				n.logger.Printf("persist Claude usage windows: %v", err)
 			}
@@ -106,7 +109,7 @@ func (n *Node) recordClaudeUsage(source string, raw json.RawMessage, now time.Ti
 }
 
 // Combine volatile event samples with the last file poll without changing the cached file sample.
-func (s *claudeUsageStreams) overlay(accounts map[string]proto.UsageAccount, now time.Time) {
+func (s *claudeUsageStreams) overlay(accounts map[string]proto.UsageNodeAccount, now time.Time) {
 	s.Lock()
 	defer s.Unlock()
 	for key, sample := range s.samples {
@@ -117,7 +120,7 @@ func (s *claudeUsageStreams) overlay(accounts map[string]proto.UsageAccount, now
 		}
 		a, ok := accounts[key.source]
 		if !ok {
-			a = proto.UsageAccount{Provider: "claude", Name: "Claude"}
+			a = proto.UsageNodeAccount{UsageAccount: proto.UsageAccount{Provider: "claude", Name: "Claude"}}
 		}
 		i := slices.IndexFunc(a.Windows, func(v proto.UsageWindow) bool { return v.WindowMinutes == key.minutes })
 		if i >= 0 && !newerClaudeWindow(w, a.Windows[i]) {

@@ -83,10 +83,12 @@ const (
 
 // Capabilities are what a channel can do (docs/extensions/channels.md "Capabilities"). Taking text is a given.
 type Capabilities struct {
-	ImagesIn bool   `json:"images_in,omitempty"`
-	FilesIn  bool   `json:"files_in,omitempty"`
-	VoiceIn  bool   `json:"voice_in,omitempty"`
-	Format   Format `json:"format,omitempty"`
+	ImagesIn bool `json:"images_in,omitempty"`
+	// ImagesOut: it can send pictures; an answer's pictures go in SendParams.Images (at most ImagesMost of ImageMost).
+	ImagesOut bool   `json:"images_out,omitempty"`
+	FilesIn   bool   `json:"files_in,omitempty"`
+	VoiceIn   bool   `json:"voice_in,omitempty"`
+	Format    Format `json:"format,omitempty"`
 	// MaxText is how many characters one message holds (0: no limit): the hub splits an answer to fit.
 	MaxText int  `json:"max_text,omitempty"`
 	Asks    Asks `json:"asks,omitempty"`
@@ -97,7 +99,8 @@ type Capabilities struct {
 	Typing           bool `json:"typing,omitempty"`
 	// Progress: it can post a message and change it (a progress card the answer goes into).
 	Progress bool `json:"progress,omitempty"`
-	// Threads: a reply to one of the bot's messages goes to that message's conversation.
+	// Threads: a reply to one of the bot's messages goes to that message's conversation (the Feishu bot); an
+	// extension channel's message carrying Thread goes to that thread's own conversation.
 	Threads bool `json:"threads,omitempty"`
 }
 
@@ -359,6 +362,7 @@ type Message struct {
 	Quote       string   `json:"quote,omitempty"`
 	Forward     string   `json:"forward,omitempty"`
 	ReplyTo     string   `json:"reply_to,omitempty"`
+	Thread      string   `json:"thread,omitempty"` // the chat app's thread, an opaque key (Capabilities.Threads)
 	Unsupported []string `json:"unsupported,omitempty"`
 }
 
@@ -409,6 +413,8 @@ type (
 		Kind       string           `json:"kind"`
 		ReplyTo    string           `json:"reply_to,omitempty"`
 		FeishuCard *FeishuOwnerCard `json:"feishu_card,omitempty"`
+		// Images are sent after Text, only to a channel with ImagesOut.
+		Images []Blob `json:"images,omitempty"`
 	}
 	// FeishuOwnerCard binds the extension's outbox entry to the card and pairing.
 	// The manager uses the paired bot to send it and confirm its platform message ID.

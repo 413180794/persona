@@ -8,14 +8,34 @@ import { acceptBrief, type BriefRow } from "../../lib/feed";
 import { shortDuration } from "../../lib/format";
 import { t } from "../../i18n";
 import { Button, cx, toast } from "../../ui/atoms";
+import { Icon, type IconName } from "../../ui/icons";
 
-export function briefRowMeta(row: BriefRow): string {
-  const parts = [t("assistant-brief.waited", { wait: shortDuration(row.waited_s * 1000) })];
+/** A section's rows shown at once (the hub cuts the lists as its card does; the totals say how many there were). */
+export function Section({ icon, tint, title, children }: { icon: IconName; tint: string; title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-line py-2 first:border-t-0" data-brief-section>
+      <div role="heading" aria-level={3} className="mb-1 flex items-center gap-2 text-[12.5px] font-medium text-ink-2">
+        <span className={cx("flex size-6 items-center justify-center rounded-control", tint)}>
+          <Icon name={icon} size={13} />
+        </span>
+        {title}
+      </div>
+      <div className="flex flex-col">{children}</div>
+    </section>
+  );
+}
+
+/** What a row's meta line is made of: numbers and text only. A row typed as BriefRow cannot carry an object here: a
+ *  to-do's `ask.from` is one, and spreading the ask into a row is a type error (#11794); rows off the wire go through
+ *  lib/feed `briefRow`, which drops a field that is not text. */
+export function meta(row: Pick<BriefRow, "waited_s" | "nudged" | "from">): string {
+  const parts: string[] = [t("assistant-brief.waited", { wait: shortDuration(row.waited_s * 1000) })];
   if (row.nudged) parts.push(t("assistant-brief.nudged"));
   if (row.from) parts.push(row.from);
   return parts.join(" · ");
 }
 
+export const briefRowMeta = meta;
 /** What the Accept button of a task says: it asked, the hub took it, or the round is already over. */
 type Accepting = "idle" | "busy" | "finishing" | "finished" | "accepted" | "recorded" | "handled";
 

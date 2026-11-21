@@ -31,7 +31,7 @@ func taskResumeParams(t Task, text string, ex TaskExecution) map[string]any {
 func taskStartParams(t Task, text string, ex TaskExecution) startParams {
 	return startParams{Text: text, Source: taskMessageSource(t), PermissionMode: t.PermissionMode,
 		Purpose: "task." + t.ID, Space: t.Space, Origin: OriginTask, OriginRef: t.ID, MachineID: ex.MachineID, Cwd: ex.Cwd,
-		TaskExecution: true, LegacyTaskExecution: ex.LegacyCompatible, TaskModel: &ModelBinding{Provider: launcherProvider(ex.Launcher), Model: ex.Model, Effort: ex.Effort}}
+		TaskExecution: true, LegacyTaskExecution: ex.LegacyCompatible, TaskModel: &ModelBinding{Provider: launcherProvider(ex.Launcher), Model: ex.Model, Effort: ex.Effort, PermissionMode: ex.PermissionMode}}
 }
 
 func (s *Service) sourceTaskExecution(ctx context.Context, t Task, params map[string]any) *TaskExecution {
@@ -61,12 +61,12 @@ func (s *Service) taskConversationChanged(t Task, ex TaskExecution, override Mod
 	return true
 }
 
-func (s *Service) failSourceTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, work *scheduleWork) (proto.Session, error) {
+func (s *Service) failSourceTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, work *scheduleAdmissionWork) (proto.Session, error) {
 	// ErrNotSent retries this same source after the existing delay; it does not select another conversation.
 	return s.failTaskRun(ctx, t, run, err, !errors.Is(err, rpc.ErrNotSent), work)
 }
 
-func (s *Service) failTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, unknown bool, work *scheduleWork) (proto.Session, error) {
+func (s *Service) failTaskRun(ctx context.Context, t Task, run ScheduleRun, err error, unknown bool, work *scheduleAdmissionWork) (proto.Session, error) {
 	run.Status, run.Error, run.DeliveryUnknown = runFailed, err.Error(), unknown
 	run.ID = s.recordRun(run)
 	s.verifyScheduleReceipt(work, run.ID, runFailed)

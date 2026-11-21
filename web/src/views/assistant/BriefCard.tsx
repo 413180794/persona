@@ -1,28 +1,15 @@
 // A morning or evening briefing snapshot, with its own waiting, history and owner verification rows.
 import { useState } from "react";
-import { openTask } from "../../lib/handoff";
-import { briefBody, briefSetupPage, failedKey, handledLater, type BriefBody, type BriefRow, type FeedItem } from "../../lib/feed";
-import { navigate } from "../../lib/router";
+import { leaveChat, openAgent, openTask } from "../../lib/handoff";
+import { conversationRoute } from "../../lib/conversation-page";
+import { getState } from "../../lib/store";
+import { briefBody, failedKey, handledLater, type BriefBody, type BriefRow, type FeedItem } from "../../lib/feed";
 import { formatDate, t } from "../../i18n";
-import { Button, cx, toast } from "../../ui/atoms";
-import { Icon, type IconName } from "../../ui/icons";
+import { Button, toast } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
 import { TodoStageBar } from "../TodoStageBar";
-import { AcceptRow, briefRowMeta } from "./Brief";
-
-/** A section's rows shown at once (the hub cuts the lists as its card does; the totals say how many there were). */
-function Section({ icon, tint, title, children }: { icon: IconName; tint: string; title: string; children: React.ReactNode }) {
-  return (
-    <section className="border-t border-line py-2 first:border-t-0" data-brief-section>
-      <div role="heading" aria-level={3} className="mb-1 flex items-center gap-2 text-[12.5px] font-medium text-ink-2">
-        <span className={cx("flex size-6 items-center justify-center rounded-control", tint)}>
-          <Icon name={icon} size={13} />
-        </span>
-        {title}
-      </div>
-      <div className="flex flex-col">{children}</div>
-    </section>
-  );
-}
+import { AcceptRow, meta, Section } from "./Brief";
+import { BriefSetupRows } from "./BriefSetup";
 
 function More({ n, text = "assistant-brief.more" }: { n: number; text?: string }) {
   return n > 0 ? <div className="py-1 text-label text-ink-2">{t(text, { n })}</div> : null;
@@ -33,6 +20,26 @@ function webLink(link?: string): string | undefined {
   return link && /^https?:\/\//i.test(link) ? link : undefined;
 }
 
+/** Opens the chat a waiting or later row came from in the app (#12055), as iOS and Android do (#2320): an Agent's as the
+ *  task rows open theirs (How Agents open: the side panel, or its page with the way back to this conversation), a
+ *  Persona conversation as its page. */
+function openChat(mid: string, sid: string) {
+  const s = getState();
+  const to = conversationRoute(mid, sid, s.sessions, s.assistant);
+  if (to.name === "session") openAgent(mid, sid);
+  else leaveChat(to, false);
+}
+
+/** Open on a waiting or later row: the chat it came from, in the app; from a hub that does not name it, the row's link
+ *  in a new tab, as before. */
+function RowOpen({ row }: { row: BriefRow }) {
+  const title = t("assistant-brief.open_row", { title: row.title });
+  const { machine_id: mid, session_id: sid } = row;
+  if (mid && sid) return <Button title={title} onClick={() => openChat(mid, sid)}>{t("assistant-brief.open")}</Button>;
+  const link = webLink(row.link);
+  return link ? <Button href={link} title={title}>{t("assistant-brief.open")}</Button> : null;
+}
+
 function WaitingRow({ row }: { row: BriefRow }) {
   return (
     <div className="@container" data-brief-row="waiting">
@@ -40,13 +47,9 @@ function WaitingRow({ row }: { row: BriefRow }) {
       <div className="flex items-center gap-3 py-1.5 @max-md:flex-wrap @max-md:gap-y-2">
         <div className="min-w-0 flex-1 @max-md:w-full @max-md:flex-none">
           <div className="text-[13.5px] font-medium [overflow-wrap:anywhere]">{row.title}</div>
-          <div className="text-label text-ink-2">{briefRowMeta(row)}</div>
+          <div className="text-label text-ink-2">{meta(row)}</div>
         </div>
-        {webLink(row.link) && (
-          <Button href={webLink(row.link)} title={t("assistant-brief.open_row", { title: row.title })}>
-            {t("assistant-brief.open")}
-          </Button>
-        )}
+        <RowOpen row={row} />
       </div>
     </div>
   );
@@ -72,13 +75,9 @@ function LaterRow({ row, conversation }: { row: BriefRow; conversation: string }
     <div className="flex items-center gap-3 py-1.5" data-brief-row="later">
       <div className="min-w-0 flex-1">
         <div className="text-[13.5px] font-medium [overflow-wrap:anywhere]">{row.title}</div>
-        <div className="text-label text-ink-2">{briefRowMeta(row)}</div>
+        <div className="text-label text-ink-2">{meta(row)}</div>
       </div>
-      {webLink(row.link) && (
-        <Button href={webLink(row.link)} title={t("assistant-brief.open_row", { title: row.title })}>
-          {t("assistant-brief.open")}
-        </Button>
-      )}
+      <RowOpen row={row} />
       {state === "marked" || state === "handled" ? (
         <span className="shrink-0 text-[12.5px] text-ink-2" data-brief-marked={state}>
           {t(state === "marked" ? "assistant-brief.later_marked" : "assistant-brief.handled")}
@@ -171,21 +170,8 @@ export function BriefCard({ item }: { item: FeedItem }) {
         </Section>
       )}
       {/* The week's recommended setup (#5085): the hub's own counts and words, drawn as they came. Opening the settings
-          page is all a row does: nothing is turned on from here. */}
-      {body.setup.length > 0 && (
-        <Section icon="spark" tint="bg-field text-ink-2" title={t("assistant-brief.setup_head")}>
-          <div className="py-1 text-label text-ink-2">{t("assistant-brief.setup_intro")}</div>
-          {body.setup.map((x) => {
-            const page = briefSetupPage(x.id);
-            return (
-              <div key={x.id} className="flex items-center gap-3 py-1.5" data-brief-row="setup">
-                <div className="min-w-0 flex-1 text-meta [overflow-wrap:anywhere]">{x.text}</div>
-                {page && <Button onClick={() => navigate(page)}>{t("assistant-brief.setup_open")}</Button>}
-              </div>
-            );
-          })}
-        </Section>
-      )}
+          page is all a row does: nothing is turned on from here. At most once a week, so its own chunk (#11794). */}
+      {body.setup.length > 0 && <BriefSetupRows setup={body.setup} />}
     </div>
   );
 }

@@ -33,7 +33,7 @@ func (p *Pusher) maintenanceLoop(ctx context.Context, gate *admission.Gate) {
 					if err := p.reconcileDevices(ctx); err != nil {
 						p.logf("push registration maintenance: %v", err)
 					}
-					p.mirrorSentIfDue(ctx) // delivered pushes for an older build (lnmode.go)
+					p.mirrorSentIfDue(ctx) // the delivered pushes for a build from before hub_push_sent (push_grading.go)
 				}()
 			}
 		}

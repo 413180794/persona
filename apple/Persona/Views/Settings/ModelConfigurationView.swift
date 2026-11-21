@@ -185,6 +185,9 @@ struct ModelPurposeEditorView: View {
                         Text(status).font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
+                if let policy = purpose.extensionCandidates {
+                    ExtensionModelCandidatesView(page: page, policy: policy)
+                }
                 Section {
                     if purpose.supports("model") {
                         if purpose.kind == "plugin" { pluginModelPicker }
@@ -279,6 +282,7 @@ struct ModelPurposeEditorView: View {
                     Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
                     Button("Reload [Lark Chat Pins View 7bdd5c]") { reload() }.lineLimit(1)
                         .disabled(page.saving || page.loading)
+                        .accessibilityIdentifier("model-config-reload")
                 }
             }
         }
@@ -307,6 +311,7 @@ struct ModelPurposeEditorView: View {
         .task(id: listProvider) { await loadList() }
         .accessibleConfirmationDialog("Reloading discards your unsaved edits.", isPresented: $confirmReload, titleVisibility: .visible) {
             Button("Reload [Lark Chat Pins View 7bdd5c]", role: .destructive) { Task { await page.load(purposeID: purposeID) } }
+                .accessibilityIdentifier("model-config-confirm-reload")
         }
     }
 
@@ -343,7 +348,7 @@ struct ModelPurposeEditorView: View {
         } label: {
             if page.saving { ProgressView() } else { Text("Save").lineLimit(1) }
         }
-        .disabled(page.purpose == nil || !page.dirty || page.saving || page.loading || page.conflict)
+        .disabled(page.purpose == nil || !page.dirty || page.saving || page.loading || page.conflict || !page.validCandidateChange)
         .accessibilityIdentifier("model-config-save")
     }
 

@@ -65,6 +65,10 @@ type NodeSession struct {
 	FollowsSetting bool `json:"follows_setting,omitempty"`
 	// An empty assistant start has not delivered its first message or runtime instructions.
 	AwaitingFirstMessage bool `json:"awaiting_first_message,omitempty"`
+	// EngineRuntime: the engine runtime (Paseo, Cindy) whose start wrote the record (node/session_state.go), kept with
+	// the model: after a node restart too, an extension's resume of such an Agent its computer no longer lists is
+	// checked against the record's directory (#10941).
+	EngineRuntime string `json:"engine_runtime,omitempty"`
 }
 
 type nodeSessionExecutor interface {
@@ -110,7 +114,7 @@ func putNodeSession(ctx context.Context, executor nodeSessionExecutor, machine, 
 			'model_recovery', $23::jsonb, 'follows_setting', $24::boolean,
 			'stop_cause', $25::text, 'stop_cause_at', $26::bigint,
 			'awaiting_first_message', $27::boolean, 'idle_compaction', $28::jsonb, 'origin', $29::text,
-			'origin_known', $30::boolean), now() FROM saved
+			'origin_known', $30::boolean, 'engine_runtime', $31::text), now() FROM saved
 		ON CONFLICT (key) DO UPDATE SET value = CASE
 			WHEN COALESCE((settings.value->>'stop_cause_at')::bigint, 0) > $26
 				OR (COALESCE((settings.value->>'stop_cause_at')::bigint, 0) = $26
@@ -120,7 +124,8 @@ func putNodeSession(ctx context.Context, executor nodeSessionExecutor, machine, 
 			ELSE EXCLUDED.value END, updated_at = now()`,
 		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks, s.Model, s.ModelFingerprint, s.ModelEffort, s.AppMode, s.AppEffort,
 		s.UltracodeProcess, unknownStart, s.CreationID, s.Incarnation, guest, s.GuestKind, s.ConfigDir, pendingSwitch, engineHistory, pendingHandoff,
-		modelRecovery, s.FollowsSetting, string(s.StopCause), s.StopCauseAt, s.AwaitingFirstMessage, jsonOrNil(s.IdleCompaction), s.Origin, s.OriginKnown)
+		modelRecovery, s.FollowsSetting, string(s.StopCause), s.StopCauseAt, s.AwaitingFirstMessage, jsonOrNil(s.IdleCompaction), s.Origin, s.OriginKnown,
+		s.EngineRuntime)
 	return err
 }
 
@@ -220,6 +225,9 @@ type nodeModel struct {
 
 	// Kept until the node confirms its first actual message was delivered.
 	AwaitingFirstMessage bool `json:"awaiting_first_message"`
+	// EngineRuntime: the engine runtime whose start wrote the record ("" for a terminal's, and for a row written before
+	// it was kept).
+	EngineRuntime string `json:"engine_runtime"`
 }
 
 // jsonOrNil is raw, or nil when it holds nothing (empty, or a JSON null).
@@ -262,6 +270,7 @@ func queryNodeSessions(ctx context.Context, store interface {
 		s.IdleCompaction = jsonOrNil(m.IdleCompaction)
 		s.FollowsSetting = m.FollowsSetting
 		s.AwaitingFirstMessage = m.AwaitingFirstMessage
+		s.EngineRuntime = m.EngineRuntime
 		s.StopCause, s.StopCauseAt = m.StopCause, m.StopCauseAt
 		if m.StartedAtUnknown {
 			s.StartedAt = time.Time{}

@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/lazyre"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -25,12 +25,12 @@ const assistantCompactTimeout = 10 * time.Minute
 // assistantCompact starts compacting conversation id, resuming its process when it is not running; with onlyRunning
 // (the hub compacting a meeting's room, #8253) it refuses not_running instead: a process that exited since the hub saw it
 // running is never started only to be compacted.
-func (n *Node) assistantCompact(ctx context.Context, id string, onlyRunning bool) error {
-	if id == "" || !validID(id) {
-		return errors.New("invalid session id")
-	}
+func (n *Node) assistantCompact(ctx context.Context, id string, onlyRunning bool) (compactErr error) {
 	if n.runtimeAssistant(id) {
-		return refusal("unsupported", "这个对话由 runtime 运行，不能在这里压缩", nil)
+		return n.assistantCompactRuntime(ctx, id, onlyRunning)
+	}
+	if !validID(id) {
+		return errors.New("invalid session id")
 	}
 	if saved, ok := n.state.get(id); ok && proto.IsExternalLauncher(saved.Launcher) {
 		var finish func()
@@ -38,6 +38,13 @@ func (n *Node) assistantCompact(ctx context.Context, id string, onlyRunning bool
 		defer finish()
 	}
 	defer n.assistantLife.lock(id)() // not while a send or a restore has this conversation's process (model_restore.go)
+	// As in assistantSend, a start after pruning the only, refused turn counts as starting only while it can still come up.
+	drop := func() {}
+	defer func() {
+		if compactErr != nil {
+			drop()
+		}
+	}()
 	n.mu.Lock()
 	p := n.procs[id]
 	n.mu.Unlock()
@@ -129,14 +136,12 @@ func (n *Node) assistantCompact(ctx context.Context, id string, onlyRunning bool
 		}
 		// A trailing refused turn is no context the compaction would summarize: it is cut, and a session left with no
 		// file by that starts under the id rather than resuming nothing.
-		drop := func() {}
 		if agentKind == "claude" {
 			if pruned, clean := n.healClaudeRefusalTranscript(id); pruned && !clean {
 				drop = n.startsBegun.begin(id, n.startWait()) // started again right below: an empty chat meanwhile
 			}
 		}
 		if p, err = n.spawnAssistant(id, cwd, launcher, n.transcriptPath(id) != "", false, execution); err != nil {
-			drop()
 			return err
 		}
 		if st.SupervisionInstructions != execution.SupervisionInstructions {
@@ -244,6 +249,7 @@ const (
 	handoffTurnMax    = 800   // characters of each recent message
 	handoffRecentMax  = 6000  // characters of the recent messages together
 	handoffTurns      = 12
+	handoffPageLimit  = 400
 )
 
 // HandoffTurn is one recent message of a conversation handed off: role user or assistant.
@@ -261,32 +267,12 @@ type Handoff struct {
 
 // assistantHandoff reads what a new main conversation should know of conversation id (docs/assistant/assistant.md
 // "New main chat").
-func (n *Node) assistantHandoff(id string) (Handoff, error) {
-	return n.assistantHandoffContext(context.Background(), id)
-}
-
-func (n *Node) assistantHandoffContext(ctx context.Context, id string) (Handoff, error) {
-	runtime := n.runtimeAssistant(id)
-	if id == "" || (!validID(id) && !runtime) {
-		return Handoff{}, errors.New("invalid session id")
+func (n *Node) assistantHandoff(ctx context.Context, id string) (Handoff, error) {
+	if n.runtimeAssistant(id) {
+		return n.assistantHandoffRuntime(ctx, id)
 	}
-	if runtime && n.runtimeTranscript(id) == "" {
-		h, err := n.runtimeFor(ctx, "session.items", id)
-		if err != nil {
-			return Handoff{}, err
-		}
-		if h == nil {
-			return Handoff{}, errRuntimeAway(id)
-		}
-		var page struct {
-			Items []proto.Item `json:"items"`
-		}
-		cctx, cancel := context.WithTimeout(ctx, runtimeCallTimeout)
-		defer cancel()
-		if err := h.peer.Call(cctx, "session.items", map[string]any{"session_id": id, "limit": 400, "lazy_images": true}, &page); err != nil {
-			return Handoff{}, err
-		}
-		return Handoff{Recent: recentTurns(page.Items, -1)}, nil
+	if !validID(id) {
+		return Handoff{}, errors.New("invalid session id")
 	}
 	path := n.transcriptPath(id)
 	if path == "" {
@@ -303,7 +289,7 @@ func (n *Node) assistantHandoffContext(ctx context.Context, id string) (Handoff,
 		return Handoff{}, err
 	}
 	n.refresh(id, f)
-	page, _, _ := f.Page(0, 400)
+	page, _, _ := f.Page(0, handoffPageLimit)
 	return Handoff{Summary: clipHandoff(summary, handoffSummaryMax), Recent: recentTurns(page, at)}, nil
 }
 

@@ -32,14 +32,14 @@ func (s *Service) keepScheduleDispatch(due []dueTask) (func(), error) {
 	return s.maintenanceGate.ContinuePayload("manager-schedules", "schedule-dispatch", "dispatch", payload)
 }
 
-// scheduleWork owns a durable operation through the dispatch, outcome writes
+// scheduleAdmissionWork owns a durable operation through the dispatch, outcome writes
 // and retries that its earlier stages spawn.
-type scheduleWork struct {
+type scheduleAdmissionWork struct {
 	active    sync.WaitGroup
 	uncertain atomic.Bool
 }
 
-func (w *scheduleWork) hold() func() {
+func (w *scheduleAdmissionWork) hold() func() {
 	if w == nil {
 		return func() {}
 	}
@@ -47,13 +47,13 @@ func (w *scheduleWork) hold() func() {
 	return w.active.Done
 }
 
-func (w *scheduleWork) retain() {
+func (w *scheduleAdmissionWork) retain() {
 	if w != nil {
 		w.uncertain.Store(true)
 	}
 }
 
-func (s *Service) scheduleAdmission(t Task, due time.Time, fromScan bool) (*scheduleWork, func(), error) {
+func (s *Service) scheduleAdmission(t Task, due time.Time, fromScan bool) (*scheduleAdmissionWork, func(), error) {
 	if s.maintenanceGate == nil {
 		return nil, func() {}, nil
 	}
@@ -70,7 +70,7 @@ func (s *Service) scheduleAdmission(t Task, due time.Time, fromScan bool) (*sche
 	if err != nil {
 		return nil, nil, err
 	}
-	work := &scheduleWork{}
+	work := &scheduleAdmissionWork{}
 	finish := work.hold()
 	return work, func() {
 		finish()
@@ -83,7 +83,7 @@ func (s *Service) scheduleAdmission(t Task, due time.Time, fromScan bool) (*sche
 	}, nil
 }
 
-func (s *Service) verifyScheduleReceipt(work *scheduleWork, id, status string) {
+func (s *Service) verifyScheduleReceipt(work *scheduleAdmissionWork, id, status string) {
 	if work == nil {
 		return
 	}

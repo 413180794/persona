@@ -1,12 +1,12 @@
-Verify handed-out work. accepted closes the task; its terminal stays unless opted in at Start, when accepted done closes its idle tab once saved. Report the cleanup result (closed, skipped or pending); never close the tab yourself or ask to. rework sends gaps back for at most 2 rounds; a third requires an owner decision. Replace stopped Agents with agent_start. External waits use parked with evidence, not needs_user. For answerable owner-only decisions use needs_user with why_owner, reason, recommend, 2–4 options (recommended first, each with leads_to), and cost_of_waiting. Otherwise decide, rework or close.
+Verify handed-out work. accepted closes it (default delivery_gate=merged keeps PR/linked-issue tasks open until merged/closed; park verified open PRs). If opted in at Start, accepted done closes the idle tab (report closed/skipped/pending; never close it yourself). rework allows 2 rounds before an owner decision. Replace stopped Agents via agent_start. External waits use parked+evidence; owner-only decisions use needs_user with why_owner, reason, recommend, 2–4 options, cost_of_waiting.
 
-accepted/done (default) with done_when requires each current criterion once in checks with met=true and evidence. Refuse missing, duplicate, unknown, unmet or blank-evidence checks even with user_check. No such gate for cannot, cancelled or tasks without criteria. Omitted checks otherwise keep progress. Report each criterion (met, unmet or dropped by logged scope change), then also_done. Review every task supervision asks you to against its scoped brief and evidence.
+accepted (outcome=done) with done_when needs every criterion once in checks (met=true + nonblank evidence); user_check cannot bypass. outcome=cannot, cancelled and no-criteria tasks are unchanged. Other verdicts may omit checks without losing progress. Report each criterion met/not_met/dropped, then also_done. Judge the scoped brief, not a handover or Agent claims.
 
-For accepted give outcome/reason/link; for needs_user give reason/recommend. Each sends one Lark conclusion card; do not duplicate it. “OK” takes recommend. Acceptance passes “Please verify” unless the owner must inspect (user_check). Default to recommend at 24h or deadline. Irreversible or visible_to_others never default; remind daily. Recheck once at 24h. Defer with can_wait only if nobody is blocked today, waiting costs little and no deadline is within 12h. “You decide”, “This isn't what I asked for” and “Tell me the background first” return to supervision; don't repeat the ask or take irreversible/external action.
+Give accepted's outcome/reason/link. The hub handles conclusion cards and passes “Please verify” on acceptance unless user_check. needs_user defaults to recommend at 24h/deadline; irreversible or visible_to_others only reminds. Recheck at 24h. can_wait needs low cost, nobody blocked today and no deadline within 12h. “You decide”, “This isn't what I asked for” and “Tell me the background first” return to supervision; clarify without repeating or taking irreversible/external action.
 
-Use everyday language on the owner's card: what's affected, what to choose and what each choice or waiting means. Omit internal IDs, paths, log timestamps, log wording and jargon.
+Use plain language on owner cards (what's affected, choice, consequences); omit internal IDs, paths, log timestamps and jargon.
 
-Outside main, only accept/cancel another supervisor's task; send gaps via agent_send. A leader's needs_user also reaches main. Cancel duplicates/unwanted tasks, closing/archiving Agents and ending cards.
+Outside main, another supervisor's task may only be accepted/cancelled; send gaps via agent_send. A leader's needs_user reaches main too. Cancel only duplicates/unwanted tasks; their Agents close/archive and waiting cards end.{{template "shared/mcp_language" .}}
 
 ```json
 {
@@ -36,7 +36,7 @@ Outside main, only accept/cancel another supervisor's task; send gaps via agent_
     },
     "note": {
       "type": "string",
-      "description": "rework: what the agent is to do (Chinese, concrete); needs_user: what the user is to decide; parked: anything more than reason, for your own record; cancelled: why; accepted: the result in a line"
+      "description": "{{if eq .Lang "en"}}rework: what the agent is to do (English, concrete); needs_user: what the user is to decide; parked: anything more than reason, for your own record; cancelled: why; accepted: the result in a line{{else if eq .Lang `ja`}}rework は Agent が行う具体的な作業を日本語で記述します。needs_user はユーザーが決めること、parked は reason 以外に記録する補足、cancelled は理由、accepted は結果を一行で記述します{{else}}rework: what the agent is to do (Chinese, concrete); needs_user: what the user is to decide; parked: anything more than reason, for your own record; cancelled: why; accepted: the result in a line{{end}}"
     },
     "outcome": {
       "type": "string",
@@ -87,6 +87,10 @@ Outside main, only accept/cancel another supervisor's task; send gaps via agent_
       "type": "string",
       "description": "needs_user: one sentence on what waiting costs the owner"
     },
+    "question_quote": {
+      "type": "string",
+      "description": "needs_user: quote the Agent's original question verbatim if reason paraphrases it, so the hub can check for an existing reply"
+    },
     "can_wait": {
       "type": "boolean",
       "description": "needs_user, optional: true when the decision can wait for the next daily briefing (no deadline within 12 hours, a low cost_of_waiting): it is not pushed and has no card, and is in the user's Needs you at once. Ignored (the answer says why) for why_owner irreversible and visible_to_others, a deadline within 12 hours or with reversible false, and when no daily briefing with facts is due within 24 hours and at least 12 hours before the deadline (24 hours by default: give a longer deadline for what can wait longer); default false (pushed as usual)"
@@ -116,11 +120,17 @@ Outside main, only accept/cancel another supervisor's task; send gaps via agent_
         "kind": {
           "type": "string",
           "enum": ["person_reply", "merge_review", "external_event", "date"],
-          "description": "parked: person_reply (a sent request to a person), merge_review (a sent request for review of a ready PR/MR), external_event (an observable outside event), or date"
+          "description": "External wait kind"
         },
-        "target": {"type": "string", "maxLength": 200, "description": "the named person/reviewer or external object"},
-        "wake": {"type": "string", "maxLength": 600, "description": "the observable change that ends this wait"},
-        "url": {"type": "string", "maxLength": 2000, "description": "required for merge_review (ready PR/MR link) and external_event (observable object URL); omit for person_reply and date"},
+        "target": {"type": "string", "maxLength": 200, "description": "The person or external object"},
+        "wake": {"type": "string", "maxLength": 600, "description": "Observable change that ends the wait"},
+        "url": {"type": "string", "maxLength": 2000, "description": "Required for merge_review (ready PR/MR) and external_event"},
+        "interaction_id": {"type": "string", "maxLength": 200, "description": "external_event only. This worker's exact pending owner request ID from agents_list. Shows the existing request"},
+        "pr_event": {
+          "type": "string",
+          "enum": ["terminal", "terminal_or_review"],
+          "description": "GitHub PR waits only. terminal for merge or close. terminal_or_review adds new submitted reviews"
+        },
         "contact": {
           "type": "object",
           "required": ["channel", "url", "sender", "sent_at", "request", "status"],
@@ -132,9 +142,9 @@ Outside main, only accept/cancel another supervisor's task; send gaps via agent_
             "request": {"type": "string", "maxLength": 600},
             "status": {"type": "string", "enum": ["sent"]}
           },
-          "description": "required for person_reply and merge_review: the request has already been sent"
+          "description": "Sent request, required for person_reply and merge_review"
         },
-        "ready": {"type": "boolean", "enum": [true], "description": "merge_review only: the named reviewer can review the PR/MR"},
+        "ready": {"type": "boolean", "enum": [true], "description": "merge_review only. The PR/MR is ready for the reviewer"},
         "reply": {
           "type": "object",
           "required": ["source", "brand", "app_id", "account_open_id", "person_open_id", "chat_id", "thread_id", "request_message_id"],
@@ -151,7 +161,7 @@ Outside main, only accept/cancel another supervisor's task; send gaps via agent_
           "description": "person_reply: exact IDs from a configured lark-cli reader, never names. contact.url must be the sent request's matching topic AppLink. A verified reply asks the current supervisor to review, not direct Agent delivery"
         }
       },
-      "description": "required for parked. Inspect the source receipt: this records your attestation, not a provider check. Do not supply recorded_by (current conversation, server-authored/output only). Legacy missing evidence is unrecorded, not verified"
+      "description": "Required for parked. Inspect the source. recorded_by is output only. Missing legacy evidence is unverified"
     }
   }
 }

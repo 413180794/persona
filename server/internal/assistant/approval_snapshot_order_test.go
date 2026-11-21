@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -11,6 +12,89 @@ import (
 	approvalops "github.com/nwverse/persona/server/internal/approval"
 	"github.com/nwverse/persona/server/internal/proto"
 )
+
+// startOlderApprovalSnapshotPublisher starts a real publish before the prepared
+// card exists and holds it immediately before askOnPhone. The old snapshot has
+// to remove this seeded task link, so it waits on quiet's leaf mutex. A newer
+// snapshot sees that the link is already gone and can pass this cleanup without
+// taking that mutex. Thus the newer publisher can apply its interactions first,
+// after which release applies the genuinely older interaction list.
+func startOlderApprovalSnapshotPublisher(t *testing.T, ft *fleetTest) (<-chan struct{}, func()) {
+	t.Helper()
+	key := [2]string{"mac", "left_before_approval_snapshot"}
+	r := &ft.s.fleet.rep
+	r.mu.Lock()
+	r.links = map[[2]string]TodoLink{key: {
+		MachineID: key[0],
+		SessionID: key[1],
+		TodoID:    "old_approval_snapshot_link",
+	}}
+	r.mu.Unlock()
+
+	quiet := &ft.s.tasks.quiet
+	quiet.mu.Lock()
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(quiet.mu.Unlock) }
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			release()
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		ft.s.publish(context.Background())
+		close(done)
+	}()
+	for {
+		r.mu.RLock()
+		reached := r.got && len(r.links) == 0
+		r.mu.RUnlock()
+		if reached {
+			break
+		}
+		// A mutex-blocked goroutine is not durably blocked for synctest's
+		// virtual clock. Yield instead of using a sleep-based polling helper
+		// until the older publisher has reached this gate.
+		runtime.Gosched()
+	}
+	handedOff = true
+	return done, release
+}
+
+// startPreparedInteractionAtSnapshotGate is startPreparedInteraction with a
+// scheduler handoff instead of its sleep-based waitPending: the older publisher
+// is still parked on an ordinary mutex, so virtual time cannot advance yet.
+func startPreparedInteractionAtSnapshotGate(t *testing.T, ft *fleetTest, ix proto.Interaction, op approvalops.Operation) <-chan preparedTestResult {
+	t.Helper()
+	// The snapshot gate holds quiet.mu, which a cache-miss session lookup also
+	// needs. Register against the already-observed complete session list so the
+	// prepared caller can reach its card without passing through that gate.
+	ft.s.fleetKeepPrevious(ix.MachineID, []proto.Session{{SessionID: ix.SessionID, Status: proto.StatusIdle}})
+	done := make(chan preparedTestResult, 1)
+	go func() {
+		out, err := ft.s.waitPreparedCard(context.Background(), ix, op)
+		done <- preparedTestResult{out: out, err: err}
+	}()
+	for {
+		if got := len(ft.s.pendingInteractions()); got == 1 {
+			break
+		} else if got > 1 {
+			t.Fatalf("pending interactions during gated setup = %d, want one", got)
+		}
+		runtime.Gosched()
+	}
+	t.Cleanup(func() {
+		ft.s.fleet.mu.Lock()
+		p := ft.s.fleet.interactions[ix.ID]
+		ft.s.fleet.mu.Unlock()
+		if p != nil {
+			ft.s.endPrepared(p, "cancelled", "test cleanup")
+		}
+	})
+	return done
+}
 
 func TestPreparedSnapshotOutOfOrderDoesNotCancelOriginal(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
