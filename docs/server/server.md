@@ -88,7 +88,7 @@ session is read once and its items are placed inside the recorded switch windows
 
 The command requires a hub that advertises `sessions_lookup` and a hub and node that confirm strict transcript reads.
 This currently means a readable local transcript, including a runtime session whose transcript the node reads locally.
-Export declines terminal-only views and transcripts reconstructed from Codex App or Traex databases. It captures each source's last sequence on the first page. New messages after
+Export declines terminal-only views and transcripts reconstructed from Codex App or TRAE CLI databases. It captures each source's last sequence on the first page. New messages after
 that point stay out, and an observed rewrite or changed switch history triggers one fresh attempt. An unreadable
 page, incomplete full message, or exhausted budget fails without publishing a document. An attempt can read up to
 400 pages, 20,000 items, 512 full items, 64 conversation segments and 96 MiB of responses. Individual responses have a
@@ -769,7 +769,7 @@ Pairing: hub `~/.persona/bin/personad hub pair` calls running hub via loopback H
   - Running background commands / sub-Agents defer push until reports are processed and that Claude turn ends; no standalone `WokeByTask` turn push.
   - Duration = first working to final completion. Per-device `prefs.done` off / long / always; long receives turns at least `long_turn_seconds`; `prefs.input` off suppresses Needs you.
   - Hidden Agents and assistant turns already pushed by `notify_user` are skipped. Hub restart measures ongoing turns from first post-restart observation.
-  - A session hosted in a Lark chat bridge that finished normally gets no push and no Lark card: the bridge answered in the topic it was asked in (#8592, `chatBridgeFinish` in `server/internal/assistant/fleet_push.go`). Hosted means origin `feishu` (`server/internal/sessionorigin/origin.go`, the Agents rows' "Lark group"), or a pane of the herdr session the bridge runs its agents in on its herdr backend, which the clients label a terminal (`sessionorigin.ChatBridge`, #8845); on Claude Code, Codex or TRAEX. An error, a cut-off, a stuck turn, a usage limit or a stop the host reports is pushed as ever; the Agents list still shows it finished and unread.
+  - A session hosted in a Lark chat bridge that finished normally gets no push and no Lark card: the bridge answered in the topic it was asked in (#8592, `chatBridgeFinish` in `server/internal/assistant/fleet_push.go`). Hosted means origin `feishu` (`server/internal/sessionorigin/origin.go`, the Agents rows' "Lark group"), or a pane of the herdr session the bridge runs its agents in on its herdr backend, which the clients label a terminal (`sessionorigin.ChatBridge`, #8845); on Claude Code, Codex or TRAE CLI. An error, a cut-off, a stuck turn, a usage limit or a stop the host reports is pushed as ever; the Agents list still shows it finished and unread.
 - Extension notifications (`POST /api/v1/notify`, `hub/notify_api.go`): extension picks active / `time-sensitive`, filtered by device input and hidden status. Decision / rate limits belong to extension; `docs/extensions/extensions.md` (“Sending notifications”).
 
 ### Push grading (push urgency filtering, `hub/push_grading.go`)
