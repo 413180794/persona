@@ -354,7 +354,14 @@ func (s *Service) checkTaskLauncher(ctx context.Context, machine, name string) (
 	if slices.ContainsFunc(fits, named) {
 		return true, nil
 	}
-	if slices.ContainsFunc(picker, named) {
+	if i := slices.IndexFunc(picker, named); i >= 0 {
+		l := picker[i]
+		// The node can still discover the terminal agy while its Assistant companion is disconnected.
+		if name == "agy" && l.Source == "zshrc" && cmp.Or(l.AgentType, l.Agent) == "agy" && !l.Assistant {
+			d, _ := s.device(ctx, machine)
+			return true, i18n.Err("assistant-schedule.execution_agy_runtime_unavailable",
+				i18n.Args{"machine": cmp.Or(d.Name, machine)})
+		}
 		return true, s.mainChatRefusal(ctx, machine, name, "")
 	}
 	return true, i18n.Err("assistant-models.err_provider_missing")

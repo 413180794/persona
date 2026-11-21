@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -105,6 +108,47 @@ func TestTaskExecutionSavedLauncherCatalogAuthority(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTaskExecutionResumesAgyAfterCompanionReconnects(t *testing.T) {
+	f := newFakeHub().withMachine()
+	shell := proto.Launcher{Name: "agy", Agent: "agy", Source: "zshrc"}
+	runtime := proto.Launcher{Name: "agy", Agent: "agy", Source: "agy", Assistant: true}
+	f.launcherList = []proto.Launcher{runtime}
+	s := newTestService(t, f)
+	task := Task{ID: "job", Prompt: "Check files", Repeat: repeatDaily, Time: "09:00", Enabled: true}
+	setTasks(s, task)
+	setModel(t, s, "assistant", ModelBinding{Provider: "launcher.agy"})
+
+	now := time.Now()
+	first, err := s.runTask(task, now, now, false, false)
+	if err != nil || first.SessionID == "" {
+		t.Fatalf("initial run: %+v %v", first, err)
+	}
+	waitRuns(t, s, 1)
+	f.mu.Lock()
+	f.launcherList = []proto.Launcher{shell}
+	f.mu.Unlock()
+	task, _ = taskByID(s, task.ID)
+	_, err = s.runTask(task, now, now, false, false)
+	if !strings.Contains(i18n.Localize(err, "en"), "Antigravity Assistant runtime is unavailable on server") || f.sent() != 1 {
+		t.Fatalf("missing companion: err=%v sends=%d", err, f.sent())
+	}
+	failed := lastRunOf(t, s, task.ID)
+	task, _ = taskByID(s, task.ID)
+	if failed.Status != runFailed || failed.DeliveryUnknown || task.RunSessionID != first.SessionID || task.RunLauncher != "agy" {
+		t.Fatalf("refusal changed the saved conversation or delivery status: run=%+v task=%+v", failed, task)
+	}
+
+	f.mu.Lock()
+	f.launcherList = []proto.Launcher{runtime}
+	f.mu.Unlock()
+	resumed, err := s.runTask(task, now, now, true, false)
+	p := f.lastSend(t)
+	if err != nil || f.sent() != 2 || resumed.SessionID != first.SessionID || p["launcher"] != "agy" ||
+		p["session_id"] != first.SessionID || p["resume_only"] != true {
+		t.Fatalf("restored companion did not resume the saved conversation: %+v %v payload=%v", resumed, err, p)
 	}
 }
 

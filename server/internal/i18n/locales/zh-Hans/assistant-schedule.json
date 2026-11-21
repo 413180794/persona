@@ -46,6 +46,7 @@
   "cron_often": "{cron} 两次运行只隔 {gap} 分钟。定时任务最多每 {min} 分钟运行一次。",
   "cron_never": "{cron} 永远不会运行：未来 5 年里没有符合的日期。",
   "execution_offline": "所选电脑离线或不可用，请重新连接后重试。",
+  "execution_agy_runtime_unavailable": "{machine} 上的 Antigravity 助手运行时不可用，任务没有发出。请在这台电脑上恢复 Antigravity 运行时后重试。",
   "execution_directory": "无法使用此工作目录，请在所选电脑上检查目录后重试。详情：{error}",
   "execution_directory_whitespace": "工作目录包含首尾空白，请移除后重试。",
   "execution_health_directory": "健康任务只能使用健康空间目录。请清空工作目录后重试。",
